@@ -623,13 +623,54 @@ class TestOrderCompletionPriority:
             f"Should rush to deliver to complete order, got {action}"
         )
 
-    def test_rush_when_last_item_picked_up(self):
-        """After picking up the last needed item, rush to deliver even with empty slots."""
+    def test_rush_when_last_item_picked_up_no_cascade(self):
+        """After picking up the last needed item, rush to deliver if no cascade
+        items are nearby (preview needs same types as active)."""
         reset_bot()
         state = make_state(
             bots=[{"id": 0, "position": [4, 3], "inventory": ["milk", "cheese"]}],
             items=[
-                {"id": "item_0", "type": "yogurt", "position": [6, 2]},  # preview
+                {
+                    "id": "item_0",
+                    "type": "milk",
+                    "position": [6, 2],
+                },  # preview, same type
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["milk", "cheese"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+                {
+                    "id": "order_1",
+                    "items_required": ["milk"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=50,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # Bot has all items. Preview needs milk (same as active type) — no cascade benefit.
+        # Small detour not worth it for same-type. Should rush to deliver.
+        assert action["action"] in ("move_left", "move_down"), (
+            f"Should rush to deliver (no cascade benefit), got {action}"
+        )
+
+    def test_detour_for_cascade_item_before_completing(self):
+        """When completing an order, detour for cascade-worthy preview item
+        (different type from active) because it auto-delivers for free."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [4, 3], "inventory": ["milk", "cheese"]}],
+            items=[
+                {"id": "item_0", "type": "yogurt", "position": [6, 2]},  # cascade item
             ],
             orders=[
                 {
@@ -652,10 +693,10 @@ class TestOrderCompletionPriority:
         )
         actions = bot.decide_actions(state)
         action = get_action(actions)
-        # Bot has both items to complete the order. 1 empty slot.
-        # Should rush to deliver, not pick preview yogurt.
-        assert action["action"] in ("move_left", "move_down"), (
-            f"Should rush to deliver with all order items, got {action}"
+        # Bot has all active items. Preview yogurt is a cascade item (type not in active).
+        # Detour ~4 rounds saves ~10 rounds on next order. Should detour.
+        assert action["action"] not in ("move_left", "move_down", "wait"), (
+            f"Should detour for cascade-worthy preview item, got {action}"
         )
 
     def test_still_detour_when_order_not_completable(self):
@@ -1088,6 +1129,314 @@ class TestDropoffAtDropoff:
         action = get_action(actions)
         assert action["action"] == "drop_off", (
             "Should deliver when at dropoff with needed items"
+        )
+
+
+class TestPreviewDoesntBlockActive:
+    """REGRESSION: Bot fills inventory with preview items, blocking active pickups.
+    This caused score to drop from 118 to 2 on live server."""
+
+    def test_dont_fill_inventory_with_preview_when_active_needed(self):
+        """Bot needs yogurt for active order. Has 1 preview cheese in inventory.
+        Step 6 should NOT pick up more preview items if active items still needed."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 7], "inventory": ["cheese"]}],
+            items=[
+                {"id": "item_0", "type": "yogurt", "position": [4, 2]},  # active needed
+                {"id": "item_1", "type": "milk", "position": [4, 6]},  # preview needed
+                {"id": "item_2", "type": "bread", "position": [6, 6]},  # preview needed
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese", "milk", "yogurt"],
+                    "items_delivered": ["cheese", "milk"],
+                    "complete": False,
+                    "status": "active",
+                },
+                {
+                    "id": "order_1",
+                    "items_required": ["milk", "bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=50,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # Active order still needs yogurt. Bot has cheese (preview) in inventory.
+        # Bot must NOT pick up more preview items — it needs the slot for yogurt.
+        assert action["action"] != "pick_up" or action.get("item_id") == "item_0", (
+            f"Should go pick active yogurt, not preview items, got {action}"
+        )
+        # Bot should be heading toward yogurt (up/left)
+        assert action["action"] in ("move_up", "move_left", "pick_up"), (
+            f"Should move toward active item yogurt, got {action}"
+        )
+
+    def test_step6_respects_active_slots(self):
+        """Step 6 preview pickup should not use slots needed for active items."""
+        reset_bot()
+        # Bot has empty inventory, active order needs 2 items, preview needs 1.
+        # Bot has 3 slots. Active needs 2 → only 1 spare for preview.
+        # Preview item is adjacent. Bot should pick it up (1 spare slot).
+        state = make_state(
+            bots=[{"id": 0, "position": [3, 5], "inventory": []}],
+            items=[
+                {"id": "item_0", "type": "cheese", "position": [8, 2]},  # active, far
+                {"id": "item_1", "type": "milk", "position": [8, 4]},  # active, far
+                {
+                    "id": "item_2",
+                    "type": "yogurt",
+                    "position": [4, 5],
+                },  # preview, adjacent
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese", "milk"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+                {
+                    "id": "order_1",
+                    "items_required": ["yogurt"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=50,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # 3 slots - 2 active needed = 1 spare. Adjacent preview item OK.
+        # Bot should pick up the preview yogurt (it's free, adjacent).
+        # This is step 3 opportunistic pickup.
+        assert action["action"] != "wait"
+
+    def test_no_preview_when_inventory_full_of_preview(self):
+        """Bot has 2 preview items, active needs 1 more item.
+        Only 1 slot left → must reserve for active item, NOT pick preview."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": ["bread", "milk"]}],
+            items=[
+                {"id": "item_0", "type": "yogurt", "position": [4, 2]},  # active needed
+                {
+                    "id": "item_1",
+                    "type": "cheese",
+                    "position": [6, 5],
+                },  # preview, adjacent
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["yogurt"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+                {
+                    "id": "order_1",
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=50,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # 1 slot left, active needs yogurt → no spare slots for preview
+        # Bot must NOT pick up preview cheese even though adjacent
+        assert action.get("item_id") != "item_1", (
+            f"Should NOT pick preview cheese when active needs the slot, got {action}"
+        )
+
+    def test_dont_walk_to_preview_when_active_unreachable(self):
+        """When active item exists on map but can't be reached (all adjacent blocked),
+        the bot should NOT walk toward distant preview items indefinitely."""
+        reset_bot()
+        # Active needs yogurt. Yogurt at (4,4) surrounded by walls on 3 sides
+        # and a shelf on the 4th — unreachable.
+        # Preview needs cheese. Cheese at (8,2) far away.
+        # Bot at (5,7) with cheese (preview) in inventory.
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 7], "inventory": ["cheese"]}],
+            items=[
+                {
+                    "id": "item_0",
+                    "type": "yogurt",
+                    "position": [4, 4],
+                },  # active, unreachable
+                {"id": "item_1", "type": "cheese", "position": [8, 2]},  # preview, far
+            ],
+            # Make yogurt unreachable: all adjacent cells blocked
+            walls=[[3, 4], [5, 4], [4, 3], [4, 5]],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese", "milk", "yogurt"],
+                    "items_delivered": ["cheese", "milk"],
+                    "complete": False,
+                    "status": "active",
+                },
+                {
+                    "id": "order_1",
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=50,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # Bot should NOT walk toward distant preview cheese when active yogurt is still needed
+        # (even though yogurt is unreachable). It should wait or go to dropoff.
+        # Critically, it must not enter a loop chasing preview items.
+        assert action["action"] != "move_right", (
+            f"Should NOT walk toward distant preview when active items still needed, got {action}"
+        )
+
+    def test_simulator_no_stuck_loop(self):
+        """Full simulation should never get stuck (same action for 10+ rounds)."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        bot._blocked_static = None
+        bot._dist_cache = {}
+        bot._adj_cache = {}
+
+        last_actions = []
+        for _ in range(300):
+            if sim.is_over():
+                break
+            state = sim.get_state()
+            if not state["orders"]:
+                break
+            actions = bot.decide_actions(state)
+            # Track action+position for loop detection
+            b = sim.bots[0]
+            sig = (
+                tuple(b["position"]),
+                actions[0]["action"],
+                actions[0].get("item_id"),
+            )
+            last_actions.append(sig)
+            if len(last_actions) > 10:
+                last_actions.pop(0)
+                # Check if last 10 actions repeat a 2-round cycle
+                if len(set(last_actions)) <= 2:
+                    assert False, (
+                        f"Bot stuck in loop at round {sim.round}: {last_actions}"
+                    )
+            sim.apply_actions(actions)
+
+        assert sim.score > 50, f"Score {sim.score} too low — possible stuck loop"
+
+
+class TestEndGamePartialDelivery:
+    """In the last ~30 rounds, if the order can't be completed, still deliver
+    individual items for +1 each rather than waiting."""
+
+    def test_pick_up_nearby_item_in_endgame(self):
+        """With 8 rounds left, a nearby item should still be picked up and delivered."""
+        reset_bot()
+        # Bot at dropoff (1,8). Item at (2,7) — 2 steps away. Dropoff is 2 steps from item.
+        # Total round trip: 2 (walk) + 1 (pickup) + 2 (return) = 5 rounds. Fits in 8.
+        state = make_state(
+            bots=[{"id": 0, "position": [1, 8], "inventory": []}],
+            items=[
+                {"id": "item_0", "type": "cheese", "position": [2, 7]},  # close
+                {"id": "item_1", "type": "milk", "position": [8, 2]},  # far
+                {"id": "item_2", "type": "bread", "position": [8, 4]},  # far
+                {"id": "item_3", "type": "butter", "position": [8, 6]},  # far
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese", "milk", "bread", "butter"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=292,
+            max_rounds=300,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # 8 rounds left. Can't complete the 4-item order. But cheese is close enough
+        # to pick up and deliver for +1 point. Should NOT wait.
+        assert action["action"] != "wait", (
+            f"Should pick up nearby item in endgame for partial credit, got {action}"
+        )
+
+    def test_wait_when_nothing_reachable_in_endgame(self):
+        """With 3 rounds left and all items far away, waiting is correct."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [1, 8], "inventory": []}],
+            items=[
+                {"id": "item_0", "type": "cheese", "position": [10, 1]},
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=297,
+            max_rounds=300,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        assert action["action"] == "wait", (
+            f"Should wait when no items reachable in 3 rounds, got {action}"
+        )
+
+    def test_deliver_partial_items_in_endgame(self):
+        """Bot has items in inventory near end of game. Should deliver them for +1 each
+        even if the order won't be completed."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [1, 7], "inventory": ["cheese"]}],
+            items=[
+                {"id": "item_0", "type": "milk", "position": [10, 1]},  # too far
+            ],
+            orders=[
+                {
+                    "id": "order_0",
+                    "items_required": ["cheese", "milk"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=297,
+            max_rounds=300,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions)
+        # Bot has cheese, dropoff is 1 step away. Should deliver for +1.
+        assert action["action"] == "move_down", (
+            f"Should deliver partial items in endgame, got {action}"
         )
 
 
