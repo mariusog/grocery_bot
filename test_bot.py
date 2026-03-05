@@ -1606,11 +1606,480 @@ class TestSimulatedGame:
         """Bot should start moving on round 0, not wait."""
         sim = GameSimulator(seed=42, num_bots=1)
         state = sim.get_state()
-        bot._blocked_static = None
-        bot._dist_cache = {}
-        bot._adj_cache = {}
+        reset_bot()
         actions = bot.decide_actions(state)
         action = actions[0]
         assert action["action"] != "wait", (
             f"Bot should not wait on round 0, got {action}"
         )
+
+
+class TestHelperFunctions:
+    """Tests for individual helper functions in bot.py."""
+
+    def test_direction_to_same_position(self):
+        """direction_to returns 'wait' when source equals target."""
+        assert bot.direction_to(5, 5, 5, 5) == "wait"
+
+    def test_direction_to_all_directions(self):
+        assert bot.direction_to(5, 5, 6, 5) == "move_right"
+        assert bot.direction_to(5, 5, 4, 5) == "move_left"
+        assert bot.direction_to(5, 5, 5, 6) == "move_down"
+        assert bot.direction_to(5, 5, 5, 4) == "move_up"
+
+    def test_get_needed_items_fully_delivered(self):
+        """Returns empty dict when all items delivered."""
+        order = {"items_required": ["milk", "bread"], "items_delivered": ["milk", "bread"]}
+        assert bot.get_needed_items(order) == {}
+
+    def test_get_needed_items_partial(self):
+        order = {"items_required": ["milk", "milk", "bread"], "items_delivered": ["milk"]}
+        needed = bot.get_needed_items(order)
+        assert needed == {"milk": 1, "bread": 1}
+
+    def test_bfs_no_path(self):
+        """bfs returns None when no path exists (completely walled off)."""
+        # Surround goal with blocked cells
+        blocked = {(4, 4), (4, 6), (3, 5), (5, 5), (6, 5)}
+        result = bot.bfs((0, 0), (4, 5), blocked)
+        assert result is None
+
+    def test_bfs_start_equals_goal(self):
+        assert bot.bfs((3, 3), (3, 3), set()) is None
+
+    def test_find_adjacent_positions_uncached(self):
+        """find_adjacent_positions works for positions not in _adj_cache."""
+        reset_bot()
+        bot._adj_cache = {}  # ensure empty cache
+        blocked = {(5, 4), (5, 6)}  # block two neighbors
+        adj = bot.find_adjacent_positions(5, 5, blocked)
+        assert (4, 5) in adj
+        assert (6, 5) in adj
+        assert (5, 4) not in adj
+        assert (5, 6) not in adj
+
+    def test_predict_pos(self):
+        assert bot._predict_pos(5, 5, "move_up") == (5, 4)
+        assert bot._predict_pos(5, 5, "move_down") == (5, 6)
+        assert bot._predict_pos(5, 5, "move_left") == (4, 5)
+        assert bot._predict_pos(5, 5, "move_right") == (6, 5)
+        assert bot._predict_pos(5, 5, "pick_up") == (5, 5)
+        assert bot._predict_pos(5, 5, "wait") == (5, 5)
+
+    def test_tsp_cost_single_item(self):
+        """tsp_cost calculates distance through items to drop-off."""
+        reset_bot()
+        # Set up static state for dist_static to work
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
+            orders=[{
+                "id": "o1", "status": "active", "complete": False,
+                "items_required": ["milk"], "items_delivered": [],
+            }],
+        )
+        bot.init_static(state)
+        cost = bot.tsp_cost((5, 5), [("item", (3, 4))], (1, 8))
+        assert cost > 0
+        assert cost == bot.dist_static((5, 5), (3, 4)) + bot.dist_static((3, 4), (1, 8))
+
+
+class TestNoActiveOrder:
+    """Test behavior when no active order exists."""
+
+    def test_all_bots_wait_when_no_active_order(self):
+        """All bots should wait when there's no active order."""
+        reset_bot()
+        state = make_state(
+            bots=[
+                {"id": 0, "position": [5, 5], "inventory": []},
+                {"id": 1, "position": [7, 5], "inventory": []},
+            ],
+            items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
+            orders=[],  # No orders at all
+        )
+        actions = bot.decide_actions(state)
+        for a in actions:
+            assert a["action"] == "wait"
+
+    def test_bots_wait_when_all_orders_complete(self):
+        """Bots wait when the only order is already complete."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
+            orders=[{
+                "id": "o1", "status": "active", "complete": True,
+                "items_required": ["milk"], "items_delivered": ["milk"],
+            }],
+        )
+        actions = bot.decide_actions(state)
+        assert actions[0]["action"] == "wait"
+
+
+class TestStep5PreviewDetour:
+    """Test Step 5: preview detour while delivering active items."""
+
+    def test_detour_for_nearby_preview_item_while_delivering(self):
+        """Bot carrying active items should detour for nearby preview item
+        when it has spare slots beyond active needs."""
+        reset_bot()
+        # Bot at (5, 5), drop-off at (1, 8), has 1 active item, needs to deliver
+        # Preview item at (4, 4) — slightly off the direct path
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": ["milk"]}],
+            items=[
+                {"id": "i_preview", "type": "bread", "position": [4, 4]},
+                {"id": "i_active", "type": "milk", "position": [8, 2]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": [],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["bread"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        # Bot has the active item and needs to deliver, but might detour for preview
+        # The action should be a move (either toward drop-off or toward preview item)
+        assert action["action"] != "wait"
+
+    def test_skip_distant_preview_during_delivery(self):
+        """Bot should not detour far for preview while delivering active items."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [2, 7], "inventory": ["milk"]}],
+            items=[
+                {"id": "i_preview", "type": "bread", "position": [9, 1]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": [],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["bread"], "items_delivered": [],
+                },
+            ],
+            drop_off=[1, 8],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        # Bot should head to drop-off, not detour to (9, 1)
+        assert action["action"] in ("move_down", "move_left")
+
+
+class TestStep6DistantPreviewPrepick:
+    """Test Step 6: walking to distant preview items when no active items left."""
+
+    def test_walk_to_preview_when_active_complete(self):
+        """Bot should navigate to preview items when all active items are picked up
+        and it has nothing to deliver."""
+        reset_bot()
+        # Active order is fully delivered except for what other bots carry
+        # Bot 0 has no active items in inventory, no active items on shelves
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[
+                {"id": "i_preview", "type": "bread", "position": [3, 3]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["bread"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        # Bot should move toward the preview item, not wait
+        assert action["action"] != "wait"
+
+    def test_pick_adjacent_preview_item(self):
+        """Bot picks up adjacent preview item when no active items needed."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [4, 3], "inventory": []}],
+            items=[
+                {"id": "i_preview", "type": "bread", "position": [3, 3]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["bread"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        assert action["action"] == "pick_up"
+        assert action["item_id"] == "i_preview"
+
+
+class TestGetDistancesFrom:
+    """Test distance caching behavior."""
+
+    def test_non_static_blocked_skips_cache(self):
+        """get_distances_from with non-static blocked set doesn't use cache."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
+            orders=[],
+        )
+        bot.init_static(state)
+        custom_blocked = set(bot._blocked_static)  # same contents, different object
+        dists = bot.get_distances_from((5, 5), custom_blocked)
+        assert (5, 5) in dists
+        assert dists[(5, 5)] == 0
+        # Should NOT have been cached since it's not the same object
+        assert (5, 5) not in bot._dist_cache
+
+
+class TestSimulatorEdgeCases:
+    """Test simulator edge cases for coverage."""
+
+    def test_large_map_aisle_generation(self):
+        """Simulator generates correct aisles for larger maps."""
+        sim = GameSimulator(seed=1, width=16, height=10)
+        assert len(sim.item_shelves) > 0
+
+    def test_extra_large_map(self):
+        sim = GameSimulator(seed=1, width=22, height=12)
+        assert len(sim.item_shelves) > 0
+
+    def test_huge_map(self):
+        sim = GameSimulator(seed=1, width=26, height=14)
+        assert len(sim.item_shelves) > 0
+
+    def test_blocked_by_wall(self):
+        """Simulator correctly blocks movement into walls."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        sim.walls = [[5, 5]]
+        assert sim._is_blocked(5, 5) is True
+
+    def test_blocked_by_other_bot(self):
+        sim = GameSimulator(seed=42, num_bots=2)
+        pos = sim.bots[0]["position"]
+        assert sim._is_blocked(pos[0], pos[1], exclude_bot_id=1) is True
+
+    def test_pickup_too_far(self):
+        """Pickup fails when bot is not adjacent to item."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        item = sim.items_on_map[0]
+        # Move bot far from item
+        b["position"] = [0, 0]
+        action = {"action": "pick_up", "item_id": item["id"]}
+        sim._apply_action(b, action)
+        assert len(b["inventory"]) == 0
+
+    def test_pickup_nonexistent_item(self):
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        action = {"action": "pick_up", "item_id": "nonexistent"}
+        sim._apply_action(b, action)
+        assert len(b["inventory"]) == 0
+
+    def test_pickup_full_inventory(self):
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        b["inventory"] = ["a", "b", "c"]
+        item = sim.items_on_map[0]
+        action = {"action": "pick_up", "item_id": item["id"]}
+        sim._apply_action(b, action)
+        assert len(b["inventory"]) == 3
+
+    def test_dropoff_wrong_position(self):
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        b["inventory"] = ["milk"]
+        b["position"] = [0, 0]  # not at drop-off
+        action = {"action": "drop_off"}
+        sim._apply_action(b, action)
+        assert len(b["inventory"]) == 1  # nothing delivered
+
+    def test_dropoff_empty_inventory(self):
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        b["position"] = list(sim.drop_off)
+        b["inventory"] = []
+        action = {"action": "drop_off"}
+        sim._apply_action(b, action)
+        assert sim.score == 0
+
+    def test_verbose_run(self):
+        """Simulator runs in verbose mode without errors."""
+        sim = GameSimulator(seed=42, num_bots=1, max_rounds=100)
+        result = sim.run(verbose=True)
+        assert result["rounds_used"] == 100
+
+    def test_move_blocked_by_boundary(self):
+        """Bot can't move out of bounds."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        b = sim.bots[0]
+        b["position"] = [0, 0]
+        action = {"action": "move_left"}
+        sim._apply_action(b, action)
+        assert b["position"] == [0, 0]
+
+
+class TestStep5PreviewDetourDeep:
+    """Hit the deep branches in Step 5 (lines 630-666)."""
+
+    def test_step5_detour_to_nearby_preview_not_adjacent(self):
+        """Bot with active item detours for non-adjacent preview item on way to drop-off.
+
+        Step 3a only picks up *adjacent* preview items. This test places the preview
+        item 2+ cells away (not adjacent), so step 3a skips it. Step 4 finds no
+        reachable active items (endgame). Step 5 then detours for the preview item.
+        """
+        reset_bot()
+        # Bot at (5, 5) with 1 milk (active item)
+        # Active order needs milk + bread; bread at (9, 1) unreachable in endgame
+        # Preview item cheese at (3, 3) — NOT adjacent to bot, but near drop-off path
+        # active_items_on_shelves = 1, spare = 3-1-1 = 1 > 0
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": ["milk"]}],
+            items=[
+                {"id": "i_bread", "type": "bread", "position": [9, 1]},
+                {"id": "i_cheese", "type": "cheese", "position": [3, 3]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk", "bread"], "items_delivered": [],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["cheese"], "items_delivered": [],
+                },
+            ],
+            drop_off=[1, 8],
+            round_num=1,
+            max_rounds=10,
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        # Bot should move (either toward drop-off or toward preview detour)
+        assert action["action"] != "wait"
+        assert action["action"].startswith("move_")
+
+
+class TestStep6AdjacentPreviewPickup:
+    """Hit Step 6 adjacent preview pickup (lines 700-736)."""
+
+    def test_step6_adjacent_cascade_preview_pickup(self):
+        """Bot with no active items picks up adjacent cascade preview item in Step 6."""
+        reset_bot()
+        # Active order needs milk which is fully delivered
+        # Bot has no items, is adjacent to a preview item
+        # Preview item type != active type → cascade-able
+        state = make_state(
+            bots=[{"id": 0, "position": [4, 3], "inventory": []}],
+            items=[
+                {"id": "i_cheese", "type": "cheese", "position": [3, 3]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["cheese"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        assert action["action"] == "pick_up"
+        assert action["item_id"] == "i_cheese"
+
+    def test_step6_adjacent_noncascade_preview_pickup(self):
+        """Bot picks up adjacent non-cascade preview item when no cascade available."""
+        reset_bot()
+        # Active order needs milk (delivered), preview needs milk too
+        # Same type → not cascade-able, but still should pick up
+        state = make_state(
+            bots=[{"id": 0, "position": [4, 3], "inventory": []}],
+            items=[
+                {"id": "i_milk", "type": "milk", "position": [3, 3]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["milk"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        assert action["action"] == "pick_up"
+        assert action["item_id"] == "i_milk"
+
+    def test_step6_walk_to_distant_cascade_preview(self):
+        """Bot walks to distant cascade preview item when no active items on shelves."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[
+                {"id": "i_cheese", "type": "cheese", "position": [2, 2]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["cheese"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        # Should navigate toward the cheese item
+        assert action["action"] != "wait"
+        assert action["action"].startswith("move_")
+
+    def test_step6_distant_noncascade_preview(self):
+        """Bot walks to distant non-cascade preview item when no active items."""
+        reset_bot()
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 5], "inventory": []}],
+            items=[
+                {"id": "i_milk2", "type": "milk", "position": [2, 2]},
+            ],
+            orders=[
+                {
+                    "id": "o1", "status": "active", "complete": False,
+                    "items_required": ["milk"], "items_delivered": ["milk"],
+                },
+                {
+                    "id": "o2", "status": "preview", "complete": False,
+                    "items_required": ["milk"], "items_delivered": [],
+                },
+            ],
+        )
+        actions = bot.decide_actions(state)
+        action = get_action(actions, 0)
+        assert action["action"].startswith("move_")
