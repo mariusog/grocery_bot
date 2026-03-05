@@ -12,6 +12,11 @@ _blocked_static = None  # walls + item shelves + out-of-bounds
 _dist_cache = {}  # {source_pos: {dest_pos: distance}} — lazy BFS cache
 _adj_cache = {}  # {item_pos: [adjacent walkable positions]}
 
+# --- Pickup failure tracking (detect server-side silent failures) ---
+_last_pickup = {}  # bot_id -> (item_id, inventory_len)
+_pickup_fail_count = {}  # item_id -> consecutive failure count
+_blacklisted_items = set()  # items that failed pick_up too many times
+
 
 def init_static(state):
     """Compute static blocked set and caches on round 0."""
@@ -247,6 +252,22 @@ def decide_actions(state):
     if _blocked_static is None:
         init_static(state)
 
+    # Detect pick_up failures from previous round
+    for b in bots:
+        bid = b["id"]
+        if bid in _last_pickup:
+            last_item_id, last_inv_len = _last_pickup[bid]
+            if len(b["inventory"]) <= last_inv_len:
+                # Pick_up was attempted but inventory didn't grow → failure
+                _pickup_fail_count[last_item_id] = (
+                    _pickup_fail_count.get(last_item_id, 0) + 1
+                )
+                if _pickup_fail_count[last_item_id] >= 3:
+                    _blacklisted_items.add(last_item_id)
+            else:
+                _pickup_fail_count.pop(last_item_id, None)
+            del _last_pickup[bid]
+
     blocked_static = _blocked_static
     rounds_remaining = state["max_rounds"] - state["round"]
 
@@ -323,6 +344,12 @@ def decide_actions(state):
         """Append action and record predicted position."""
         actions.append(action_dict)
         predicted_positions[bot_id] = _predict_pos(bx, by, action_dict["action"])
+        # Track pick_up attempts for failure detection
+        if action_dict["action"] == "pick_up":
+            inv_len = len(
+                next(b for b in bots if b["id"] == bot_id)["inventory"]
+            )
+            _last_pickup[bot_id] = (action_dict["item_id"], inv_len)
 
     for bot in bots:
         bx, by = bot["position"]
@@ -363,7 +390,7 @@ def decide_actions(state):
                         continue
                     is_cascade = item_type not in active_types
                     for it in items_by_type.get(item_type, []):
-                        if it["id"] in claimed_items:
+                        if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                             continue
                         ix, iy = it["position"]
                         if abs(bx - ix) + abs(by - iy) == 1:
@@ -402,7 +429,7 @@ def decide_actions(state):
                             continue
                         is_cascade = item_type not in active_types
                         for it in items_by_type.get(item_type, []):
-                            if it["id"] in claimed_items:
+                            if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                                 continue
                             cell, d = find_best_item_target(pos, it, blocked_static)
                             if cell:
@@ -472,7 +499,7 @@ def decide_actions(state):
                     continue
                 is_cascade = item_type not in active_types
                 for it in items_by_type.get(item_type, []):
-                    if it["id"] in claimed_items:
+                    if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                         continue
                     ix, iy = it["position"]
                     if abs(bx - ix) + abs(by - iy) == 1:
@@ -524,7 +551,7 @@ def decide_actions(state):
             if count <= 0:
                 continue
             for it in items_by_type.get(item_type, []):
-                if it["id"] in claimed_items:
+                if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                     continue
                 ix, iy = it["position"]
                 # Check if adjacent (can pick up immediately)
@@ -608,7 +635,7 @@ def decide_actions(state):
                     if count <= 0:
                         continue
                     for it in items_by_type.get(item_type, []):
-                        if it["id"] in claimed_items:
+                        if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                             continue
                         cell, d = find_best_item_target(pos, it, blocked_static)
                         if cell:
@@ -665,7 +692,7 @@ def decide_actions(state):
                     continue
                 is_cascade = item_type not in active_types
                 for it in items_by_type.get(item_type, []):
-                    if it["id"] in claimed_items:
+                    if it["id"] in claimed_items or it["id"] in _blacklisted_items:
                         continue
                     ix, iy = it["position"]
                     if abs(bx - ix) + abs(by - iy) == 1:
@@ -750,16 +777,22 @@ def _predict_pos(bx, by, action):
 
 async def play():
     global _blocked_static, _dist_cache, _adj_cache
+    global _last_pickup, _pickup_fail_count, _blacklisted_items
     _blocked_static = None
     _dist_cache = {}
     _adj_cache = {}
+    _last_pickup = {}
+    _pickup_fail_count = {}
+    _blacklisted_items = set()
 
     ws_url = sys.argv[1] if len(sys.argv) > 1 else input("Enter WebSocket URL: ")
 
     os.makedirs("logs", exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = f"logs/game_{timestamp}.csv"
+    meta_path = f"logs/game_{timestamp}.json"
     log_rows = []
+    game_meta = {}
 
     import websockets
 
@@ -776,7 +809,17 @@ async def play():
                 print(f"  Items delivered: {data['items_delivered']}")
                 print(f"  Orders completed: {data['orders_completed']}")
 
-                # Write log file
+                # Save game results to metadata
+                game_meta["result"] = {
+                    "score": data["score"],
+                    "rounds_used": data["rounds_used"],
+                    "items_delivered": data["items_delivered"],
+                    "orders_completed": data["orders_completed"],
+                }
+                if _blacklisted_items:
+                    game_meta["blacklisted_items"] = list(_blacklisted_items)
+
+                # Write log files
                 with open(log_path, "w", newline="") as f:
                     writer = csv.DictWriter(
                         f,
@@ -796,15 +839,45 @@ async def play():
                     )
                     writer.writeheader()
                     writer.writerows(log_rows)
+                with open(meta_path, "w") as f:
+                    json.dump(game_meta, f, indent=2)
                 print(f"  Log: {log_path}")
+                print(f"  Meta: {meta_path}")
                 break
 
             if data["type"] == "game_state":
                 round_num = data["round"]
+
+                # Capture game metadata on round 0
+                if round_num == 0:
+                    grid = data["grid"]
+                    item_types = sorted({it["type"] for it in data["items"]})
+                    game_meta = {
+                        "timestamp": timestamp,
+                        "grid": {
+                            "width": grid["width"],
+                            "height": grid["height"],
+                            "walls": len(grid["walls"]),
+                        },
+                        "bots": len(data["bots"]),
+                        "items_on_map": len(data["items"]),
+                        "item_types": item_types,
+                        "drop_off": data["drop_off"],
+                        "max_rounds": data["max_rounds"],
+                        "total_orders": data.get("total_orders", "?"),
+                        "spawn": data["bots"][0]["position"],
+                    }
+                    print(
+                        f"Map: {grid['width']}x{grid['height']} | "
+                        f"Bots: {len(data['bots'])} | "
+                        f"Items: {len(data['items'])} ({len(item_types)} types) | "
+                        f"Rounds: {data['max_rounds']}"
+                    )
+
                 if round_num % 25 == 0 or round_num == 0:
                     print(
                         f"Round {round_num}/{data['max_rounds']} | Score: {data['score']} | "
-                        f"Order: {data.get('active_order_index', '?')} | "
+                        f"Order: {data.get('active_order_index', '?')}/{data.get('total_orders', '?')} | "
                         f"Bots: {len(data['bots'])}"
                     )
 

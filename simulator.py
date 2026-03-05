@@ -323,6 +323,9 @@ class GameSimulator:
         bot._blocked_static = None
         bot._dist_cache = {}
         bot._adj_cache = {}
+        bot._last_pickup = {}
+        bot._pickup_fail_count = {}
+        bot._blacklisted_items = set()
 
         while not self.is_over():
             state = self.get_state()
