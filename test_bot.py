@@ -38,12 +38,7 @@ def make_state(
 
 def reset_bot():
     """Reset global state between tests."""
-    bot._blocked_static = None
-    bot._dist_cache = {}
-    bot._adj_cache = {}
-    bot._last_pickup = {}
-    bot._pickup_fail_count = {}
-    bot._blacklisted_items = set()
+    bot.reset_state()
 
 
 def get_action(actions, bot_id=0):
@@ -1316,9 +1311,7 @@ class TestPreviewDoesntBlockActive:
     def test_simulator_no_stuck_loop(self):
         """Full simulation should never get stuck (same action for 10+ rounds)."""
         sim = GameSimulator(seed=42, num_bots=1)
-        bot._blocked_static = None
-        bot._dist_cache = {}
-        bot._adj_cache = {}
+        reset_bot()
 
         last_actions = []
         for _ in range(300):
