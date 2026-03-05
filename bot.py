@@ -7,14 +7,10 @@ from collections import deque
 from datetime import datetime
 from itertools import permutations
 
-import websockets
-
-WS_URL = sys.argv[1] if len(sys.argv) > 1 else input("Enter WebSocket URL: ")
-
 # --- Global cached state (computed once on round 0, map is static) ---
 _blocked_static = None  # walls + item shelves + out-of-bounds
-_dist_cache = {}        # {source_pos: {dest_pos: distance}} — lazy BFS cache
-_adj_cache = {}         # {item_pos: [adjacent walkable positions]}
+_dist_cache = {}  # {source_pos: {dest_pos: distance}} — lazy BFS cache
+_adj_cache = {}  # {item_pos: [adjacent walkable positions]}
 
 
 def init_static(state):
@@ -140,7 +136,9 @@ def find_adjacent_positions(ix, iy, blocked_static):
 def find_best_item_target(pos, item, blocked_static):
     """Find the best adjacent cell to reach an item, using cached static distances."""
     ipos = tuple(item["position"])
-    adj_cells = _adj_cache.get(ipos, find_adjacent_positions(ipos[0], ipos[1], blocked_static))
+    adj_cells = _adj_cache.get(
+        ipos, find_adjacent_positions(ipos[0], ipos[1], blocked_static)
+    )
     if not adj_cells:
         return None, float("inf")
     best_cell = None
@@ -183,6 +181,60 @@ def tsp_route(bot_pos, item_targets, drop_off):
     return [item_targets[i] for i in best_order]
 
 
+def tsp_cost(bot_pos, item_targets, drop_off):
+    """Calculate total travel cost for a TSP route."""
+    cost = 0
+    prev = bot_pos
+    for _, cell in item_targets:
+        cost += dist_static(prev, cell)
+        prev = cell
+    cost += dist_static(prev, drop_off)
+    return cost
+
+
+def plan_multi_trip(bot_pos, all_candidates, drop_off, capacity=3):
+    """For orders needing more items than inventory capacity, find the optimal
+    split into trip 1 (pick now) and trip 2 (pick after delivering).
+
+    Returns the trip 1 items as a TSP-optimized route.
+    """
+    n = len(all_candidates)
+    if n <= capacity:
+        return tsp_route(bot_pos, all_candidates, drop_off)
+
+    from itertools import combinations
+
+    best_cost = float("inf")
+    best_trip1 = None
+
+    # Try all ways to split items into trip1 (up to capacity) and trip2
+    for trip1_size in range(max(1, n - capacity), min(capacity, n) + 1):
+        for trip1_indices in combinations(range(n), trip1_size):
+            trip2_indices = tuple(i for i in range(n) if i not in trip1_indices)
+            if len(trip2_indices) > capacity:
+                continue
+
+            trip1 = [all_candidates[i] for i in trip1_indices]
+            trip2 = [all_candidates[i] for i in trip2_indices]
+
+            route1 = tsp_route(bot_pos, trip1, drop_off)
+            cost1 = tsp_cost(bot_pos, route1, drop_off)
+
+            route2 = tsp_route(drop_off, trip2, drop_off)
+            cost2 = tsp_cost(drop_off, route2, drop_off)
+
+            total = cost1 + cost2
+            if total < best_cost:
+                best_cost = total
+                best_trip1 = route1
+
+    return (
+        best_trip1
+        if best_trip1
+        else tsp_route(bot_pos, all_candidates[:capacity], drop_off)
+    )
+
+
 def decide_actions(state):
     global _blocked_static
 
@@ -199,7 +251,9 @@ def decide_actions(state):
     rounds_remaining = state["max_rounds"] - state["round"]
 
     # Active and preview orders
-    active = next((o for o in orders if o.get("status") == "active" and not o["complete"]), None)
+    active = next(
+        (o for o in orders if o.get("status") == "active" and not o["complete"]), None
+    )
     preview = next((o for o in orders if o.get("status") == "preview"), None)
 
     if not active:
@@ -253,7 +307,9 @@ def decide_actions(state):
         idle_bots += 1
     # Max items per bot = fair share (at least 1)
     total_needed = active_items_on_shelves
-    max_claim_per_bot = max(1, (total_needed + idle_bots - 1) // idle_bots) if idle_bots > 0 else 3
+    max_claim_per_bot = (
+        max(1, (total_needed + idle_bots - 1) // idle_bots) if idle_bots > 0 else 3
+    )
 
     actions = []
     # Track predicted positions for anti-collision: where each bot will be after this round
@@ -304,8 +360,19 @@ def decide_actions(state):
                         ix, iy = it["position"]
                         if abs(bx - ix) + abs(by - iy) == 1:
                             claimed_items.add(it["id"])
-                            net_preview_needed[it["type"]] = net_preview_needed.get(it["type"], 0) - 1
-                            emit(bot_id, bx, by, {"bot": bot_id, "action": "pick_up", "item_id": it["id"]})
+                            net_preview_needed[it["type"]] = (
+                                net_preview_needed.get(it["type"], 0) - 1
+                            )
+                            emit(
+                                bot_id,
+                                bx,
+                                by,
+                                {
+                                    "bot": bot_id,
+                                    "action": "pick_up",
+                                    "item_id": it["id"],
+                                },
+                            )
                             break
                     else:
                         continue
@@ -313,9 +380,57 @@ def decide_actions(state):
                 if len(actions) > 0 and actions[-1]["bot"] == bot_id:
                     continue
 
+                # Also check near-path preview items (small detour ≤3 rounds)
+                if len(inventory) < 3:
+                    direct = dist_static(pos, drop_off)
+                    best_detour_item = None
+                    best_detour_cell = None
+                    best_detour_cost = float("inf")
+                    for item_type, count in net_preview_needed.items():
+                        if count <= 0:
+                            continue
+                        for it in items_by_type.get(item_type, []):
+                            if it["id"] in claimed_items:
+                                continue
+                            cell, d = find_best_item_target(pos, it, blocked_static)
+                            if cell:
+                                detour = d + dist_static(cell, drop_off) - direct
+                                if detour < best_detour_cost:
+                                    best_detour_cost = detour
+                                    best_detour_item = it
+                                    best_detour_cell = cell
+
+                    if best_detour_item and best_detour_cost <= 3:
+                        claimed_items.add(best_detour_item["id"])
+                        net_preview_needed[best_detour_item["type"]] = (
+                            net_preview_needed.get(best_detour_item["type"], 0) - 1
+                        )
+                        next_pos = bfs(pos, best_detour_cell, blocked)
+                        if next_pos:
+                            emit(
+                                bot_id,
+                                bx,
+                                by,
+                                {
+                                    "bot": bot_id,
+                                    "action": direction_to(
+                                        bx, by, next_pos[0], next_pos[1]
+                                    ),
+                                },
+                            )
+                            continue
+
             next_pos = bfs(pos, drop_off, blocked)
             if next_pos:
-                emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                emit(
+                    bot_id,
+                    bx,
+                    by,
+                    {
+                        "bot": bot_id,
+                        "action": direction_to(bx, by, next_pos[0], next_pos[1]),
+                    },
+                )
             else:
                 emit(bot_id, bx, by, {"bot": bot_id, "action": "wait"})
             continue
@@ -333,8 +448,15 @@ def decide_actions(state):
                     ix, iy = it["position"]
                     if abs(bx - ix) + abs(by - iy) == 1:
                         claimed_items.add(it["id"])
-                        net_preview_needed[it["type"]] = net_preview_needed.get(it["type"], 0) - 1
-                        emit(bot_id, bx, by, {"bot": bot_id, "action": "pick_up", "item_id": it["id"]})
+                        net_preview_needed[it["type"]] = (
+                            net_preview_needed.get(it["type"], 0) - 1
+                        )
+                        emit(
+                            bot_id,
+                            bx,
+                            by,
+                            {"bot": bot_id, "action": "pick_up", "item_id": it["id"]},
+                        )
                         picked_up_preview = True
                         break
                 else:
@@ -350,7 +472,15 @@ def decide_actions(state):
         if has_active_items and len(inventory) >= 3:
             next_pos = bfs(pos, drop_off, blocked)
             if next_pos:
-                emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                emit(
+                    bot_id,
+                    bx,
+                    by,
+                    {
+                        "bot": bot_id,
+                        "action": direction_to(bx, by, next_pos[0], next_pos[1]),
+                    },
+                )
             else:
                 emit(bot_id, bx, by, {"bot": bot_id, "action": "wait"})
             continue
@@ -368,8 +498,15 @@ def decide_actions(state):
                 # Check if adjacent (can pick up immediately)
                 if abs(bx - ix) + abs(by - iy) == 1 and len(inventory) < 3:
                     claimed_items.add(it["id"])
-                    net_active_needed[it["type"]] = net_active_needed.get(it["type"], 0) - 1
-                    emit(bot_id, bx, by, {"bot": bot_id, "action": "pick_up", "item_id": it["id"]})
+                    net_active_needed[it["type"]] = (
+                        net_active_needed.get(it["type"], 0) - 1
+                    )
+                    emit(
+                        bot_id,
+                        bx,
+                        by,
+                        {"bot": bot_id, "action": "pick_up", "item_id": it["id"]},
+                    )
                     picked_up = True
                     break
                 cell, d = find_best_item_target(pos, it, blocked_static)
@@ -387,25 +524,43 @@ def decide_actions(state):
         if candidates and len(inventory) < 3:
             slots = min(3 - len(inventory), max_claim_per_bot)
             candidates.sort(key=lambda c: c[2])
-            selected = []
+            # Select best item per type up to what's needed
+            all_selected = []
             selected_types = {}
             for it, cell, d in candidates:
                 t = it["type"]
                 needed_count = net_active_needed.get(t, 0) - selected_types.get(t, 0)
-                if needed_count > 0 and len(selected) < slots:
-                    selected.append((it, cell))
+                if needed_count > 0:
+                    all_selected.append((it, cell))
                     selected_types[t] = selected_types.get(t, 0) + 1
 
-            if selected:
-                route = tsp_route(pos, selected, drop_off)
+            if len(all_selected) > slots:
+                # More items than slots: use multi-trip planning
+                route = plan_multi_trip(pos, all_selected, drop_off, slots)
+            elif all_selected:
+                route = tsp_route(pos, all_selected, drop_off)
+            else:
+                route = []
+
+            if route:
                 first_item, first_cell = route[0]
                 for it, _ in route:
                     claimed_items.add(it["id"])
-                    net_active_needed[it["type"]] = net_active_needed.get(it["type"], 0) - 1
+                    net_active_needed[it["type"]] = (
+                        net_active_needed.get(it["type"], 0) - 1
+                    )
 
                 next_pos = bfs(pos, first_cell, blocked)
                 if next_pos:
-                    emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                    emit(
+                        bot_id,
+                        bx,
+                        by,
+                        {
+                            "bot": bot_id,
+                            "action": direction_to(bx, by, next_pos[0], next_pos[1]),
+                        },
+                    )
                     continue
 
         # 5. If we have active items to deliver, consider preview detour first
@@ -434,15 +589,35 @@ def decide_actions(state):
                 # A preview item picked up now saves ~2*dist(dropoff, item) later
                 if best_detour_item and best_detour_cost <= 6:
                     claimed_items.add(best_detour_item["id"])
-                    net_preview_needed[best_detour_item["type"]] = net_preview_needed.get(best_detour_item["type"], 0) - 1
+                    net_preview_needed[best_detour_item["type"]] = (
+                        net_preview_needed.get(best_detour_item["type"], 0) - 1
+                    )
                     next_pos = bfs(pos, best_detour_cell, blocked)
                     if next_pos:
-                        emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                        emit(
+                            bot_id,
+                            bx,
+                            by,
+                            {
+                                "bot": bot_id,
+                                "action": direction_to(
+                                    bx, by, next_pos[0], next_pos[1]
+                                ),
+                            },
+                        )
                         continue
 
             next_pos = bfs(pos, drop_off, blocked)
             if next_pos:
-                emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                emit(
+                    bot_id,
+                    bx,
+                    by,
+                    {
+                        "bot": bot_id,
+                        "action": direction_to(bx, by, next_pos[0], next_pos[1]),
+                    },
+                )
                 continue
 
         # 6. Try preview order items (pre-pick)
@@ -469,18 +644,37 @@ def decide_actions(state):
 
             if best_preview and best_pdist == 0:
                 claimed_items.add(best_preview["id"])
-                net_preview_needed[best_preview["type"]] = net_preview_needed.get(best_preview["type"], 0) - 1
-                emit(bot_id, bx, by, {"bot": bot_id, "action": "pick_up", "item_id": best_preview["id"]})
+                net_preview_needed[best_preview["type"]] = (
+                    net_preview_needed.get(best_preview["type"], 0) - 1
+                )
+                emit(
+                    bot_id,
+                    bx,
+                    by,
+                    {"bot": bot_id, "action": "pick_up", "item_id": best_preview["id"]},
+                )
                 continue
 
             if best_preview:
                 claimed_items.add(best_preview["id"])
-                net_preview_needed[best_preview["type"]] = net_preview_needed.get(best_preview["type"], 0) - 1
+                net_preview_needed[best_preview["type"]] = (
+                    net_preview_needed.get(best_preview["type"], 0) - 1
+                )
                 target, _ = find_best_item_target(pos, best_preview, blocked_static)
                 if target:
                     next_pos = bfs(pos, target, blocked)
                     if next_pos:
-                        emit(bot_id, bx, by, {"bot": bot_id, "action": direction_to(bx, by, next_pos[0], next_pos[1])})
+                        emit(
+                            bot_id,
+                            bx,
+                            by,
+                            {
+                                "bot": bot_id,
+                                "action": direction_to(
+                                    bx, by, next_pos[0], next_pos[1]
+                                ),
+                            },
+                        )
                         continue
 
         emit(bot_id, bx, by, {"bot": bot_id, "action": "wait"})
@@ -507,19 +701,23 @@ async def play():
     _dist_cache = {}
     _adj_cache = {}
 
+    ws_url = sys.argv[1] if len(sys.argv) > 1 else input("Enter WebSocket URL: ")
+
     os.makedirs("logs", exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = f"logs/game_{timestamp}.csv"
     log_rows = []
 
-    print(f"Connecting to {WS_URL[:60]}...")
-    async with websockets.connect(WS_URL) as ws:
+    import websockets
+
+    print(f"Connecting to {ws_url[:60]}...")
+    async with websockets.connect(ws_url) as ws:
         print("Connected!")
         async for message in ws:
             data = json.loads(message)
 
             if data["type"] == "game_over":
-                print(f"\nGame Over!")
+                print("\nGame Over!")
                 print(f"  Score: {data['score']}")
                 print(f"  Rounds: {data['rounds_used']}")
                 print(f"  Items delivered: {data['items_delivered']}")
@@ -527,11 +725,22 @@ async def play():
 
                 # Write log file
                 with open(log_path, "w", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=[
-                        "round", "score", "order_idx", "bot_id", "bot_pos",
-                        "inventory", "action", "item_id", "active_needed",
-                        "active_delivered", "preview_needed",
-                    ])
+                    writer = csv.DictWriter(
+                        f,
+                        fieldnames=[
+                            "round",
+                            "score",
+                            "order_idx",
+                            "bot_id",
+                            "bot_pos",
+                            "inventory",
+                            "action",
+                            "item_id",
+                            "active_needed",
+                            "active_delivered",
+                            "preview_needed",
+                        ],
+                    )
                     writer.writeheader()
                     writer.writerows(log_rows)
                 print(f"  Log: {log_path}")
@@ -540,30 +749,57 @@ async def play():
             if data["type"] == "game_state":
                 round_num = data["round"]
                 if round_num % 25 == 0 or round_num == 0:
-                    print(f"Round {round_num}/{data['max_rounds']} | Score: {data['score']} | "
-                          f"Order: {data.get('active_order_index', '?')} | "
-                          f"Bots: {len(data['bots'])}")
+                    print(
+                        f"Round {round_num}/{data['max_rounds']} | Score: {data['score']} | "
+                        f"Order: {data.get('active_order_index', '?')} | "
+                        f"Bots: {len(data['bots'])}"
+                    )
 
                 actions = decide_actions(data)
 
                 # Log each bot's action
-                active_o = next((o for o in data["orders"] if o.get("status") == "active" and not o["complete"]), None)
-                preview_o = next((o for o in data["orders"] if o.get("status") == "preview"), None)
+                active_o = next(
+                    (
+                        o
+                        for o in data["orders"]
+                        if o.get("status") == "active" and not o["complete"]
+                    ),
+                    None,
+                )
+                preview_o = next(
+                    (o for o in data["orders"] if o.get("status") == "preview"), None
+                )
                 for a in actions:
                     b = next(bt for bt in data["bots"] if bt["id"] == a["bot"])
-                    log_rows.append({
-                        "round": round_num,
-                        "score": data["score"],
-                        "order_idx": data.get("active_order_index", ""),
-                        "bot_id": a["bot"],
-                        "bot_pos": f"{b['position'][0]},{b['position'][1]}",
-                        "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
-                        "action": a["action"],
-                        "item_id": a.get("item_id", ""),
-                        "active_needed": ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items()) if active_o else "",
-                        "active_delivered": ";".join(active_o["items_delivered"]) if active_o else "",
-                        "preview_needed": ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items()) if preview_o else "",
-                    })
+                    log_rows.append(
+                        {
+                            "round": round_num,
+                            "score": data["score"],
+                            "order_idx": data.get("active_order_index", ""),
+                            "bot_id": a["bot"],
+                            "bot_pos": f"{b['position'][0]},{b['position'][1]}",
+                            "inventory": ";".join(b["inventory"])
+                            if b["inventory"]
+                            else "",
+                            "action": a["action"],
+                            "item_id": a.get("item_id", ""),
+                            "active_needed": ";".join(
+                                f"{k}:{v}"
+                                for k, v in get_needed_items(active_o).items()
+                            )
+                            if active_o
+                            else "",
+                            "active_delivered": ";".join(active_o["items_delivered"])
+                            if active_o
+                            else "",
+                            "preview_needed": ";".join(
+                                f"{k}:{v}"
+                                for k, v in get_needed_items(preview_o).items()
+                            )
+                            if preview_o
+                            else "",
+                        }
+                    )
 
                 await ws.send(json.dumps({"actions": actions}))
 
