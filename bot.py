@@ -293,6 +293,10 @@ def decide_actions(state):
         if still > 0:
             net_preview_needed[item_type] = still
 
+    # Types in the active order — preview items of these types get consumed on
+    # drop_off (no cascade). Prefer preview items NOT of these types.
+    active_types = set(active_needed.keys())
+
     # Assignment: track which items are claimed by bots this round
     claimed_items = set()
 
@@ -347,60 +351,81 @@ def decide_actions(state):
             continue
 
         # 2. Rush to deliver if all active items are picked up (completes order = +5 bonus)
-        #    BUT still grab adjacent preview items first (1 round cost saves ~20 later)
+        #    BUT grab preview items first — they cascade-deliver when order completes.
+        #    Prefer items NOT matching active types (they survive drop_off → cascade).
         if has_active_items and active_items_on_shelves == 0:
-            # Check for adjacent preview items first — nearly free
             if preview and len(inventory) < 3:
+                # Check adjacent preview items — prefer cascade-able (non-active type)
+                best_adj = None
+                best_adj_cascade = False
                 for item_type, count in net_preview_needed.items():
                     if count <= 0:
                         continue
+                    is_cascade = item_type not in active_types
                     for it in items_by_type.get(item_type, []):
                         if it["id"] in claimed_items:
                             continue
                         ix, iy = it["position"]
                         if abs(bx - ix) + abs(by - iy) == 1:
-                            claimed_items.add(it["id"])
-                            net_preview_needed[it["type"]] = (
-                                net_preview_needed.get(it["type"], 0) - 1
-                            )
-                            emit(
-                                bot_id,
-                                bx,
-                                by,
-                                {
-                                    "bot": bot_id,
-                                    "action": "pick_up",
-                                    "item_id": it["id"],
-                                },
-                            )
-                            break
-                    else:
-                        continue
-                    break
-                if len(actions) > 0 and actions[-1]["bot"] == bot_id:
+                            if is_cascade and not best_adj_cascade:
+                                best_adj = it
+                                best_adj_cascade = True
+                            elif not best_adj:
+                                best_adj = it
+
+                if best_adj:
+                    claimed_items.add(best_adj["id"])
+                    net_preview_needed[best_adj["type"]] = (
+                        net_preview_needed.get(best_adj["type"], 0) - 1
+                    )
+                    emit(
+                        bot_id,
+                        bx,
+                        by,
+                        {
+                            "bot": bot_id,
+                            "action": "pick_up",
+                            "item_id": best_adj["id"],
+                        },
+                    )
                     continue
 
-                # Also check near-path preview items (small detour ≤3 rounds)
+                # Near-path preview detour — cascade items worth bigger detour
                 if len(inventory) < 3:
                     direct = dist_static(pos, drop_off)
                     best_detour_item = None
                     best_detour_cell = None
                     best_detour_cost = float("inf")
+                    best_detour_cascade = False
                     for item_type, count in net_preview_needed.items():
                         if count <= 0:
                             continue
+                        is_cascade = item_type not in active_types
                         for it in items_by_type.get(item_type, []):
                             if it["id"] in claimed_items:
                                 continue
                             cell, d = find_best_item_target(pos, it, blocked_static)
                             if cell:
                                 detour = d + dist_static(cell, drop_off) - direct
-                                if detour < best_detour_cost:
+                                # Prefer cascade items; accept larger detour for them
+                                if is_cascade and not best_detour_cascade:
                                     best_detour_cost = detour
                                     best_detour_item = it
                                     best_detour_cell = cell
+                                    best_detour_cascade = True
+                                elif (
+                                    is_cascade == best_detour_cascade
+                                    and detour < best_detour_cost
+                                ):
+                                    best_detour_cost = detour
+                                    best_detour_item = it
+                                    best_detour_cell = cell
+                                    best_detour_cascade = is_cascade
 
-                    if best_detour_item and best_detour_cost <= 3:
+                    # Cascade items save ~15 rounds later → worth up to 6 rounds detour
+                    # Same-type items give +1 but no cascade → worth up to 3
+                    max_detour = 6 if best_detour_cascade else 3
+                    if best_detour_item and best_detour_cost <= max_detour:
                         claimed_items.add(best_detour_item["id"])
                         net_preview_needed[best_detour_item["type"]] = (
                             net_preview_needed.get(best_detour_item["type"], 0) - 1
@@ -436,32 +461,39 @@ def decide_actions(state):
             continue
 
         # 3. Opportunistic preview pickup: grab adjacent preview items only if
-        #    we have spare slots beyond what active items need
+        #    we have spare slots beyond what active items need.
+        #    Prefer cascade-able items (types NOT in active order).
         spare_slots = (3 - len(inventory)) - active_items_on_shelves
         if preview and spare_slots > 0:
+            best_opp = None
+            best_opp_cascade = False
             for item_type, count in net_preview_needed.items():
                 if count <= 0:
                     continue
+                is_cascade = item_type not in active_types
                 for it in items_by_type.get(item_type, []):
                     if it["id"] in claimed_items:
                         continue
                     ix, iy = it["position"]
                     if abs(bx - ix) + abs(by - iy) == 1:
-                        claimed_items.add(it["id"])
-                        net_preview_needed[it["type"]] = (
-                            net_preview_needed.get(it["type"], 0) - 1
-                        )
-                        emit(
-                            bot_id,
-                            bx,
-                            by,
-                            {"bot": bot_id, "action": "pick_up", "item_id": it["id"]},
-                        )
-                        picked_up_preview = True
-                        break
-                else:
-                    continue
-                break
+                        if is_cascade and not best_opp_cascade:
+                            best_opp = it
+                            best_opp_cascade = True
+                        elif not best_opp:
+                            best_opp = it
+
+            if best_opp:
+                claimed_items.add(best_opp["id"])
+                net_preview_needed[best_opp["type"]] = (
+                    net_preview_needed.get(best_opp["type"], 0) - 1
+                )
+                emit(
+                    bot_id,
+                    bx,
+                    by,
+                    {"bot": bot_id, "action": "pick_up", "item_id": best_opp["id"]},
+                )
+                picked_up_preview = True
             else:
                 picked_up_preview = False
 
@@ -565,8 +597,9 @@ def decide_actions(state):
 
         # 5. If we have active items to deliver, consider preview detour first
         if has_active_items:
-            # If empty slots, check if a preview item is worth a small detour
-            if preview and len(inventory) < 3:
+            # If spare slots (beyond active needs), check if a preview detour is worth it
+            step5_spare = (3 - len(inventory)) - active_items_on_shelves
+            if preview and step5_spare > 0:
                 direct = dist_static(pos, drop_off)
                 best_detour_item = None
                 best_detour_cell = None
@@ -585,9 +618,7 @@ def decide_actions(state):
                                 best_detour_item = it
                                 best_detour_cell = cell
 
-                # Detour worth it if cost is small relative to savings
-                # A preview item picked up now saves ~2*dist(dropoff, item) later
-                if best_detour_item and best_detour_cost <= 6:
+                if best_detour_item and best_detour_cost <= 3:
                     claimed_items.add(best_detour_item["id"])
                     net_preview_needed[best_detour_item["type"]] = (
                         net_preview_needed.get(best_detour_item["type"], 0) - 1
@@ -621,25 +652,47 @@ def decide_actions(state):
                 continue
 
         # 6. Try preview order items (pre-pick)
-        if preview and len(inventory) < 3:
+        # Only walk toward distant preview items if no active items remain on shelves.
+        # When active items still needed, only do adjacent (free) preview pickups.
+        # Prefer cascade-able items (types NOT in active order).
+        spare_slots_for_preview = (3 - len(inventory)) - active_items_on_shelves
+        if preview and spare_slots_for_preview > 0:
             best_preview = None
             best_pdist = float("inf")
+            best_preview_cascade = False
             for item_type, count in net_preview_needed.items():
                 if count <= 0:
                     continue
+                is_cascade = item_type not in active_types
                 for it in items_by_type.get(item_type, []):
                     if it["id"] in claimed_items:
                         continue
                     ix, iy = it["position"]
                     if abs(bx - ix) + abs(by - iy) == 1:
-                        best_preview = it
-                        best_pdist = 0
-                        break
-                    _, d = find_best_item_target(pos, it, blocked_static)
-                    if d < best_pdist:
-                        best_pdist = d
-                        best_preview = it
-                if best_pdist == 0:
+                        # Adjacent: prefer cascade items
+                        if is_cascade and not best_preview_cascade:
+                            best_preview = it
+                            best_pdist = 0
+                            best_preview_cascade = True
+                        elif not best_preview or (
+                            best_pdist > 0 and not best_preview_cascade
+                        ):
+                            best_preview = it
+                            best_pdist = 0
+                        if best_pdist == 0 and best_preview_cascade:
+                            break
+                        continue
+                    # Only navigate to distant preview items when no active items left
+                    if active_items_on_shelves == 0:
+                        _, d = find_best_item_target(pos, it, blocked_static)
+                        if is_cascade and not best_preview_cascade:
+                            best_pdist = d
+                            best_preview = it
+                            best_preview_cascade = True
+                        elif is_cascade == best_preview_cascade and d < best_pdist:
+                            best_pdist = d
+                            best_preview = it
+                if best_pdist == 0 and best_preview_cascade:
                     break
 
             if best_preview and best_pdist == 0:
@@ -655,7 +708,7 @@ def decide_actions(state):
                 )
                 continue
 
-            if best_preview:
+            if best_preview and active_items_on_shelves == 0:
                 claimed_items.add(best_preview["id"])
                 net_preview_needed[best_preview["type"]] = (
                     net_preview_needed.get(best_preview["type"], 0) - 1
