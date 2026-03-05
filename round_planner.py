@@ -109,15 +109,20 @@ class RoundPlanner:
         carried_active = {}
         carried_preview = {}
         self.bot_has_active = {}
+        # Per-bot carried active items (for order-completion check)
+        self.bot_carried_active = {}
         for bot in self.bots:
             has = False
+            bot_active = {}
             for inv_item in bot["inventory"]:
                 if self.active_needed.get(inv_item, 0) > 0:
                     carried_active[inv_item] = carried_active.get(inv_item, 0) + 1
+                    bot_active[inv_item] = bot_active.get(inv_item, 0) + 1
                     has = True
                 elif inv_item in preview_needed:
                     carried_preview[inv_item] = carried_preview.get(inv_item, 0) + 1
             self.bot_has_active[bot["id"]] = has
+            self.bot_carried_active[bot["id"]] = bot_active
 
         self.net_active = {
             t: c - carried_active.get(t, 0)
@@ -144,6 +149,13 @@ class RoundPlanner:
             max(1, (total + idle_bots - 1) // idle_bots) if idle_bots > 0 else 3
         )
 
+        # Dedicated preview bot assignment (Phase 2.2)
+        # Only for exactly 2 bots; more bots benefit more from all focusing on active
+        self.preview_bot_id = None
+        if (self.order_nearly_complete and len(self.bots) == 2
+                and self.preview and self.net_preview):
+            self._assign_preview_bot()
+
     def _is_delivering(self, bot):
         """True if bot is busy delivering (shouldn't count as idle)."""
         has_ai = self.bot_has_active[bot["id"]]
@@ -152,6 +164,64 @@ class RoundPlanner:
         if has_ai and tuple(bot["position"]) == self.drop_off:
             return True
         return False
+
+    def _assign_preview_bot(self):
+        """Assign the bot furthest from remaining active items as preview-only bot.
+
+        Only assigns when there are more idle bots than active items on shelves,
+        so pulling one bot away doesn't leave active items unattended.
+        """
+        # Count bots that could pick active items (idle, no active in inv)
+        idle_for_active = []
+        for bot in self.bots:
+            if self._is_delivering(bot):
+                continue
+            idle_for_active.append(bot)
+
+        # Only dedicate a preview bot if we have MORE idle bots than active
+        # items on shelves (i.e., at least one bot is redundant)
+        if len(idle_for_active) <= self.active_on_shelves:
+            return
+
+        # Find positions of remaining active items on shelves
+        active_item_positions = []
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, _ = self.gs.find_best_item_target(self.drop_off, it)
+            if cell:
+                active_item_positions.append(cell)
+        if not active_item_positions:
+            return
+
+        # Center of mass of active items (using walkable positions)
+        cx = sum(p[0] for p in active_item_positions) / len(active_item_positions)
+        cy = sum(p[1] for p in active_item_positions) / len(active_item_positions)
+
+        # Find idle bot furthest from active items center that has no active items
+        best_bid = None
+        best_dist = -1
+        for bot in idle_for_active:
+            if self.bot_has_active[bot["id"]]:
+                continue  # don't pull a bot that has active items
+            bx, by = bot["position"]
+            d = abs(bx - cx) + abs(by - cy)
+            if d > best_dist:
+                best_dist = d
+                best_bid = bot["id"]
+
+        if best_bid is not None:
+            self.preview_bot_id = best_bid
+
+    def _bot_delivery_completes_order(self, bot):
+        """Check if THIS bot's delivery alone completes the order.
+
+        True if for every item type still needed, this bot carries enough.
+        active_needed is already {type: still_needed_count}.
+        """
+        bot_active = self.bot_carried_active[bot["id"]]
+        for item_type, still_need in self.active_needed.items():
+            if still_need > 0 and bot_active.get(item_type, 0) < still_need:
+                return False
+        return True
 
     def _compute_bot_assignments(self):
         """Pre-assign active items to bots (multi-bot optimization)."""
@@ -237,9 +307,28 @@ class RoundPlanner:
         blocked = self._build_blocked(bid)
         has_active = self.bot_has_active[bid]
 
+        # Phase 2.2: dedicated preview bot skips active items entirely
+        if bid == self.preview_bot_id and not has_active:
+            if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
+                return
+            if self._try_clear_dropoff(bid, bx, by, pos, blocked):
+                return
+            self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
+            return
+
         # Step 1: at drop-off with active items -> deliver
         if pos == self.drop_off and has_active:
             self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
+            return
+
+        # Phase 4.4: deliver partial items if it COMPLETES the order (+5 bonus)
+        # This triggers when items are still on shelves but this bot's inventory
+        # alone can finish the order (already delivered + this bot's items = required)
+        if (has_active and self.active_on_shelves > 0
+                and len(inv) < 3
+                and self._bot_delivery_completes_order(bot)):
+            # Rush to deliver — completing order is worth +5 bonus
+            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return
 
         # Step 2: all active items picked up -> rush to deliver
@@ -278,12 +367,38 @@ class RoundPlanner:
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return
 
-        # Endgame: rush to deliver if no time for more pickups
+        # Phase 4.4: zero-cost delivery — deliver if adjacent to dropoff
+        # and have active items, en route to next pickup (don't detour)
+        if (has_active and pos != self.drop_off
+                and self.gs.dist_static(pos, self.drop_off) == 1
+                and not self._bot_delivery_completes_order(bot)):
+            # Check if delivering now is "free" — next item is further from dropoff
+            # Only deliver if it doesn't cost extra rounds vs going straight to item
+            next_item_pos = self._find_nearest_active_item_pos(pos)
+            if next_item_pos is not None:
+                dist_via_dropoff = 1 + self.gs.dist_static(self.drop_off, next_item_pos)
+                dist_direct = self.gs.dist_static(pos, next_item_pos)
+                if dist_via_dropoff <= dist_direct + 1:
+                    # Zero or near-zero cost: deliver on the way
+                    self._emit_move_or_wait(
+                        bid, bx, by, pos, self.drop_off, blocked
+                    )
+                    return
+
+        # Phase 4.3: improved end-game strategy
         if self.endgame and inv:
             d = self.gs.dist_static(pos, self.drop_off)
             if d + 1 >= self.rounds_left:
+                # Must deliver now or lose items
                 self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
                 return
+            # Calculate if we can complete the order in remaining rounds
+            if has_active and self.active_on_shelves > 0:
+                rounds_to_complete = self._estimate_rounds_to_complete(pos, inv)
+                if rounds_to_complete > self.rounds_left:
+                    # Can't complete order — maximize individual item deliveries
+                    if self._try_maximize_items(bid, bx, by, pos, inv, blocked):
+                        return
 
         # Step 4: pick up active items (adjacent first, then TSP route)
         if self._try_active_pickup(bid, bx, by, pos, inv, blocked):
@@ -305,9 +420,14 @@ class RoundPlanner:
         if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
             return
 
-        # Step 7: clear dropoff area when idle
+        # Step 7: clear dropoff area or move out of others' way when idle
         if self._try_clear_dropoff(bid, bx, by, pos, blocked):
             return
+
+        # Step 8: idle bot at spawn or blocking — move to a less crowded spot
+        if len(self.bots) > 1:
+            if self._try_move_away_from_crowd(bid, bx, by, pos, blocked):
+                return
 
         self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
 
@@ -380,6 +500,80 @@ class RoundPlanner:
         return None, None
 
     # ------------------------------------------------------------------
+    # Phase 4.3: end-game helpers
+    # ------------------------------------------------------------------
+
+    def _find_nearest_active_item_pos(self, pos):
+        """Find the position of the nearest reachable active item on shelves."""
+        best_cell = None
+        best_d = float("inf")
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, d = self.gs.find_best_item_target(pos, it)
+            if cell and d < best_d:
+                best_d = d
+                best_cell = cell
+        return best_cell
+
+    def _estimate_rounds_to_complete(self, pos, inv):
+        """Estimate rounds needed to pick up all remaining active items and deliver."""
+        # Collect remaining items to pick
+        remaining = []
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, d = self.gs.find_best_item_target(pos, it)
+            if cell and d < float("inf"):
+                remaining.append((it, cell, d))
+        if not remaining:
+            # Only need to deliver what we have
+            return self.gs.dist_static(pos, self.drop_off) + 1
+
+        # Estimate: greedy nearest-neighbor tour + delivery trips
+        remaining.sort(key=lambda c: c[2])
+        total_dist = 0
+        current = pos
+        picked = 0
+        for it, cell, _ in remaining:
+            d = self.gs.dist_static(current, cell)
+            total_dist += d + 1  # +1 for pickup
+            current = cell
+            picked += 1
+            if picked + len(inv) >= 3:
+                # Need a delivery trip
+                total_dist += self.gs.dist_static(current, self.drop_off) + 1
+                current = self.drop_off
+                picked = 0
+        # Final delivery
+        if picked > 0 or inv:
+            total_dist += self.gs.dist_static(current, self.drop_off) + 1
+        return total_dist
+
+    def _try_maximize_items(self, bid, bx, by, pos, inv, blocked):
+        """End-game: maximize individual item deliveries when order can't complete.
+
+        Pick up nearby items that can be delivered before time runs out.
+        If carrying items, decide whether to deliver now or grab one more.
+        """
+        has_active = self.bot_has_active[bid]
+        d_to_drop = self.gs.dist_static(pos, self.drop_off)
+
+        # If carrying items, check if we should deliver now
+        if has_active and len(inv) > 0:
+            # Can we grab one more and still deliver?
+            nearest = self._find_nearest_active_item_pos(pos)
+            if nearest:
+                d_to_item = self.gs.dist_static(pos, nearest)
+                d_item_to_drop = self.gs.dist_static(nearest, self.drop_off)
+                total_with_pickup = d_to_item + 1 + d_item_to_drop + 1
+                if total_with_pickup < self.rounds_left and len(inv) < 3:
+                    # Worth picking up one more
+                    return False  # Fall through to normal pickup
+
+            # Deliver what we have
+            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+            return True
+
+        return False
+
+    # ------------------------------------------------------------------
     # Step 4: active item pickup
     # ------------------------------------------------------------------
 
@@ -444,8 +638,13 @@ class RoundPlanner:
         if not candidates:
             return None
 
+        # Phase 4.2: Item proximity clustering
+        # When multiple same-type items exist, prefer ones closer to other
+        # needed items (center-of-mass tiebreaker)
+        if len(candidates) > 1:
+            candidates = self._cluster_select(candidates)
+
         slots = min(3 - len(inv), self.max_claim)
-        candidates.sort(key=lambda c: c[2])
 
         # Select best item per type, up to what's still needed
         selected = []
@@ -463,6 +662,47 @@ class RoundPlanner:
             return self.gs.plan_multi_trip(pos, selected, self.drop_off, slots)
         return self.gs.tsp_route(pos, selected, self.drop_off)
 
+    def _cluster_select(self, candidates):
+        """For same-type items, prefer the one closest to other needed items.
+
+        Uses center-of-mass of all candidate positions as a gravity point.
+        Re-ranks candidates by: distance_to_bot + cluster_penalty.
+        """
+        # Compute center of mass of ALL needed item positions
+        all_positions = [cell for _, cell, _ in candidates]
+        if len(all_positions) < 2:
+            return candidates
+        cx = sum(p[0] for p in all_positions) / len(all_positions)
+        cy = sum(p[1] for p in all_positions) / len(all_positions)
+
+        # Group candidates by type
+        by_type = {}
+        for entry in candidates:
+            t = entry[0]["type"]
+            by_type.setdefault(t, []).append(entry)
+
+        result = []
+        for t, entries in by_type.items():
+            needed = self.net_active.get(t, 0)
+            if len(entries) <= needed:
+                # Need all of them — keep sorted by distance to bot
+                entries.sort(key=lambda e: e[2])
+                result.extend(entries)
+            else:
+                # More available than needed — pick ones closest to center
+                # Score: bot_distance + 0.5 * distance_from_center
+                scored = []
+                for entry in entries:
+                    _, cell, d = entry
+                    cluster_d = abs(cell[0] - cx) + abs(cell[1] - cy)
+                    scored.append((*entry, d + 0.5 * cluster_d))
+                scored.sort(key=lambda e: e[3])
+                result.extend((it, cell, d) for it, cell, d, _ in scored)
+
+        # Re-sort by bot distance for final ordering
+        result.sort(key=lambda c: c[2])
+        return result
+
     # ------------------------------------------------------------------
     # Step 6: preview pre-pick
     # ------------------------------------------------------------------
@@ -471,6 +711,8 @@ class RoundPlanner:
         if not self.preview or self._spare_slots(inv) <= 0:
             return False
 
+        is_preview_bot = (bid == self.preview_bot_id)
+
         # Pass 1: check adjacent items via position lookup (free pickup)
         adj = self._find_adjacent_needed(bx, by, self.net_preview, prefer_cascade=True)
         if adj:
@@ -478,8 +720,10 @@ class RoundPlanner:
             self._emit(bid, bx, by, self._pickup(bid, adj))
             return True
 
-        # Pass 2: walk to distant preview items (only when no active items left)
-        if self.active_on_shelves > 0:
+        # Pass 2: walk to distant preview items
+        # Normal bots only do this when no active items left on shelves
+        # Preview bots always do this (that's their job)
+        if not is_preview_bot and self.active_on_shelves > 0:
             return False
 
         best = None
@@ -529,6 +773,39 @@ class RoundPlanner:
             return True
         return False
 
+    def _try_move_away_from_crowd(self, bid, bx, by, pos, blocked):
+        """Idle bot moves toward less crowded area to avoid blocking others."""
+        # Count nearby bots (within Manhattan distance 2)
+        nearby = sum(
+            1 for b in self.bots
+            if b["id"] != bid
+            and abs(b["position"][0] - bx) + abs(b["position"][1] - by) <= 2
+        )
+        if nearby == 0:
+            return False
+        # Move to the neighbor with fewest adjacent bots
+        best = None
+        best_crowd = nearby
+        for dx, dy in DIRECTIONS:
+            npos = (bx + dx, by + dy)
+            if npos in blocked:
+                continue
+            crowd = sum(
+                1 for b in self.bots
+                if b["id"] != bid
+                and abs(b["position"][0] - npos[0]) + abs(b["position"][1] - npos[1]) <= 2
+            )
+            if crowd < best_crowd:
+                best_crowd = crowd
+                best = npos
+        if best:
+            self._emit(
+                bid, bx, by,
+                {"bot": bid, "action": direction_to(bx, by, best[0], best[1])},
+            )
+            return True
+        return False
+
     # ------------------------------------------------------------------
     # Action emission and collision avoidance
     # ------------------------------------------------------------------
@@ -563,6 +840,8 @@ class RoundPlanner:
     def _emit_move(self, bid, bx, by, pos, target, blocked):
         """BFS to target and emit. Returns True if a move was emitted."""
         next_pos = bfs(pos, target, blocked)
+        if next_pos and next_pos in blocked:
+            next_pos = None
         if next_pos:
             self._emit(
                 bid, bx, by,
@@ -574,6 +853,9 @@ class RoundPlanner:
     def _emit_move_or_wait(self, bid, bx, by, pos, target, blocked):
         """Move toward target with unstick fallback, or wait."""
         next_pos = bfs(pos, target, blocked)
+        # BFS may return a position that's blocked (goal occupied by another bot)
+        if next_pos and next_pos in blocked:
+            next_pos = None
         if not next_pos:
             # Unstick: try any unblocked neighbor
             for dx, dy in DIRECTIONS:

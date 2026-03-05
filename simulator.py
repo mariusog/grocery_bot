@@ -2,11 +2,48 @@
 
 Generates a realistic store layout matching the Easy map format and runs
 the bot's decide_actions() through 300 rounds, tracking score and orders.
+
+Difficulty presets:
+  Easy:   1 bot,  12x10 grid, 4 item types
+  Medium: 2 bots, 16x12 grid, 6 item types
+  Hard:   5 bots, 22x14 grid, 10 item types
 """
 
 import random
+import statistics
+import time
+from collections import defaultdict
 
 import bot
+
+
+# --- Difficulty presets ---
+DIFFICULTY_PRESETS = {
+    "Easy": {
+        "num_bots": 1,
+        "width": 12,
+        "height": 10,
+        "num_item_types": 4,
+        "items_per_order": (3, 4),
+        "max_rounds": 300,
+    },
+    "Medium": {
+        "num_bots": 2,
+        "width": 16,
+        "height": 12,
+        "num_item_types": 6,
+        "items_per_order": (3, 5),
+        "max_rounds": 300,
+    },
+    "Hard": {
+        "num_bots": 5,
+        "width": 22,
+        "height": 14,
+        "num_item_types": 10,
+        "items_per_order": (4, 6),
+        "max_rounds": 300,
+    },
+}
 
 
 class GameSimulator:
@@ -317,9 +354,16 @@ class GameSimulator:
     def is_over(self):
         return self.round >= self.max_rounds
 
-    def run(self, verbose=False):
-        """Run full game, return results dict."""
+    def run(self, verbose=False, profile=False):
+        """Run full game, return results dict.
+
+        Args:
+            verbose: Print progress every 50 rounds.
+            profile: If True, record per-function timing stats in result.
+        """
         bot.reset_state()
+
+        timings = defaultdict(list) if profile else None
 
         while not self.is_over():
             state = self.get_state()
@@ -327,7 +371,14 @@ class GameSimulator:
             if not state["orders"]:
                 break  # no more orders
 
+            if profile:
+                t0 = time.perf_counter()
+
             actions = bot.decide_actions(state)
+
+            if profile:
+                timings["decide_actions"].append(time.perf_counter() - t0)
+
             self.apply_actions(actions)
 
             if verbose and self.round % 50 == 0:
@@ -343,6 +394,69 @@ class GameSimulator:
             "orders_completed": self.orders_completed,
             "rounds_used": self.round,
         }
+        if profile and timings:
+            timing_stats = {}
+            for name, vals in timings.items():
+                ms = [v * 1000 for v in vals]
+                sorted_ms = sorted(ms)
+                p99_idx = min(int(len(ms) * 0.99), len(ms) - 1)
+                timing_stats[name] = {
+                    "calls": len(ms),
+                    "avg_ms": statistics.mean(ms),
+                    "max_ms": max(ms),
+                    "p99_ms": sorted_ms[p99_idx],
+                    "total_ms": sum(ms),
+                }
+            result["timings"] = timing_stats
         if verbose:
             print(f"  Final: {result}")
         return result
+
+
+def run_benchmark(configs=None, seeds=None, verbose=False):
+    """Run multiple simulator configurations and print a comparison table.
+
+    Args:
+        configs: dict of {name: kwargs_dict} for GameSimulator.
+                 Defaults to DIFFICULTY_PRESETS.
+        seeds: list of seeds to test per config. Defaults to [42].
+        verbose: Print per-seed details.
+
+    Returns:
+        list of result dicts with config metadata.
+    """
+    if configs is None:
+        configs = DIFFICULTY_PRESETS
+    if seeds is None:
+        seeds = [42]
+
+    all_results = []
+    print(f"{'Config':<10} {'Bots':>4} {'Seed':>5} {'Score':>6} "
+          f"{'Orders':>7} {'Items':>6} {'Rounds':>7} {'Time(s)':>8}")
+    print("-" * 65)
+
+    for cname, cfg in configs.items():
+        config_scores = []
+        for seed in seeds:
+            t0 = time.perf_counter()
+            sim = GameSimulator(seed=seed, **cfg)
+            result = sim.run(verbose=verbose, profile=True)
+            elapsed = time.perf_counter() - t0
+
+            result["config"] = cname
+            result["seed"] = seed
+            result["num_bots"] = cfg.get("num_bots", 1)
+            result["wall_time_s"] = elapsed
+            all_results.append(result)
+            config_scores.append(result["score"])
+
+            print(f"{cname:<10} {cfg.get('num_bots', 1):>4} {seed:>5} "
+                  f"{result['score']:>6} {result['orders_completed']:>7} "
+                  f"{result['items_delivered']:>6} {result['rounds_used']:>7} "
+                  f"{elapsed:>8.3f}")
+
+        if len(seeds) > 1:
+            avg = statistics.mean(config_scores)
+            print(f"{'':10} {'':>4} {'AVG':>5} {avg:>6.1f}")
+
+    return all_results

@@ -1,4 +1,4 @@
-"""GameState — persistent map caches and cross-round tracking."""
+"""GameState — persistent map caches, cross-round tracking, and algorithms."""
 
 from itertools import combinations, permutations
 
@@ -127,3 +127,203 @@ class GameState:
                     best_cost = total
                     best_trip1 = route1
         return best_trip1 or self.tsp_route(bot_pos, all_candidates[:capacity], drop_off)
+
+    # ------------------------------------------------------------------
+    # Phase 1.3: Interleaved Pickup-Delivery
+    # ------------------------------------------------------------------
+
+    def plan_interleaved_route(self, bot_pos, item_targets, drop_off, capacity=3):
+        """Compare full-pickup-then-deliver vs deliver-when-passing-dropoff.
+
+        Returns list of (action_type, target) tuples:
+        - ("pickup", (item, cell))
+        - ("deliver", drop_off)
+        """
+        n = len(item_targets)
+        if n == 0:
+            return []
+        if n == 1:
+            return [("pickup", item_targets[0]), ("deliver", drop_off)]
+
+        # Strategy 1: Full pickup then deliver
+        if n <= capacity:
+            full_route = self.tsp_route(bot_pos, item_targets, drop_off)
+            full_cost = self.tsp_cost(bot_pos, full_route, drop_off)
+            best_cost = full_cost
+            best_plan = [("pickup", it) for it in full_route] + [("deliver", drop_off)]
+        else:
+            best_cost = float("inf")
+            best_plan = None
+
+        # Strategy 2: Interleaved — split into two batches
+        if n > capacity:
+            min_b1 = max(1, n - capacity)
+            max_b1 = min(capacity, n - 1)
+        else:
+            min_b1 = 1
+            max_b1 = n - 1
+
+        for b1_size in range(min_b1, max_b1 + 1):
+            if n - b1_size > capacity:
+                continue
+            for b1_indices in combinations(range(n), b1_size):
+                batch1 = [item_targets[i] for i in b1_indices]
+                batch2 = [item_targets[i] for i in range(n) if i not in b1_indices]
+
+                route1 = self.tsp_route(bot_pos, batch1, drop_off)
+                cost1 = self.tsp_cost(bot_pos, route1, drop_off)
+                route2 = self.tsp_route(drop_off, batch2, drop_off)
+                cost2 = self.tsp_cost(drop_off, route2, drop_off)
+
+                total = cost1 + cost2
+                if total < best_cost:
+                    best_cost = total
+                    best_plan = (
+                        [("pickup", it) for it in route1]
+                        + [("deliver", drop_off)]
+                        + [("pickup", it) for it in route2]
+                        + [("deliver", drop_off)]
+                    )
+
+        return best_plan
+
+    # ------------------------------------------------------------------
+    # Phase 3.1: Hungarian Algorithm
+    # ------------------------------------------------------------------
+
+    def hungarian_assign(self, bot_positions, item_positions, dist_fn=None):
+        """Optimal bot-to-item assignment. Falls back to greedy for >100 pairs."""
+        if not bot_positions or not item_positions:
+            return []
+
+        if dist_fn is None:
+            dist_fn = self.dist_static
+
+        n_bots = len(bot_positions)
+        n_items = len(item_positions)
+
+        if n_bots * n_items > 100:
+            return _greedy_assign(bot_positions, item_positions, dist_fn)
+
+        cost_matrix = []
+        for i in range(n_bots):
+            row = []
+            for j in range(n_items):
+                row.append(dist_fn(bot_positions[i], item_positions[j]))
+            cost_matrix.append(row)
+
+        return _hungarian_solve(cost_matrix)
+
+
+# ------------------------------------------------------------------
+# Hungarian algorithm internals (module-level for reuse)
+# ------------------------------------------------------------------
+
+def _hungarian_solve(cost_matrix):
+    """Solve assignment problem using Hungarian/Munkres algorithm O(n^3)."""
+    if not cost_matrix or not cost_matrix[0]:
+        return []
+
+    n_rows = len(cost_matrix)
+    n_cols = len(cost_matrix[0])
+    n = max(n_rows, n_cols)
+    INF = float("inf")
+
+    has_finite = any(val < INF for row in cost_matrix for val in row)
+    if not has_finite:
+        return []
+
+    max_finite = max(
+        (val for row in cost_matrix for val in row if val < INF), default=0
+    )
+    pad_val = max_finite * n + 1
+
+    matrix = []
+    for i in range(n):
+        row = []
+        for j in range(n):
+            if i < n_rows and j < n_cols:
+                val = cost_matrix[i][j]
+                row.append(pad_val if val == INF else val)
+            else:
+                row.append(pad_val)
+        matrix.append(row)
+
+    u = [0.0] * (n + 1)
+    v = [0.0] * (n + 1)
+    p = [0] * (n + 1)
+    way = [0] * (n + 1)
+
+    for i in range(1, n + 1):
+        p[0] = i
+        j0 = 0
+        min_v = [INF] * (n + 1)
+        used = [False] * (n + 1)
+
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = INF
+            j1 = -1
+
+            for j in range(1, n + 1):
+                if used[j]:
+                    continue
+                cur = matrix[i0 - 1][j - 1] - u[i0] - v[j]
+                if cur < min_v[j]:
+                    min_v[j] = cur
+                    way[j] = j0
+                if min_v[j] < delta:
+                    delta = min_v[j]
+                    j1 = j
+
+            if j1 == -1:
+                break
+
+            for j in range(n + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    min_v[j] -= delta
+
+            j0 = j1
+            if p[j0] == 0:
+                break
+
+        while j0 != 0:
+            p[j0] = p[way[j0]]
+            j0 = way[j0]
+
+    result = []
+    for j in range(1, n + 1):
+        row_idx = p[j] - 1
+        col_idx = j - 1
+        if row_idx < n_rows and col_idx < n_cols:
+            if cost_matrix[row_idx][col_idx] < INF:
+                result.append((row_idx, col_idx))
+    return result
+
+
+def _greedy_assign(bot_positions, item_positions, dist_fn):
+    """Greedy fallback for large inputs."""
+    pairs = []
+    for i, bp in enumerate(bot_positions):
+        for j, ip in enumerate(item_positions):
+            d = dist_fn(bp, ip)
+            if d < float("inf"):
+                pairs.append((d, i, j))
+    pairs.sort()
+
+    assigned_bots = set()
+    assigned_items = set()
+    result = []
+    for d, bi, ii in pairs:
+        if bi in assigned_bots or ii in assigned_items:
+            continue
+        result.append((bi, ii))
+        assigned_bots.add(bi)
+        assigned_items.add(ii)
+        if len(result) >= min(len(bot_positions), len(item_positions)):
+            break
+    return result
