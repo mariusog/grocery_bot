@@ -191,6 +191,77 @@ class GameState:
     # Phase 3.1: Hungarian Algorithm
     # ------------------------------------------------------------------
 
+    def assign_items_to_bots(self, assignable_bots, candidate_items,
+                              zone_width=None):
+        """Assign items to bots optimally using Hungarian algorithm.
+
+        Args:
+            assignable_bots: list of (bot_id, bot_pos, slots) tuples.
+            candidate_items: list of item dicts with "position" key.
+            zone_width: if set, add zone penalty for cross-zone assignments.
+
+        Returns:
+            dict mapping bot_id -> list of assigned item dicts.
+        """
+        if not assignable_bots or not candidate_items:
+            return {}
+
+        # Build item targets (adjacent walkable cells)
+        item_targets = []
+        for it in candidate_items:
+            _, d = self.find_best_item_target(
+                assignable_bots[0][1], it  # dummy pos, just need adjacency
+            )
+            item_targets.append(it)
+
+        # Build cost matrix: rows=bots, cols=items
+        bot_positions = [bp for _, bp, _ in assignable_bots]
+        item_positions = [tuple(it["position"]) for it in candidate_items]
+
+        cost_matrix = []
+        for bi, (_, bot_pos, _) in enumerate(assignable_bots):
+            row = []
+            bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
+            for ii, it in enumerate(candidate_items):
+                _, d = self.find_best_item_target(bot_pos, it)
+                if zone_width:
+                    item_zone = int(it["position"][0] / zone_width)
+                    d += abs(bot_zone - item_zone) * 3
+                row.append(d)
+            cost_matrix.append(row)
+
+        # Use Hungarian for small matrices, greedy for large
+        n_bots = len(assignable_bots)
+        n_items = len(candidate_items)
+        if n_bots * n_items <= 100:
+            pairs = _hungarian_solve(cost_matrix)
+        else:
+            pairs = []
+            flat = []
+            for i, row in enumerate(cost_matrix):
+                for j, d in enumerate(row):
+                    if d < float("inf"):
+                        flat.append((d, i, j))
+            flat.sort()
+            used_b, used_i = set(), set()
+            for d, bi, ii in flat:
+                if bi not in used_b and ii not in used_i:
+                    pairs.append((bi, ii))
+                    used_b.add(bi)
+                    used_i.add(ii)
+
+        # Convert pairs to bot_id -> items, respecting slot limits
+        result = {}
+        bot_counts = {}
+        for bi, ii in sorted(pairs, key=lambda p: cost_matrix[p[0]][p[1]]):
+            bot_id, _, slots = assignable_bots[bi]
+            if bot_counts.get(bot_id, 0) >= slots:
+                continue
+            result.setdefault(bot_id, []).append(candidate_items[ii])
+            bot_counts[bot_id] = bot_counts.get(bot_id, 0) + 1
+
+        return result
+
     def hungarian_assign(self, bot_positions, item_positions, dist_fn=None):
         """Optimal bot-to-item assignment. Falls back to greedy for >100 pairs."""
         if not bot_positions or not item_positions:
