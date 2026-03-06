@@ -1,5 +1,6 @@
 """Shared fixtures and helpers for grocery bot tests."""
 
+import gc
 import sys
 import os
 
@@ -17,8 +18,11 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _reset_bot():
-    """Auto-reset bot state before every test."""
+    """Auto-reset bot state before every test and force GC after."""
     bot.reset_state()
+    yield
+    bot.reset_state()
+    gc.collect()
 
 
 def make_state(
