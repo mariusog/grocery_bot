@@ -16,7 +16,7 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 - **Stay in your lane**: only modify files listed in your agent's "Owned Files" table
 - **One task at a time**: finish or abandon a task before claiming another
 - If you discover work needed in another agent's files, add a new task to `TASKS.md` assigned to that agent — do NOT modify their files
-- Run `python -m pytest test_bot.py -v` before committing — all tests must pass
+- Run `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20` before committing — all tests must pass
 
 ### When Done
 
@@ -37,13 +37,24 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 |-------|-------------|------|
 | pathfinding-agent | `pathfinding.py`, `game_state.py` | Routing, distance, collision, assignment |
 | strategy-agent | `round_planner.py`, `movement.py`, `assignment.py`, `pickup.py`, `delivery.py`, `idle.py` | Per-round decisions, order management |
-| qa-agent | `test_bot.py`, `simulator.py`, `benchmark.py`, `docs/benchmark_results.md` | Testing, benchmarking, profiling |
+| qa-agent | `tests/`, `simulator.py`, `benchmark.py`, `docs/benchmark_results.md` | Testing, benchmarking, profiling |
 
 Shared (read-only for agents): `bot.py`, `docs/CHALLENGE.md`
 
 ## Running Tests
 
 ```sh
-python -m pytest test_bot.py -v
-python benchmark.py  # full benchmark across difficulties
+# Fast tests only (use this while iterating)
+python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
+
+# All tests including regression benchmarks
+python -m pytest tests/ -q --tb=line 2>&1 | tail -20
+
+# Only on failure — rerun with details for the failing test
+python -m pytest tests/ -q --tb=short -x 2>&1 | tail -40
+
+# Full benchmark across difficulties
+python benchmark.py
 ```
+
+**IMPORTANT for agents**: Always pipe pytest output through `tail` to avoid flooding your context with hundreds of lines. Use `-q --tb=line` by default, only switch to `--tb=short` when debugging a specific failure. Never use `-v` — it generates excessive output that wastes context memory.

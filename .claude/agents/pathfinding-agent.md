@@ -15,7 +15,7 @@ Expert algorithm and pathfinding engineer. Owns all routing, distance computatio
 | `pathfinding.py` | BFS, movement helpers, spatial algorithms |
 | `game_state.py` | Distance caching, TSP routing, multi-trip planning, assignment |
 
-**Do NOT modify**: `bot.py`, `round_planner.py`, `simulator.py`, `test_bot.py`
+**Do NOT modify**: `bot.py`, `round_planner.py`, `simulator.py`, `tests/`
 
 ## Reference
 
@@ -100,7 +100,7 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
 ## Testing
 
 ```sh
-python -m pytest test_bot.py -v
+python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
 ```
 
 Add tests for new functions. Verify:

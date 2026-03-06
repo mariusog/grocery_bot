@@ -12,7 +12,7 @@ Expert QA engineer and performance analyst. Owns all testing, benchmarking, prof
 
 | File | Scope |
 |------|-------|
-| `test_bot.py` | Unit and integration tests |
+| `tests/` | Unit and integration tests |
 | `simulator.py` | Game simulator, benchmark configurations |
 | `benchmark.py` | Performance benchmarking script (new) |
 | `docs/benchmark_results.md` | Benchmark data and analysis (new) |
@@ -205,8 +205,19 @@ Key questions:
 ## Testing
 
 ```sh
-python -m pytest test_bot.py -v
+# Fast tests (use while iterating)
+python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
+
+# All tests including regression benchmarks
+python -m pytest tests/ -q --tb=line 2>&1 | tail -20
+
+# Debug a specific failure
+python -m pytest tests/ -q --tb=short -x 2>&1 | tail -40
+
+# Full benchmark
 python benchmark.py
 ```
+
+**IMPORTANT**: Always pipe pytest output through `tail` to limit context memory usage. Use `-q --tb=line` by default. Never use `-v`.
 
 All tests must pass. Benchmark must run without errors.

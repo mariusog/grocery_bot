@@ -14,7 +14,7 @@ Expert game strategy and decision engineer. Owns all per-round decision logic â€
 |------|-------|
 | `round_planner.py` | Per-round bot decisions, order management, preview pipelining |
 
-**Do NOT modify**: `bot.py`, `pathfinding.py`, `game_state.py`, `simulator.py`, `test_bot.py`
+**Do NOT modify**: `bot.py`, `pathfinding.py`, `game_state.py`, `simulator.py`, `tests/`
 
 ## Reference
 
@@ -149,7 +149,7 @@ Example: 4-item order = 9 points if completed, 0-4 if partial
 ## Testing
 
 ```sh
-python -m pytest test_bot.py -v
+python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
 ```
 
 Test scenarios to add:
