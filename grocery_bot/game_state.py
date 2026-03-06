@@ -305,10 +305,19 @@ class GameState:
                     if pos not in self.blocked_static:
                         self.idle_spots.append(pos)
 
+    # Maximum number of BFS results to keep in dist_cache.
+    # Expert maps have ~250 walkable cells; 256 covers full map with margin.
+    DIST_CACHE_MAX = 256
+
     def get_distances_from(
         self, source: tuple[int, int]
     ) -> dict[tuple[int, int], int]:
         if source not in self.dist_cache:
+            if len(self.dist_cache) >= self.DIST_CACHE_MAX:
+                # Evict oldest ~25% of entries
+                keys = list(self.dist_cache)
+                for k in keys[: len(keys) // 4]:
+                    del self.dist_cache[k]
             self.dist_cache[source] = bfs_all(source, self.blocked_static)
         return self.dist_cache[source]
 
