@@ -194,8 +194,10 @@ class GameSimulator:
                 for crow in corridor_rows:
                     if crow <= 1 or crow >= self.height - 2:
                         continue  # don't block top/bottom corridors
-                    if (cap_col, crow) not in wall_set and \
-                       (cap_col, crow) not in self.shelf_positions:
+                    if (cap_col, crow) not in wall_set and (
+                        cap_col,
+                        crow,
+                    ) not in self.shelf_positions:
                         self.walls.append((cap_col, crow))
                         wall_set.add((cap_col, crow))
 
@@ -509,8 +511,7 @@ class GameSimulator:
                 "max_delivery_gap": diag_max_delivery_gap,
                 "oscillation_count": diag_oscillation_count,
                 "avg_bots_idle": (
-                    statistics.mean(diag_idle_per_round)
-                    if diag_idle_per_round else 0.0
+                    statistics.mean(diag_idle_per_round) if diag_idle_per_round else 0.0
                 ),
                 "total_bot_rounds": total_bot_rounds,
             }
@@ -537,8 +538,10 @@ def run_benchmark(configs=None, seeds=None, verbose=False):
         seeds = [42]
 
     all_results = []
-    print(f"{'Config':<10} {'Bots':>4} {'Seed':>5} {'Score':>6} "
-          f"{'Orders':>7} {'Items':>6} {'Rounds':>7} {'Time(s)':>8}")
+    print(
+        f"{'Config':<10} {'Bots':>4} {'Seed':>5} {'Score':>6} "
+        f"{'Orders':>7} {'Items':>6} {'Rounds':>7} {'Time(s)':>8}"
+    )
     print("-" * 65)
 
     for cname, cfg in configs.items():
@@ -556,10 +559,12 @@ def run_benchmark(configs=None, seeds=None, verbose=False):
             all_results.append(result)
             config_scores.append(result["score"])
 
-            print(f"{cname:<10} {cfg.get('num_bots', 1):>4} {seed:>5} "
-                  f"{result['score']:>6} {result['orders_completed']:>7} "
-                  f"{result['items_delivered']:>6} {result['rounds_used']:>7} "
-                  f"{elapsed:>8.3f}")
+            print(
+                f"{cname:<10} {cfg.get('num_bots', 1):>4} {seed:>5} "
+                f"{result['score']:>6} {result['orders_completed']:>7} "
+                f"{result['items_delivered']:>6} {result['rounds_used']:>7} "
+                f"{elapsed:>8.3f}"
+            )
 
         if len(seeds) > 1:
             avg = statistics.mean(config_scores)
@@ -630,9 +635,13 @@ def profile_congestion(num_bots, seeds, verbose=False):
     print(f"\n  Average score: {statistics.mean(scores):.1f}")
     print(f"  Min score: {min(scores)}, Max score: {max(scores)}")
     problem_seeds = [
-        r["seed"] for r in all_results
+        r["seed"]
+        for r in all_results
         if r["score"] < 50
-        or (r["diagnostics"]["idle_rounds"] / r["diagnostics"]["total_bot_rounds"] * 100 > 30)
+        or (
+            r["diagnostics"]["idle_rounds"] / r["diagnostics"]["total_bot_rounds"] * 100
+            > 30
+        )
     ]
     if problem_seeds:
         print(f"  Problematic seeds: {problem_seeds}")

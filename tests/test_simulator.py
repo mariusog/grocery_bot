@@ -3,7 +3,12 @@
 import time
 
 import bot
-from grocery_bot.simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
+from grocery_bot.simulator import (
+    GameSimulator,
+    run_benchmark,
+    DIFFICULTY_PRESETS,
+    profile_congestion,
+)
 from tests.conftest import reset_bot
 
 
@@ -224,9 +229,7 @@ class TestSimulatorPerformanceProfiling:
         t0 = time.perf_counter()
         sim.run()
         elapsed = time.perf_counter() - t0
-        assert elapsed < 2.0, (
-            f"Full game took {elapsed:.3f}s, should be under 2s"
-        )
+        assert elapsed < 2.0, f"Full game took {elapsed:.3f}s, should be under 2s"
 
 
 class TestOrderCascadeDelivery:
@@ -290,7 +293,9 @@ class TestOrderCascadeDelivery:
         sim._do_dropoff(sim.bots[0])
         assert sim.orders[0]["complete"]
         assert not sim.orders[1]["complete"], "Order 1 needs bread, not cheese"
-        assert sim.bots[0]["inventory"] == ["cheese"], "Cheese should remain in inventory"
+        assert sim.bots[0]["inventory"] == ["cheese"], (
+            "Cheese should remain in inventory"
+        )
 
 
 class TestDiagnosticMode:
@@ -337,9 +342,7 @@ class TestDiagnosticMode:
         # Single bot should be efficient — less than 10% idle
         total = diag["total_bot_rounds"]
         idle_pct = diag["idle_rounds"] / total * 100 if total > 0 else 0
-        assert idle_pct < 10, (
-            f"Single bot idle {idle_pct:.1f}% is too high"
-        )
+        assert idle_pct < 10, f"Single bot idle {idle_pct:.1f}% is too high"
 
 
 class TestCongestionProfiler:

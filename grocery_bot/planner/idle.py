@@ -44,8 +44,13 @@ class IdleMixin:
                 best_away = npos
         if best_away:
             self._emit(
-                bid, bx, by,
-                {"bot": bid, "action": direction_to(bx, by, best_away[0], best_away[1])},
+                bid,
+                bx,
+                by,
+                {
+                    "bot": bid,
+                    "action": direction_to(bx, by, best_away[0], best_away[1]),
+                },
             )
             return True
         return False
@@ -81,10 +86,8 @@ class IdleMixin:
             if use_predictions:
                 ob_id = b["id"]
                 has_task = (
-                    (ob_id in self.bot_assignments
-                     and self.bot_assignments[ob_id])
-                    or self.bot_has_active.get(ob_id, False)
-                )
+                    ob_id in self.bot_assignments and self.bot_assignments[ob_id]
+                ) or self.bot_has_active.get(ob_id, False)
                 if has_task:
                     other_bot_positions.append(
                         self.predicted.get(ob_id, tuple(b["position"]))
@@ -95,7 +98,7 @@ class IdleMixin:
                 other_bot_positions.append(tuple(b["position"]))
 
         # Check if already at a precomputed idle spot (well-positioned)
-        idle_spots = getattr(self.gs, 'idle_spots', None)
+        idle_spots = getattr(self.gs, "idle_spots", None)
         idle_set = set(idle_spots) if idle_spots else set()
         at_idle_spot = pos in idle_set
 
@@ -118,8 +121,7 @@ class IdleMixin:
                 if xs:
                     zone_idx = bid % len(xs)
                     target_x = xs[zone_idx]
-                    col_ys = [p[1] for p in item_positions
-                              if p[0] == target_x]
+                    col_ys = [p[1] for p in item_positions if p[0] == target_x]
                     if col_ys:
                         target_y = col_ys[len(col_ys) // 2]
                         item_target = (target_x, target_y)
@@ -130,12 +132,16 @@ class IdleMixin:
             # Penalize being near dropoff
             drop_dist = self.gs.dist_static(p, self.drop_off)
             if drop_dist <= IDLE_DROPOFF_PENALTY_RADIUS:
-                s += (IDLE_DROPOFF_PENALTY_RADIUS + 1 - drop_dist) * IDLE_DROPOFF_PENALTY_FACTOR
+                s += (
+                    IDLE_DROPOFF_PENALTY_RADIUS + 1 - drop_dist
+                ) * IDLE_DROPOFF_PENALTY_FACTOR
             # Penalize being near other bots
             for ob_pos in other_bot_positions:
                 ob_dist = abs(p[0] - ob_pos[0]) + abs(p[1] - ob_pos[1])
                 if ob_dist <= IDLE_BOT_PROXIMITY_RADIUS:
-                    s += (IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist) * IDLE_BOT_PROXIMITY_FACTOR
+                    s += (
+                        IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist
+                    ) * IDLE_BOT_PROXIMITY_FACTOR
             # Reward being near target
             if item_target:
                 item_dist = abs(p[0] - item_target[0]) + abs(p[1] - item_target[1])
@@ -160,10 +166,15 @@ class IdleMixin:
             # only move if improvement is significant (>= 0.5 threshold).
             # This reduces oscillation from marginal score differences
             # when the bot is already well-positioned.
-            if at_idle_spot and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD:
+            if (
+                at_idle_spot
+                and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD
+            ):
                 return False
             self._emit(
-                bid, bx, by,
+                bid,
+                bx,
+                by,
                 {"bot": bid, "action": direction_to(bx, by, best[0], best[1])},
             )
             return True

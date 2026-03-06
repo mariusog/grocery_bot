@@ -124,9 +124,7 @@ class TestAntiCollision:
         assert a0["action"] == "move_left", f"Bot 0 should move left, got {a0}"
         # Bot 1 should make progress (not wait). With temporal BFS it avoids
         # bot 0's current AND predicted positions, so it may route around.
-        assert a1["action"] != "wait", (
-            f"Bot 1 should make progress, got {a1}"
-        )
+        assert a1["action"] != "wait", f"Bot 1 should make progress, got {a1}"
 
     def test_bot_waits_if_only_path_blocked(self):
         """If a bot's only path forward is blocked by another bot, it should
@@ -350,12 +348,11 @@ class TestMultiBotCollisionScenarios:
         #
         # At least one bot should move. Currently both wait (bug).
         # We document this as a known failure:
-        at_least_one_moves = (
-            a0["action"] != "wait" or a1["action"] != "wait"
-        )
+        at_least_one_moves = a0["action"] != "wait" or a1["action"] != "wait"
         if not at_least_one_moves:
             # This is the known bug -- mark as expected failure for now
             import pytest
+
             pytest.skip(
                 "Known bug: bots at same position block each other's BFS. "
                 "Fix needed in bot.py anti-collision logic to exclude self-position "
@@ -438,8 +435,7 @@ class TestMultiBotCollisionEdgeCases:
         reset_bot()
         # Corridor at y=5 between walls at y=4 and y=6
         state = make_state(
-            walls=[[3, 4], [4, 4], [5, 4], [6, 4],
-                   [3, 6], [4, 6], [5, 6], [6, 6]],
+            walls=[[3, 4], [4, 4], [5, 4], [6, 4], [3, 6], [4, 6], [5, 6], [6, 6]],
             bots=[
                 {"id": 0, "position": [3, 5], "inventory": ["milk"]},
                 {"id": 1, "position": [6, 5], "inventory": ["cheese"]},
@@ -464,6 +460,7 @@ class TestMultiBotCollisionEdgeCases:
         # Both bots have active items, both want to reach dropoff (left).
         # They should not collide — predicted positions must differ.
         from grocery_bot.pathfinding import _predict_pos
+
         p0 = _predict_pos(3, 5, a0["action"])
         p1 = _predict_pos(6, 5, a1["action"])
         assert p0 != p1, (
@@ -505,6 +502,7 @@ class TestMultiBotCollisionEdgeCases:
         # Bot 1 (at dropoff with active item) should drop_off
         # Bot 0 should not move into Bot 1's position
         from grocery_bot.pathfinding import _predict_pos
+
         p0 = _predict_pos(2, 7, a0["action"])
         assert p0 != (2, 8), (
             f"Bot 0 should yield to bot 1 at dropoff, but moved to {p0}"
@@ -577,21 +575,20 @@ class TestMultiBotCollisionEdgeCases:
         a1 = get_action(actions, 1)
         a2 = get_action(actions, 2)
         either_moves = a1["action"] != "wait" or a2["action"] != "wait"
-        assert either_moves, (
-            f"Bot 1 and 2 both waiting near dropoff: {a1}, {a2}"
-        )
+        assert either_moves, f"Bot 1 and 2 both waiting near dropoff: {a1}, {a2}"
 
     def test_five_bots_no_total_deadlock(self):
         """Five bots in a walled map should produce actions without total deadlock."""
         reset_bot()
         state = make_state(
-            width=22, height=14,
-            walls=[[x, 0] for x in range(22)] +
-                  [[x, 13] for x in range(22)] +
-                  [[0, y] for y in range(14)] +
-                  [[21, y] for y in range(14)] +
-                  [[5, y] for y in range(3, 6)] +
-                  [[5, y] for y in range(8, 11)],
+            width=22,
+            height=14,
+            walls=[[x, 0] for x in range(22)]
+            + [[x, 13] for x in range(22)]
+            + [[0, y] for y in range(14)]
+            + [[21, y] for y in range(14)]
+            + [[5, y] for y in range(3, 6)]
+            + [[5, y] for y in range(8, 11)],
             bots=[
                 {"id": 0, "position": [3, 7], "inventory": []},
                 {"id": 1, "position": [7, 7], "inventory": []},
@@ -620,9 +617,7 @@ class TestMultiBotCollisionEdgeCases:
         actions = bot.decide_actions(state)
         assert len(actions) == 5, f"Expected 5 actions, got {len(actions)}"
         moving = sum(1 for a in actions if a["action"] != "wait")
-        assert moving >= 3, (
-            f"At least 3 of 5 bots should move, but only {moving} did"
-        )
+        assert moving >= 3, f"At least 3 of 5 bots should move, but only {moving} did"
 
     def test_oscillation_detection_breaks_deadlock(self):
         """A bot that would oscillate between two positions should break
@@ -689,13 +684,12 @@ class TestMultiBotCollisionEdgeCases:
         a0 = get_action(actions, 0)
         a1 = get_action(actions, 1)
         from grocery_bot.pathfinding import _predict_pos
+
         p0 = _predict_pos(4, 4, a0["action"])
         p1 = _predict_pos(5, 4, a1["action"])
         # They should not swap — bot 0 going to (5,4) while bot 1 goes to (4,4)
-        swapped = (p0 == (5, 4) and p1 == (4, 4))
-        assert not swapped, (
-            f"Bots trying to swap positions: bot0->{p0}, bot1->{p1}"
-        )
+        swapped = p0 == (5, 4) and p1 == (4, 4)
+        assert not swapped, f"Bots trying to swap positions: bot0->{p0}, bot1->{p1}"
 
 
 class TestSpawnDispersal:
@@ -707,6 +701,7 @@ class TestSpawnDispersal:
         5 bots can occupy spawn + 4 neighbors, so we allow 1 collision for
         5 bots."""
         from grocery_bot.simulator import GameSimulator
+
         for n_bots in [2, 3, 5]:
             reset_bot()
             sim = GameSimulator(seed=42, num_bots=n_bots)
@@ -715,9 +710,7 @@ class TestSpawnDispersal:
             # Verify all bots start at the same spawn position
             spawn = state["bots"][0]["position"]
             for b in state["bots"]:
-                assert b["position"] == spawn, (
-                    f"Bot {b['id']} not at spawn {spawn}"
-                )
+                assert b["position"] == spawn, f"Bot {b['id']} not at spawn {spawn}"
 
             # Run round 0
             actions = bot.decide_actions(state)
@@ -738,6 +731,7 @@ class TestSpawnDispersal:
     def test_bots_disperse_different_seeds(self):
         """Dispersal should work across different seeds."""
         from grocery_bot.simulator import GameSimulator
+
         n_bots = 5
         for seed in [1, 5, 10]:
             reset_bot()

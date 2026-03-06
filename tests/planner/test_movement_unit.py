@@ -218,10 +218,17 @@ class TestFindYieldAlternative:
         alt = planner._find_yield_alternative(0, 3, 3, (4, 3))
         assert alt["bot"] == 0
         # Should be a valid action (wait or a different direction)
-        assert alt["action"] in ("wait", "move_up", "move_down", "move_left", "move_right")
+        assert alt["action"] in (
+            "wait",
+            "move_up",
+            "move_down",
+            "move_left",
+            "move_right",
+        )
         # Should NOT be moving into the blocked target
         if alt["action"] != "wait":
             from grocery_bot.pathfinding import _predict_pos
+
             pred = _predict_pos(3, 3, alt["action"])
             assert pred != (4, 3)
 
@@ -241,7 +248,13 @@ class TestFindYieldAlternative:
         alt = planner._find_yield_alternative(0, 5, 5, (4, 5))
         assert alt["bot"] == 0
         # Only (6,5) is free but bot 2 occupies it -> wait
-        assert alt["action"] in ("wait", "move_up", "move_down", "move_left", "move_right")
+        assert alt["action"] in (
+            "wait",
+            "move_up",
+            "move_down",
+            "move_left",
+            "move_right",
+        )
 
 
 class TestBuildMovingObstacles:
@@ -399,6 +412,7 @@ class TestEmitMoveOrWaitOscillation:
     def test_oscillation_avoidance(self):
         """Bot should avoid oscillating between two positions."""
         from collections import deque
+
         planner = make_planner(
             bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese"]}],
             items=[{"id": "i0", "type": "bread", "position": [4, 2]}],
@@ -413,7 +427,11 @@ class TestEmitMoveOrWaitOscillation:
         assert len(planner.actions) == 1
         # The action should be valid
         assert planner.actions[0]["action"] in (
-            "wait", "move_up", "move_down", "move_left", "move_right"
+            "wait",
+            "move_up",
+            "move_down",
+            "move_left",
+            "move_right",
         )
 
 

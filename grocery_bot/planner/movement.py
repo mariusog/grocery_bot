@@ -2,8 +2,18 @@
 
 from typing import Any, Optional
 
-from grocery_bot.pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, _predict_pos
-from grocery_bot.constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
+from grocery_bot.pathfinding import (
+    DIRECTIONS,
+    bfs,
+    bfs_temporal,
+    direction_to,
+    _predict_pos,
+)
+from grocery_bot.constants import (
+    BLOCKING_RADIUS_LARGE_TEAM,
+    MAX_INVENTORY,
+    MEDIUM_TEAM_MIN,
+)
 
 
 class MovementMixin:
@@ -20,7 +30,10 @@ class MovementMixin:
         self.predicted[bid] = _predict_pos(bx, by, action_dict["action"])
 
         if action_dict["action"] == "pick_up":
-            self.gs.last_pickup[bid] = (action_dict["item_id"], len(self.bots_by_id[bid]["inventory"]))
+            self.gs.last_pickup[bid] = (
+                action_dict["item_id"],
+                len(self.bots_by_id[bid]["inventory"]),
+            )
 
     def _find_yield_alternative(
         self,
@@ -31,7 +44,8 @@ class MovementMixin:
     ) -> dict[str, Any]:
         occupied: set[tuple[int, int]] = {
             self.predicted.get(b["id"], tuple(b["position"]))
-            for b in self.bots if b["id"] != bid
+            for b in self.bots
+            if b["id"] != bid
         }
         for dx, dy in DIRECTIONS:
             alt = (bx + dx, by + dy)
@@ -59,7 +73,9 @@ class MovementMixin:
             inv: list[str] = b["inventory"]
 
             # Delivering bots with full inventory or no items left to pick
-            if has_active and (len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0):
+            if has_active and (
+                len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0
+            ):
                 nxt = bfs(pos, self.drop_off, self.gs.blocked_static)
                 if nxt:
                     self.predicted[bid] = nxt
@@ -128,7 +144,9 @@ class MovementMixin:
         next_pos = self._bfs_smart(bid, pos, target, blocked)
         if next_pos:
             self._emit(
-                bid, bx, by,
+                bid,
+                bx,
+                by,
                 {"bot": bid, "action": direction_to(bx, by, next_pos[0], next_pos[1])},
             )
             return True
@@ -157,7 +175,11 @@ class MovementMixin:
             alt_pos: Optional[tuple[int, int]] = None
             for dx, dy in DIRECTIONS:
                 npos = (bx + dx, by + dy)
-                if npos not in blocked and npos != next_pos and not self._would_oscillate(bid, npos):
+                if (
+                    npos not in blocked
+                    and npos != next_pos
+                    and not self._would_oscillate(bid, npos)
+                ):
                     alt_pos = npos
                     break
             if alt_pos:
@@ -171,7 +193,9 @@ class MovementMixin:
                     break
         if next_pos:
             self._emit(
-                bid, bx, by,
+                bid,
+                bx,
+                by,
                 {"bot": bid, "action": direction_to(bx, by, next_pos[0], next_pos[1])},
             )
         else:
@@ -181,13 +205,18 @@ class MovementMixin:
         """Build blocked set for a specific bot (static + nearby other bots)."""
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
         max_dist: float = (
-            BLOCKING_RADIUS_LARGE_TEAM if len(self.bots) >= MEDIUM_TEAM_MIN else float("inf")
+            BLOCKING_RADIUS_LARGE_TEAM
+            if len(self.bots) >= MEDIUM_TEAM_MIN
+            else float("inf")
         )
         other: set[tuple[int, int]] = set()
         for b in self.bots:
             if b["id"] == bid:
                 continue
             bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
-            if max_dist == float("inf") or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist:
+            if (
+                max_dist == float("inf")
+                or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist
+            ):
                 other.add(bp)
         return self.gs.blocked_static | other

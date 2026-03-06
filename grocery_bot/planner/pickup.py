@@ -197,7 +197,9 @@ class PickupMixin:
                 best_cell: Optional[tuple[int, int]] = None
                 best_cost = float("inf")
                 for ac in self.gs.adj_cache.get(ipos, []):
-                    cost = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(ac, drop_off)
+                    cost = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(
+                        ac, drop_off
+                    )
                     if cost < best_cost:
                         best_cost = cost
                         best_cell = ac
@@ -291,7 +293,7 @@ class PickupMixin:
         if not force_slots and self._spare_slots(inv) <= 0:
             return False
 
-        is_preview_bot = (bid in self.preview_bot_ids)
+        is_preview_bot = bid in self.preview_bot_ids
 
         # Pass 1: check adjacent items via position lookup (free pickup)
         adj = self._find_adjacent_needed(bx, by, self.net_preview, prefer_cascade=True)
@@ -357,7 +359,11 @@ class PickupMixin:
                 best_cost = detour
                 best_item, best_cell = it, cell
 
-        effective_max = (CASCADE_DETOUR_STEPS if best_cascade else max_detour) if prefer_cascade else max_detour
+        effective_max = (
+            (CASCADE_DETOUR_STEPS if best_cascade else max_detour)
+            if prefer_cascade
+            else max_detour
+        )
         if best_item and best_cost <= effective_max:
             return best_item, best_cell
         return None, None

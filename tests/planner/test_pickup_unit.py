@@ -127,7 +127,13 @@ class TestTryPreviewPrepick:
         actions = bot.decide_actions(state)
         action = get_action(actions)
         # Bot should either pick up the adjacent preview milk or move toward cheese
-        assert action["action"] in ("pick_up", "move_right", "move_up", "move_down", "move_left")
+        assert action["action"] in (
+            "pick_up",
+            "move_right",
+            "move_up",
+            "move_down",
+            "move_left",
+        )
 
     def test_no_preview_when_no_preview_order(self):
         """Without a preview order, no preview prepick happens."""

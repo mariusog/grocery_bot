@@ -29,11 +29,17 @@ class TestHelperFunctions:
 
     def test_get_needed_items_fully_delivered(self):
         """Returns empty dict when all items delivered."""
-        order = {"items_required": ["milk", "bread"], "items_delivered": ["milk", "bread"]}
+        order = {
+            "items_required": ["milk", "bread"],
+            "items_delivered": ["milk", "bread"],
+        }
         assert bot.get_needed_items(order) == {}
 
     def test_get_needed_items_partial(self):
-        order = {"items_required": ["milk", "milk", "bread"], "items_delivered": ["milk"]}
+        order = {
+            "items_required": ["milk", "milk", "bread"],
+            "items_delivered": ["milk"],
+        }
         needed = bot.get_needed_items(order)
         assert needed == {"milk": 1, "bread": 1}
 
@@ -73,10 +79,15 @@ class TestHelperFunctions:
         state = make_state(
             bots=[{"id": 0, "position": [5, 5], "inventory": []}],
             items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
-            orders=[{
-                "id": "o1", "status": "active", "complete": False,
-                "items_required": ["milk"], "items_delivered": [],
-            }],
+            orders=[
+                {
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": [],
+                }
+            ],
         )
         bot.init_static(state)
         cost = bot.tsp_cost((5, 5), [("item", (3, 4))], (1, 8))
@@ -263,7 +274,14 @@ class TestBfsTemporal:
 
     def test_fallback_when_temporal_fails(self):
         """Falls back to standard BFS when temporal path is fully blocked."""
-        blocked_static = _bounded_blocked() | {(0, -1), (0, 1), (1, -1), (1, 1), (2, -1), (2, 1)}
+        blocked_static = _bounded_blocked() | {
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 1),
+            (2, -1),
+            (2, 1),
+        }
         obstacles = [((1, 0), (1, 0))]
         result = bfs_temporal((0, 0), (2, 0), blocked_static, obstacles)
         assert result is None or isinstance(result, tuple)

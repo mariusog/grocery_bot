@@ -17,7 +17,8 @@ class TestDistStatic:
         """A position surrounded by walls is unreachable."""
         gs = make_gs_with_state(
             walls=[[4, 3], [4, 5], [3, 4], [5, 4]],
-            width=11, height=9,
+            width=11,
+            height=9,
         )
         # (4, 4) is enclosed by walls on all 4 sides
         assert gs.dist_static((1, 1), (4, 4)) == float("inf")
@@ -26,7 +27,8 @@ class TestDistStatic:
         """Distance should route around a wall."""
         gs = make_gs_with_state(
             walls=[[3, 3]],
-            width=11, height=9,
+            width=11,
+            height=9,
         )
         # Direct would be 2 steps (2,3)->(3,3)->(4,3), but (3,3) is wall
         d = gs.dist_static((2, 3), (4, 3))
@@ -295,6 +297,7 @@ class TestGetOptimalRoute:
             "drop_off": [1, 8],
         }
         from grocery_bot.game_state import GameState
+
         gs2 = GameState()
         gs2.init_static(state)
         result = gs2.get_optimal_route(["cheese"], (1, 1), (1, 8))
@@ -310,6 +313,7 @@ class TestGetOptimalRoute:
             "drop_off": [1, 8],
         }
         from grocery_bot.game_state import GameState
+
         gs2 = GameState()
         gs2.init_static(state)
         result = gs2.get_optimal_route(["unknown_type"], (1, 1), (1, 8))
@@ -334,6 +338,7 @@ class TestPrecomputeRouteTables:
             "drop_off": [1, 8],
         }
         from grocery_bot.game_state import GameState
+
         gs = GameState()
         gs.init_static(state)
         assert "cheese" in gs.best_pickup
@@ -353,6 +358,7 @@ class TestPrecomputeRouteTables:
             "drop_off": [1, 8],
         }
         from grocery_bot.game_state import GameState
+
         gs = GameState()
         gs.init_static(state)
         key = tuple(sorted(["a", "b", "c"]))

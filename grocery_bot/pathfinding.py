@@ -5,6 +5,7 @@ from typing import Optional
 
 DIRECTIONS: list[tuple[int, int]] = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
+
 def bfs_all(
     source: tuple[int, int],
     blocked: set[tuple[int, int]],
@@ -231,7 +232,6 @@ def _predict_pos(bx: int, by: int, action: str) -> tuple[int, int]:
     if action == "move_right":
         return (bx + 1, by)
     return (bx, by)
-
 
 
 def find_adjacent_positions(

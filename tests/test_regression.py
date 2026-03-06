@@ -163,10 +163,10 @@ class TestCongestionRegression:
             result = sim.run()
             scores.append(result["score"])
         import statistics as _stats
+
         avg = _stats.mean(scores)
         assert avg >= 60, (
-            f"5-bot average score {avg:.1f} is below 60 threshold "
-            f"(scores: {scores})"
+            f"5-bot average score {avg:.1f} is below 60 threshold (scores: {scores})"
         )
 
     def test_no_excessive_idle_rounds(self):

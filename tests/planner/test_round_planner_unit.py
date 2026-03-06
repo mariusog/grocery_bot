@@ -172,6 +172,7 @@ class TestPickup:
     def test_pickup_returns_correct_action(self):
         """_pickup should return a pick_up action dict."""
         from grocery_bot.planner.round_planner import RoundPlanner
+
         action = RoundPlanner._pickup(0, {"id": "i0", "type": "cheese"})
         assert action == {"bot": 0, "action": "pick_up", "item_id": "i0"}
 
@@ -268,14 +269,19 @@ class TestPlan:
         """Without an active order, all bots should wait."""
         from tests.conftest import make_state
         import bot
+
         state = make_state(
             bots=[{"id": 0, "position": [3, 3], "inventory": []}],
             items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            orders=[{
-                "id": "o1", "items_required": ["cheese"],
-                "items_delivered": ["cheese"], "complete": True,
-                "status": "completed",
-            }],
+            orders=[
+                {
+                    "id": "o1",
+                    "items_required": ["cheese"],
+                    "items_delivered": ["cheese"],
+                    "complete": True,
+                    "status": "completed",
+                }
+            ],
         )
         bot.reset_state()
         actions = bot.decide_actions(state)

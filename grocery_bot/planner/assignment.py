@@ -11,7 +11,9 @@ class AssignmentMixin:
     def _is_delivering(self, bot: dict[str, Any]) -> bool:
         """True if bot is busy delivering (shouldn't count as idle)."""
         has_ai = self.bot_has_active[bot["id"]]
-        if has_ai and (len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0):
+        if has_ai and (
+            len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0
+        ):
             return True
         if has_ai and tuple(bot["position"]) == self.drop_off:
             return True
@@ -108,7 +110,9 @@ class AssignmentMixin:
             return
 
         map_width: int = self.full_state["grid"]["width"]
-        num_zones = max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
+        num_zones = (
+            max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
+        )
         zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
 
         max_slots = max(s for _, _, s in assignable)
@@ -118,8 +122,9 @@ class AssignmentMixin:
             )
         else:
             self._greedy_assign(assignable, candidates, zone_width)
-        taken_items: set[str] = {it["id"] for items in self.bot_assignments.values()
-                       for it in items}
+        taken_items: set[str] = {
+            it["id"] for items in self.bot_assignments.values() for it in items
+        }
 
         self._stagger_aisle_assignments(assignable, candidates, taken_items)
 
@@ -220,7 +225,8 @@ class AssignmentMixin:
 
                 if best_alt is not None:
                     self.bot_assignments[furthest_bid] = [
-                        it for it in self.bot_assignments[furthest_bid]
+                        it
+                        for it in self.bot_assignments[furthest_bid]
                         if it["id"] != old_item["id"]
                     ]
                     self.bot_assignments[furthest_bid].append(best_alt)

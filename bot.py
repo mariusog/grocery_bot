@@ -80,6 +80,7 @@ def decide_actions(state):
 # WebSocket game loop
 # ---------------------------------------------------------------------------
 
+
 async def play():
     reset_state()
 
@@ -146,8 +147,7 @@ def _build_game_meta(data, timestamp):
         "items_on_map": len(data["items"]),
         "item_types": sorted({it["type"] for it in data["items"]}),
         "item_positions": [
-            {"type": it["type"], "position": it["position"]}
-            for it in data["items"]
+            {"type": it["type"], "position": it["position"]} for it in data["items"]
         ],
         "drop_off": data["drop_off"],
         "max_rounds": data["max_rounds"],
@@ -158,36 +158,41 @@ def _build_game_meta(data, timestamp):
 
 def _log_round(data, actions, log_rows):
     active_o = next(
-        (o for o in data["orders"]
-         if o.get("status") == "active" and not o["complete"]),
+        (
+            o
+            for o in data["orders"]
+            if o.get("status") == "active" and not o["complete"]
+        ),
         None,
     )
-    preview_o = next(
-        (o for o in data["orders"] if o.get("status") == "preview"), None
-    )
+    preview_o = next((o for o in data["orders"] if o.get("status") == "preview"), None)
     for a in actions:
         b = next(bt for bt in data["bots"] if bt["id"] == a["bot"])
-        log_rows.append({
-            "round": data["round"],
-            "score": data["score"],
-            "order_idx": data.get("active_order_index", ""),
-            "bot_id": a["bot"],
-            "bot_pos": f"{b['position'][0]},{b['position'][1]}",
-            "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
-            "action": a["action"],
-            "item_id": a.get("item_id", ""),
-            "active_needed": (
-                ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
-                if active_o else ""
-            ),
-            "active_delivered": (
-                ";".join(active_o["items_delivered"]) if active_o else ""
-            ),
-            "preview_needed": (
-                ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
-                if preview_o else ""
-            ),
-        })
+        log_rows.append(
+            {
+                "round": data["round"],
+                "score": data["score"],
+                "order_idx": data.get("active_order_index", ""),
+                "bot_id": a["bot"],
+                "bot_pos": f"{b['position'][0]},{b['position'][1]}",
+                "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
+                "action": a["action"],
+                "item_id": a.get("item_id", ""),
+                "active_needed": (
+                    ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
+                    if active_o
+                    else ""
+                ),
+                "active_delivered": (
+                    ";".join(active_o["items_delivered"]) if active_o else ""
+                ),
+                "preview_needed": (
+                    ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
+                    if preview_o
+                    else ""
+                ),
+            }
+        )
 
 
 def _log_game_over(data, game_meta, log_rows, log_path, meta_path):
@@ -207,11 +212,22 @@ def _log_game_over(data, game_meta, log_rows, log_path, meta_path):
         game_meta["blacklisted_items"] = list(_gs.blacklisted_items)
 
     with open(log_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "round", "score", "order_idx", "bot_id", "bot_pos",
-            "inventory", "action", "item_id", "active_needed",
-            "active_delivered", "preview_needed",
-        ])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "round",
+                "score",
+                "order_idx",
+                "bot_id",
+                "bot_pos",
+                "inventory",
+                "action",
+                "item_id",
+                "active_needed",
+                "active_delivered",
+                "preview_needed",
+            ],
+        )
         writer.writeheader()
         writer.writerows(log_rows)
     with open(meta_path, "w") as f:

@@ -616,6 +616,7 @@ class TestPreviewDoesntBlockActive:
     def test_simulator_no_stuck_loop(self):
         """Full simulation should never get stuck (same action for 10+ rounds)."""
         from grocery_bot.simulator import GameSimulator
+
         sim = GameSimulator(seed=42, num_bots=1)
         reset_bot()
 
@@ -665,12 +666,18 @@ class TestStep5PreviewDetour:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": [],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": [],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["bread"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["bread"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -690,12 +697,18 @@ class TestStep5PreviewDetour:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": [],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": [],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["bread"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["bread"],
+                    "items_delivered": [],
                 },
             ],
             drop_off=[1, 8],
@@ -729,12 +742,18 @@ class TestStep5PreviewDetourDeep:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk", "bread"], "items_delivered": [],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk", "bread"],
+                    "items_delivered": [],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["cheese"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
                 },
             ],
             drop_off=[1, 8],
@@ -764,12 +783,18 @@ class TestStep6DistantPreviewPrepick:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["bread"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["bread"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -788,12 +813,18 @@ class TestStep6DistantPreviewPrepick:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["bread"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["bread"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -819,12 +850,18 @@ class TestStep6AdjacentPreviewPickup:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["cheese"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -845,12 +882,18 @@ class TestStep6AdjacentPreviewPickup:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["milk"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -869,12 +912,18 @@ class TestStep6AdjacentPreviewPickup:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["cheese"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["cheese"],
+                    "items_delivered": [],
                 },
             ],
         )
@@ -894,12 +943,18 @@ class TestStep6AdjacentPreviewPickup:
             ],
             orders=[
                 {
-                    "id": "o1", "status": "active", "complete": False,
-                    "items_required": ["milk"], "items_delivered": ["milk"],
+                    "id": "o1",
+                    "status": "active",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
                 },
                 {
-                    "id": "o2", "status": "preview", "complete": False,
-                    "items_required": ["milk"], "items_delivered": [],
+                    "id": "o2",
+                    "status": "preview",
+                    "complete": False,
+                    "items_required": ["milk"],
+                    "items_delivered": [],
                 },
             ],
         )

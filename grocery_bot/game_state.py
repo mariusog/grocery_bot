@@ -30,9 +30,7 @@ class GameState:
         self.grid_height: int = 0
 
         # Precomputed route tables (populated in init_static)
-        self.best_pickup: dict[
-            str, tuple[tuple[int, int], tuple[int, int], float]
-        ] = {}
+        self.best_pickup: dict[str, tuple[tuple[int, int], tuple[int, int], float]] = {}
         self.best_pair_route: dict[
             tuple[str, str], list[tuple[str, tuple[int, int]]]
         ] = {}
@@ -152,13 +150,9 @@ class GameState:
                 + self.dist_static(cell1, drop_off)
             )
             if cost_12 <= cost_21:
-                self.best_pair_route[(t1, t2)] = [
-                    (t1, cell1), (t2, cell2)
-                ]
+                self.best_pair_route[(t1, t2)] = [(t1, cell1), (t2, cell2)]
             else:
-                self.best_pair_route[(t1, t2)] = [
-                    (t2, cell2), (t1, cell1)
-                ]
+                self.best_pair_route[(t1, t2)] = [(t2, cell2), (t1, cell1)]
 
         # (c) Best 3-type pickup routes
         self.best_triple_route = {}
@@ -181,9 +175,7 @@ class GameState:
                         best_perm = perm
             if best_perm is not None:
                 key = tuple(sorted(types))
-                self.best_triple_route[key] = [
-                    (types[i], cells[i]) for i in best_perm
-                ]
+                self.best_triple_route[key] = [(types[i], cells[i]) for i in best_perm]
 
     def get_optimal_route(
         self,
@@ -309,9 +301,7 @@ class GameState:
     # Expert maps have ~250 walkable cells; 256 covers full map with margin.
     DIST_CACHE_MAX = 256
 
-    def get_distances_from(
-        self, source: tuple[int, int]
-    ) -> dict[tuple[int, int], int]:
+    def get_distances_from(self, source: tuple[int, int]) -> dict[tuple[int, int], int]:
         if source not in self.dist_cache:
             if len(self.dist_cache) >= self.DIST_CACHE_MAX:
                 # Evict oldest ~25% of entries
@@ -416,7 +406,9 @@ class GameState:
                 if total < best_cost:
                     best_cost = total
                     best_trip1 = route1
-        return best_trip1 or self.tsp_route(bot_pos, all_candidates[:capacity], drop_off)
+        return best_trip1 or self.tsp_route(
+            bot_pos, all_candidates[:capacity], drop_off
+        )
 
     # ------------------------------------------------------------------
     # Phase 1.3: Interleaved Pickup-Delivery
@@ -446,9 +438,9 @@ class GameState:
             full_route = self.tsp_route(bot_pos, item_targets, drop_off)
             full_cost = self.tsp_cost(bot_pos, full_route, drop_off)
             best_cost = full_cost
-            best_plan: Optional[list[tuple[str, Any]]] = (
-                [("pickup", it) for it in full_route] + [("deliver", drop_off)]
-            )
+            best_plan: Optional[list[tuple[str, Any]]] = [
+                ("pickup", it) for it in full_route
+            ] + [("deliver", drop_off)]
         else:
             best_cost = float("inf")
             best_plan = None
@@ -595,6 +587,7 @@ class GameState:
 # ------------------------------------------------------------------
 # Hungarian algorithm internals (module-level for reuse)
 # ------------------------------------------------------------------
+
 
 def _hungarian_solve(cost_matrix: list[list[float]]) -> list[tuple[int, int]]:
     """Solve assignment problem using Hungarian/Munkres algorithm O(n^3)."""

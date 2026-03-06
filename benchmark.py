@@ -63,19 +63,23 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False):
 
     for diff in difficulties:
         cfg = DIFFICULTY_PRESETS[diff]
-        print(f"\n--- {diff} ({cfg['num_bots']} bot{'s' if cfg['num_bots'] > 1 else ''}, "
-              f"{cfg['width']}x{cfg['height']}, {cfg['num_item_types']} types, "
-              f"orders {cfg['items_per_order'][0]}-{cfg['items_per_order'][1]}) ---")
+        print(
+            f"\n--- {diff} ({cfg['num_bots']} bot{'s' if cfg['num_bots'] > 1 else ''}, "
+            f"{cfg['width']}x{cfg['height']}, {cfg['num_item_types']} types, "
+            f"orders {cfg['items_per_order'][0]}-{cfg['items_per_order'][1]}) ---"
+        )
 
         results = []
         for seed in seeds:
             r = run_game(diff, seed)
             results.append(r)
             if verbose:
-                print(f"  seed={seed:>3}  score={r['score']:>4}  "
-                      f"orders={r['orders_completed']:>3}  "
-                      f"items={r['items_delivered']:>3}  "
-                      f"wall={r['wall_time_s']:.3f}s")
+                print(
+                    f"  seed={seed:>3}  score={r['score']:>4}  "
+                    f"orders={r['orders_completed']:>3}  "
+                    f"items={r['items_delivered']:>3}  "
+                    f"wall={r['wall_time_s']:.3f}s"
+                )
 
         scores = [r["score"] for r in results]
         orders = [r["orders_completed"] for r in results]
@@ -85,12 +89,15 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False):
         avg_score = statistics.mean(scores)
         std_score = statistics.stdev(scores) if len(scores) > 1 else 0
 
-        print(f"  Avg: {avg_score:.1f}  Min: {min(scores)}  Max: {max(scores)}  "
-              f"StdDev: {std_score:.1f}")
-        print(f"  Orders avg: {statistics.mean(orders):.1f}  "
-              f"Items avg: {statistics.mean(items):.1f}")
-        print(f"  Wall avg: {statistics.mean(walls):.3f}s  "
-              f"max: {max(walls):.3f}s")
+        print(
+            f"  Avg: {avg_score:.1f}  Min: {min(scores)}  Max: {max(scores)}  "
+            f"StdDev: {std_score:.1f}"
+        )
+        print(
+            f"  Orders avg: {statistics.mean(orders):.1f}  "
+            f"Items avg: {statistics.mean(items):.1f}"
+        )
+        print(f"  Wall avg: {statistics.mean(walls):.3f}s  max: {max(walls):.3f}s")
 
         # Timing from profiled games
         timing_avgs = []
@@ -99,8 +106,10 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False):
             if t:
                 timing_avgs.append(t["avg_ms"])
         if timing_avgs:
-            print(f"  decide_actions avg: {statistics.mean(timing_avgs):.3f}ms/round  "
-                  f"max: {max(timing_avgs):.3f}ms/round")
+            print(
+                f"  decide_actions avg: {statistics.mean(timing_avgs):.3f}ms/round  "
+                f"max: {max(timing_avgs):.3f}ms/round"
+            )
 
         all_results[diff] = results
 
@@ -113,8 +122,10 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False):
 
 def print_summary_table(all_results):
     """Print a compact summary table."""
-    print(f"\n{'Difficulty':<10} {'Bots':>4} {'Avg':>6} {'Min':>5} {'Max':>5} "
-          f"{'StdDev':>6} {'Orders':>6} {'Items':>5} {'Wall':>6}")
+    print(
+        f"\n{'Difficulty':<10} {'Bots':>4} {'Avg':>6} {'Min':>5} {'Max':>5} "
+        f"{'StdDev':>6} {'Orders':>6} {'Items':>5} {'Wall':>6}"
+    )
     print("-" * 60)
     for diff in ["Easy", "Medium", "Hard", "Expert"]:
         if diff not in all_results:
@@ -125,10 +136,12 @@ def print_summary_table(all_results):
         items = [r["items_delivered"] for r in results]
         walls = [r["wall_time_s"] for r in results]
         std = statistics.stdev(scores) if len(scores) > 1 else 0
-        print(f"{diff:<10} {results[0]['num_bots']:>4} {statistics.mean(scores):>6.1f} "
-              f"{min(scores):>5} {max(scores):>5} {std:>6.1f} "
-              f"{statistics.mean(orders):>6.1f} {statistics.mean(items):>5.1f} "
-              f"{statistics.mean(walls):>5.3f}s")
+        print(
+            f"{diff:<10} {results[0]['num_bots']:>4} {statistics.mean(scores):>6.1f} "
+            f"{min(scores):>5} {max(scores):>5} {std:>6.1f} "
+            f"{statistics.mean(orders):>6.1f} {statistics.mean(items):>5.1f} "
+            f"{statistics.mean(walls):>5.3f}s"
+        )
 
 
 def generate_markdown_report(all_results):
@@ -140,8 +153,12 @@ def generate_markdown_report(all_results):
 
     # Summary table
     lines.append("## Summary\n")
-    lines.append("| Difficulty | Bots | Avg Score | Min | Max | StdDev | Avg Orders | Avg Items |")
-    lines.append("|------------|------|-----------|-----|-----|--------|------------|-----------|")
+    lines.append(
+        "| Difficulty | Bots | Avg Score | Min | Max | StdDev | Avg Orders | Avg Items |"
+    )
+    lines.append(
+        "|------------|------|-----------|-----|-----|--------|------------|-----------|"
+    )
     for diff in ["Easy", "Medium", "Hard", "Expert"]:
         if diff not in all_results:
             continue
@@ -163,13 +180,16 @@ def generate_markdown_report(all_results):
             continue
         results = all_results[diff]
         cfg = DIFFICULTY_PRESETS[diff]
-        lines.append(f"## {diff} ({cfg['num_bots']} bots, "
-                     f"{cfg['width']}x{cfg['height']})\n")
+        lines.append(
+            f"## {diff} ({cfg['num_bots']} bots, {cfg['width']}x{cfg['height']})\n"
+        )
         lines.append("| Seed | Score | Orders | Items | Wall Time |")
         lines.append("|------|-------|--------|-------|-----------|")
         for r in sorted(results, key=lambda x: x["seed"]):
-            lines.append(f"| {r['seed']} | {r['score']} | {r['orders_completed']} "
-                         f"| {r['items_delivered']} | {r['wall_time_s']:.3f}s |")
+            lines.append(
+                f"| {r['seed']} | {r['score']} | {r['orders_completed']} "
+                f"| {r['items_delivered']} | {r['wall_time_s']:.3f}s |"
+            )
         scores = [r["score"] for r in results]
         lines.append(f"\n**Average: {statistics.mean(scores):.1f}**\n")
 
@@ -181,21 +201,30 @@ if __name__ == "__main__":
     import os
 
     parser = argparse.ArgumentParser(description="Grocery Bot Benchmark")
-    parser.add_argument("--quick", action="store_true",
-                        help="Run single seed (42) instead of 20 seeds")
-    parser.add_argument("--seeds", type=int, default=20,
-                        help="Number of seeds to run (default: 20)")
-    parser.add_argument("--difficulty", "-d", nargs="+",
-                        choices=["Easy", "Medium", "Hard", "Expert"],
-                        help="Run specific difficulties only")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Print per-seed results")
+    parser.add_argument(
+        "--quick", action="store_true", help="Run single seed (42) instead of 20 seeds"
+    )
+    parser.add_argument(
+        "--seeds", type=int, default=20, help="Number of seeds to run (default: 20)"
+    )
+    parser.add_argument(
+        "--difficulty",
+        "-d",
+        nargs="+",
+        choices=["Easy", "Medium", "Hard", "Expert"],
+        help="Run specific difficulties only",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Print per-seed results"
+    )
     args = parser.parse_args()
 
     seeds = QUICK_SEEDS if args.quick else list(range(1, args.seeds + 1))
     difficulties = args.difficulty
 
-    results = run_benchmark(difficulties=difficulties, seeds=seeds, verbose=args.verbose)
+    results = run_benchmark(
+        difficulties=difficulties, seeds=seeds, verbose=args.verbose
+    )
 
     os.makedirs("docs", exist_ok=True)
     report = generate_markdown_report(results)

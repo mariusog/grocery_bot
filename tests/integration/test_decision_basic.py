@@ -554,10 +554,15 @@ class TestNoActiveOrder:
         state = make_state(
             bots=[{"id": 0, "position": [5, 5], "inventory": []}],
             items=[{"id": "i1", "type": "milk", "position": [3, 3]}],
-            orders=[{
-                "id": "o1", "status": "active", "complete": True,
-                "items_required": ["milk"], "items_delivered": ["milk"],
-            }],
+            orders=[
+                {
+                    "id": "o1",
+                    "status": "active",
+                    "complete": True,
+                    "items_required": ["milk"],
+                    "items_delivered": ["milk"],
+                }
+            ],
         )
         actions = bot.decide_actions(state)
         assert actions[0]["action"] == "wait"
@@ -869,6 +874,7 @@ class TestItemProximityClustering:
 
 # --- Phase 4.2: Item Proximity Clustering ---
 
+
 class TestItemProximityClusteringAdvanced:
     def test_prefer_item_near_other_needed_items(self):
         """When choosing between same-type items, prefer one closer to other items."""
@@ -898,6 +904,4 @@ class TestItemProximityClusteringAdvanced:
         actions = bot.decide_actions(state)
         action = get_action(actions)
         # Bot should head toward the milk closer to the cheese cluster
-        assert action["action"] != "wait", (
-            "Bot should be navigating toward items"
-        )
+        assert action["action"] != "wait", "Bot should be navigating toward items"

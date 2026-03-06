@@ -27,7 +27,9 @@ class TestIsDelivering:
     def test_full_inventory_with_active_items(self):
         """Bot with full inventory and active items is delivering."""
         planner = make_planner(
-            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese", "milk", "bread"]}],
+            bots=[
+                {"id": 0, "position": [3, 3], "inventory": ["cheese", "milk", "bread"]}
+            ],
             items=[
                 {"id": "i0", "type": "cheese", "position": [4, 2]},
             ],
@@ -91,7 +93,9 @@ class TestBotUrgency:
     def test_urgency_full_inventory_active_gets_0(self):
         """Full inventory with active items -> urgency 0 (highest)."""
         planner = make_planner(
-            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese", "milk", "bread"]}],
+            bots=[
+                {"id": 0, "position": [3, 3], "inventory": ["cheese", "milk", "bread"]}
+            ],
             items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
             orders=[_active_order(["cheese", "milk", "bread"])],
         )
