@@ -937,12 +937,13 @@ class RoundPlanner:
             shelves.sort(key=lambda s: s[2])
             type_best[t] = shelves[0]  # (item, cell, d_drop)
 
-        # Build candidate list: each needed item uses the closest shelf
+        # Build candidate list: only 1 item per type since items restock
+        # immediately. After picking up, adjacent-pickup grabs the restocked
+        # item next round, saving trips to distant shelves of same type.
         candidates = []
         for t, (it, cell, d_drop) in type_best.items():
-            count = min(self.net_active.get(t, 0), slots - len(candidates))
-            if count <= 0:
-                continue
+            if len(candidates) >= slots:
+                break
             d_bot = self.gs.dist_static(pos, cell)
             if d_bot + 1 + d_drop >= self.rounds_left:
                 continue
