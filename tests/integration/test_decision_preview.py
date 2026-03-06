@@ -615,7 +615,7 @@ class TestPreviewDoesntBlockActive:
 
     def test_simulator_no_stuck_loop(self):
         """Full simulation should never get stuck (same action for 10+ rounds)."""
-        from simulator import GameSimulator
+        from grocery_bot.simulator import GameSimulator
         sim = GameSimulator(seed=42, num_bots=1)
         reset_bot()
 

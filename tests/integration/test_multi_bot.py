@@ -463,7 +463,7 @@ class TestMultiBotCollisionEdgeCases:
         a1 = get_action(actions, 1)
         # Both bots have active items, both want to reach dropoff (left).
         # They should not collide — predicted positions must differ.
-        from pathfinding import _predict_pos
+        from grocery_bot.pathfinding import _predict_pos
         p0 = _predict_pos(3, 5, a0["action"])
         p1 = _predict_pos(6, 5, a1["action"])
         assert p0 != p1, (
@@ -504,7 +504,7 @@ class TestMultiBotCollisionEdgeCases:
         assert len(actions) == 2
         # Bot 1 (at dropoff with active item) should drop_off
         # Bot 0 should not move into Bot 1's position
-        from pathfinding import _predict_pos
+        from grocery_bot.pathfinding import _predict_pos
         p0 = _predict_pos(2, 7, a0["action"])
         assert p0 != (2, 8), (
             f"Bot 0 should yield to bot 1 at dropoff, but moved to {p0}"
@@ -688,7 +688,7 @@ class TestMultiBotCollisionEdgeCases:
         actions = bot.decide_actions(state)
         a0 = get_action(actions, 0)
         a1 = get_action(actions, 1)
-        from pathfinding import _predict_pos
+        from grocery_bot.pathfinding import _predict_pos
         p0 = _predict_pos(4, 4, a0["action"])
         p1 = _predict_pos(5, 4, a1["action"])
         # They should not swap — bot 0 going to (5,4) while bot 1 goes to (4,4)
@@ -706,7 +706,7 @@ class TestSpawnDispersal:
         cells after round 0. With only 4 adjacent cells available, at most
         5 bots can occupy spawn + 4 neighbors, so we allow 1 collision for
         5 bots."""
-        from simulator import GameSimulator
+        from grocery_bot.simulator import GameSimulator
         for n_bots in [2, 3, 5]:
             reset_bot()
             sim = GameSimulator(seed=42, num_bots=n_bots)
@@ -737,7 +737,7 @@ class TestSpawnDispersal:
 
     def test_bots_disperse_different_seeds(self):
         """Dispersal should work across different seeds."""
-        from simulator import GameSimulator
+        from grocery_bot.simulator import GameSimulator
         n_bots = 5
         for seed in [1, 5, 10]:
             reset_bot()

@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from pathfinding import DIRECTIONS, direction_to
-from constants import (
+from grocery_bot.pathfinding import DIRECTIONS, direction_to
+from grocery_bot.constants import (
     DROPOFF_CLEAR_RADIUS,
     IDLE_BOT_PROXIMITY_FACTOR,
     IDLE_BOT_PROXIMITY_RADIUS,

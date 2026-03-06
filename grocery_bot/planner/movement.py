@@ -2,8 +2,8 @@
 
 from typing import Any, Optional
 
-from pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, _predict_pos
-from constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
+from grocery_bot.pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, _predict_pos
+from grocery_bot.constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
 
 
 class MovementMixin:

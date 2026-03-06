@@ -68,7 +68,7 @@ class TestMultiTripPlanning:
 
     def test_simulator_no_regression(self):
         """Verify multi-trip planning doesn't regress simulated scores."""
-        from simulator import GameSimulator
+        from grocery_bot.simulator import GameSimulator
         sim = GameSimulator(seed=42, num_bots=1)
         result = sim.run()
         assert result["score"] >= 120, (

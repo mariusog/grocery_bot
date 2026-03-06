@@ -85,7 +85,7 @@ def make_planner(
 
     Returns the planner object for inspection.
     """
-    from round_planner import RoundPlanner
+    from grocery_bot.planner.round_planner import RoundPlanner
 
     state = make_state(
         bots=bots or [],
@@ -120,7 +120,7 @@ def make_gs_with_state(
 
     Returns (gs, state_dict) so callers can use gs.dist_static(), etc.
     """
-    from game_state import GameState
+    from grocery_bot.game_state import GameState
 
     state = {
         "grid": {

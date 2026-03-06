@@ -12,7 +12,7 @@ Reports score, orders, items, timing across 20 seeds per difficulty.
 import statistics
 import time
 
-from simulator import GameSimulator, DIFFICULTY_PRESETS
+from grocery_bot.simulator import GameSimulator, DIFFICULTY_PRESETS
 
 # Number of seeds for averaging
 DEFAULT_SEEDS = list(range(1, 21))

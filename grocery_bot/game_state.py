@@ -3,8 +3,8 @@
 from itertools import combinations, permutations
 from typing import Any, Optional
 
-from pathfinding import bfs_all, find_adjacent_positions
-from constants import (
+from grocery_bot.pathfinding import bfs_all, find_adjacent_positions
+from grocery_bot.constants import (
     CORRIDOR_HEIGHT_THRESHOLD,
     HUNGARIAN_MAX_PAIRS,
     LAST_ITEM_BOOST_THRESHOLD,

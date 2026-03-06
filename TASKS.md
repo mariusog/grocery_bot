@@ -82,7 +82,8 @@ Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap
 
 ### T20: Package Structure Refactoring
 - **Agent**: qa-agent
-- **Status**: open
+- **Status**: done
+- **Result**: Reorganized flat layout into `grocery_bot/` package with `planner/` subpackage. Tests reorganized into matching `tests/{integration,pathfinding,game_state,planner}/` subdirectories. All 230 tests pass, ruff clean, benchmark unchanged. `bot.py` and `benchmark.py` remain at root as entry points.
 - **Priority**: 1
 - **Files**: ALL (structural refactoring)
 - **Description**: Reorganize flat file layout into proper package structure with matching test directories. See `.claude/agents/qa-agent.md` for full target layout.

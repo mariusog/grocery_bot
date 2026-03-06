@@ -14,7 +14,7 @@ import sys
 from datetime import datetime
 
 # Re-export everything tests and simulator access via `bot.xxx`
-from pathfinding import (  # noqa: F401
+from grocery_bot.pathfinding import (  # noqa: F401
     DIRECTIONS,
     bfs,
     bfs_all,
@@ -22,9 +22,9 @@ from pathfinding import (  # noqa: F401
     find_adjacent_positions,
     _predict_pos,
 )
-from orders import get_needed_items  # noqa: F401
-from game_state import GameState  # noqa: F401
-from round_planner import RoundPlanner  # noqa: F401
+from grocery_bot.orders import get_needed_items  # noqa: F401
+from grocery_bot.game_state import GameState  # noqa: F401
+from grocery_bot.planner.round_planner import RoundPlanner  # noqa: F401
 
 
 # ---------------------------------------------------------------------------

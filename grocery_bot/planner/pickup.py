@@ -3,8 +3,8 @@
 from itertools import permutations
 from typing import Any, Optional
 
-from pathfinding import DIRECTIONS
-from constants import (
+from grocery_bot.pathfinding import DIRECTIONS
+from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     CLUSTER_DISTANCE_WEIGHT,
     MAX_DETOUR_STEPS,

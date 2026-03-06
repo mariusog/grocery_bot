@@ -221,7 +221,7 @@ class TestFindYieldAlternative:
         assert alt["action"] in ("wait", "move_up", "move_down", "move_left", "move_right")
         # Should NOT be moving into the blocked target
         if alt["action"] != "wait":
-            from pathfinding import _predict_pos
+            from grocery_bot.pathfinding import _predict_pos
             pred = _predict_pos(3, 3, alt["action"])
             assert pred != (4, 3)
 

@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from constants import MAX_INVENTORY, MEDIUM_TEAM_MIN, ZONE_CROSS_PENALTY
+from grocery_bot.constants import MAX_INVENTORY, MEDIUM_TEAM_MIN, ZONE_CROSS_PENALTY
 
 
 class AssignmentMixin:

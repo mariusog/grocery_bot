@@ -5,7 +5,7 @@ These tests run multiple seeds and are slow. Use `pytest -m "not slow"` to skip 
 
 import pytest
 
-from simulator import GameSimulator, DIFFICULTY_PRESETS
+from grocery_bot.simulator import GameSimulator, DIFFICULTY_PRESETS
 from tests.conftest import reset_bot
 
 

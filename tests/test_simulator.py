@@ -3,7 +3,7 @@
 import time
 
 import bot
-from simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
+from grocery_bot.simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
 from tests.conftest import reset_bot
 
 

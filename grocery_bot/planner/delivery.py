@@ -1,6 +1,6 @@
 """Delivery decision logic and end-game helpers for RoundPlanner."""
 
-from constants import MAX_INVENTORY
+from grocery_bot.constants import MAX_INVENTORY
 
 
 class DeliveryMixin:
