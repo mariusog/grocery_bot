@@ -177,10 +177,15 @@ def _build_game_meta(data, timestamp):
             "width": grid["width"],
             "height": grid["height"],
             "walls": len(grid["walls"]),
+            "wall_positions": grid["walls"],
         },
         "bots": len(data["bots"]),
         "items_on_map": len(data["items"]),
         "item_types": sorted({it["type"] for it in data["items"]}),
+        "item_positions": [
+            {"type": it["type"], "position": it["position"]}
+            for it in data["items"]
+        ],
         "drop_off": data["drop_off"],
         "max_rounds": data["max_rounds"],
         "total_orders": data.get("total_orders", "?"),
