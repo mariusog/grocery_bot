@@ -5,8 +5,9 @@ the bot's decide_actions() through 300 rounds, tracking score and orders.
 
 Difficulty presets:
   Easy:   1 bot,  12x10 grid, 4 item types
-  Medium: 2 bots, 16x12 grid, 6 item types
-  Hard:   5 bots, 22x14 grid, 10 item types
+  Medium: 3 bots, 16x12 grid, 8 item types
+  Hard:   5 bots, 22x14 grid, 12 item types
+  Expert: 10 bots, 28x18 grid, 16 item types
 """
 
 import random
@@ -28,10 +29,10 @@ DIFFICULTY_PRESETS = {
         "max_rounds": 300,
     },
     "Medium": {
-        "num_bots": 2,
+        "num_bots": 3,
         "width": 16,
         "height": 12,
-        "num_item_types": 6,
+        "num_item_types": 8,
         "items_per_order": (3, 5),
         "max_rounds": 300,
     },
@@ -39,7 +40,15 @@ DIFFICULTY_PRESETS = {
         "num_bots": 5,
         "width": 22,
         "height": 14,
-        "num_item_types": 10,
+        "num_item_types": 12,
+        "items_per_order": (4, 6),
+        "max_rounds": 300,
+    },
+    "Expert": {
+        "num_bots": 10,
+        "width": 28,
+        "height": 18,
+        "num_item_types": 16,
         "items_per_order": (4, 6),
         "max_rounds": 300,
     },
@@ -354,16 +363,31 @@ class GameSimulator:
     def is_over(self):
         return self.round >= self.max_rounds
 
-    def run(self, verbose=False, profile=False):
+    def run(self, verbose=False, profile=False, diagnose=False):
         """Run full game, return results dict.
 
         Args:
             verbose: Print progress every 50 rounds.
             profile: If True, record per-function timing stats in result.
+            diagnose: If True, track congestion diagnostics (idle, stuck,
+                delivery gaps, oscillations) and include a 'diagnostics'
+                key in the result dict.
         """
         bot.reset_state()
 
         timings = defaultdict(list) if profile else None
+
+        # Diagnostic tracking state
+        if diagnose:
+            diag_idle_rounds = 0
+            diag_stuck_rounds = 0
+            diag_oscillation_count = 0
+            diag_last_delivery_round = 0
+            diag_max_delivery_gap = 0
+            diag_idle_per_round = []
+            # Track per-bot position history: bot_id -> [pos_round_n-2, pos_round_n-1]
+            diag_prev_positions = {b["id"]: [] for b in self.bots}
+            prev_score = 0
 
         while not self.is_over():
             state = self.get_state()
@@ -379,7 +403,50 @@ class GameSimulator:
             if profile:
                 timings["decide_actions"].append(time.perf_counter() - t0)
 
+            # Snapshot positions before applying actions (for stuck detection)
+            if diagnose:
+                pre_positions = {b["id"]: tuple(b["position"]) for b in self.bots}
+
             self.apply_actions(actions)
+
+            # Diagnostic collection after actions applied
+            if diagnose:
+                actions_by_bot = {a["bot"]: a for a in actions}
+                round_idle = 0
+                for b in self.bots:
+                    bid = b["id"]
+                    action = actions_by_bot.get(bid, {"action": "wait"})
+                    cur_pos = tuple(b["position"])
+                    prev_pos = pre_positions[bid]
+
+                    # Idle detection: explicit wait action
+                    if action["action"] == "wait":
+                        diag_idle_rounds += 1
+                        round_idle += 1
+
+                    # Stuck detection: position unchanged after a move attempt
+                    if cur_pos == prev_pos and action["action"].startswith("move_"):
+                        diag_stuck_rounds += 1
+
+                    # Oscillation detection: returned to position from 2 rounds ago
+                    history = diag_prev_positions[bid]
+                    if len(history) >= 2 and cur_pos == history[-2]:
+                        diag_oscillation_count += 1
+
+                    # Update position history (keep last 2)
+                    history.append(cur_pos)
+                    if len(history) > 2:
+                        history.pop(0)
+
+                diag_idle_per_round.append(round_idle)
+
+                # Delivery gap tracking
+                if self.score > prev_score:
+                    gap = self.round - diag_last_delivery_round
+                    if gap > diag_max_delivery_gap:
+                        diag_max_delivery_gap = gap
+                    diag_last_delivery_round = self.round
+                prev_score = self.score
 
             if verbose and self.round % 50 == 0:
                 print(
@@ -408,6 +475,23 @@ class GameSimulator:
                     "total_ms": sum(ms),
                 }
             result["timings"] = timing_stats
+        if diagnose:
+            total_bot_rounds = self.round * len(self.bots)
+            # Final delivery gap: from last delivery to end
+            final_gap = self.round - diag_last_delivery_round
+            if final_gap > diag_max_delivery_gap:
+                diag_max_delivery_gap = final_gap
+            result["diagnostics"] = {
+                "idle_rounds": diag_idle_rounds,
+                "stuck_rounds": diag_stuck_rounds,
+                "max_delivery_gap": diag_max_delivery_gap,
+                "oscillation_count": diag_oscillation_count,
+                "avg_bots_idle": (
+                    statistics.mean(diag_idle_per_round)
+                    if diag_idle_per_round else 0.0
+                ),
+                "total_bot_rounds": total_bot_rounds,
+            }
         if verbose:
             print(f"  Final: {result}")
         return result
@@ -458,5 +542,79 @@ def run_benchmark(configs=None, seeds=None, verbose=False):
         if len(seeds) > 1:
             avg = statistics.mean(config_scores)
             print(f"{'':10} {'':>4} {'AVG':>5} {avg:>6.1f}")
+
+    return all_results
+
+
+def profile_congestion(num_bots, seeds, verbose=False):
+    """Run each seed with diagnostics and print a congestion profile table.
+
+    Args:
+        num_bots: Number of bots to simulate.
+        seeds: List of seeds to test.
+        verbose: Print per-round progress.
+
+    Returns:
+        List of result dicts (with diagnostics) for each seed.
+    """
+    cfg = dict(DIFFICULTY_PRESETS["Hard"])
+    cfg["num_bots"] = num_bots
+
+    all_results = []
+    header = (
+        f"{'Seed':>5} {'Score':>6} {'Orders':>7} {'Items':>6} "
+        f"{'Idle%':>6} {'Stuck%':>7} {'MaxGap':>7} {'Oscil':>6} "
+        f"{'AvgIdle':>8} {'Status'}"
+    )
+    print(f"\n=== Congestion Profile: {num_bots} bots ===")
+    print(header)
+    print("-" * len(header))
+
+    for seed in seeds:
+        sim = GameSimulator(seed=seed, **cfg)
+        result = sim.run(verbose=verbose, diagnose=True)
+        result["seed"] = seed
+        result["num_bots"] = num_bots
+        all_results.append(result)
+
+        diag = result["diagnostics"]
+        total_br = diag["total_bot_rounds"]
+        idle_pct = (diag["idle_rounds"] / total_br * 100) if total_br > 0 else 0
+        stuck_pct = (diag["stuck_rounds"] / total_br * 100) if total_br > 0 else 0
+
+        # Flag problematic seeds
+        problems = []
+        if result["score"] < 50:
+            problems.append("LOW_SCORE")
+        if idle_pct > 30:
+            problems.append("HIGH_IDLE")
+        if stuck_pct > 10:
+            problems.append("HIGH_STUCK")
+        if diag["max_delivery_gap"] > 40:
+            problems.append("LONG_GAP")
+        if diag["oscillation_count"] > 20:
+            problems.append("OSCILLATING")
+        status = ", ".join(problems) if problems else "OK"
+
+        print(
+            f"{seed:>5} {result['score']:>6} {result['orders_completed']:>7} "
+            f"{result['items_delivered']:>6} {idle_pct:>5.1f}% {stuck_pct:>6.1f}% "
+            f"{diag['max_delivery_gap']:>7} {diag['oscillation_count']:>6} "
+            f"{diag['avg_bots_idle']:>8.2f} {status}"
+        )
+
+    # Summary
+    scores = [r["score"] for r in all_results]
+    print(f"\n  Average score: {statistics.mean(scores):.1f}")
+    print(f"  Min score: {min(scores)}, Max score: {max(scores)}")
+    problem_seeds = [
+        r["seed"] for r in all_results
+        if r["score"] < 50
+        or (r["diagnostics"]["idle_rounds"] / r["diagnostics"]["total_bot_rounds"] * 100 > 30)
+    ]
+    if problem_seeds:
+        print(f"  Problematic seeds: {problem_seeds}")
+    else:
+        print("  No problematic seeds detected.")
 
     return all_results
