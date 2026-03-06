@@ -83,6 +83,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
 
         self._compute_needs()
         self._compute_bot_assignments()
+        self._pre_predict()
 
         urgency = {b["id"]: self._bot_urgency(b) for b in self.bots}
 
@@ -311,10 +312,14 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
 
         # Step 6: pre-pick preview items
         # Bots reaching here have no active items to pick (Step 4 failed).
-        # For large teams, allow using all free slots for preview since
-        # active items are covered by other bots.
+        # For 6+ bots: only force all slots when active items are done (avoid clog).
+        # For smaller teams: always allow all slots (fewer bots = less clog risk).
+        if len(self.bots) >= 6:
+            force = self.active_on_shelves == 0
+        else:
+            force = len(self.bots) >= 3
         if self._try_preview_prepick(bid, bx, by, pos, inv, blocked,
-                                     force_slots=(len(self.bots) >= 3)):
+                                     force_slots=force):
             return
 
         # Step 7: clear dropoff area when idle
@@ -326,8 +331,13 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
                 if pos == self.drop_off:
                     self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
                     return
-                self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-                return
+                # Large teams: limit non-active deliverers to avoid dropoff congestion
+                if len(self.bots) >= 5 and self._nonactive_delivering >= 1:
+                    pass  # Fall through to idle positioning
+                else:
+                    self._nonactive_delivering += 1
+                    self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+                    return
 
         # Step 8: idle bot positioning — spread out from other bots
         if len(self.bots) > 1:

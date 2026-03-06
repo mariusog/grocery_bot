@@ -4,105 +4,136 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Live Server Results (2026-03-06)
+## Current Performance (2026-03-06)
 
-| Difficulty | Bots | Live Score | Simulator Avg | Gap |
-|------------|------|------------|---------------|-----|
-| Easy | 1 | 133 | 134.4 | -1% |
-| Medium | 3 | 110 | 141.2 | -22% |
-| Hard | 5 | 70 | 118.2 | -41% |
-| Expert | 10 | 46 | 92.5 | -50% |
+| Difficulty | Bots | Sim Avg (20 seeds) | Live Score | Theoretical ~70% util |
+|------------|------|--------------------|------------|----------------------|
+| Easy       | 1    | 152.6              | 133        | ~102                 |
+| Medium     | 3    | 112.7              | 110        | ~236                 |
+| Hard       | 5    | 83.1               | 70         | ~286                 |
+| Expert     | 10   | 50.4               | 46         | ~467                 |
 
-Single-bot is accurate. Multi-bot diverges sharply — simulator maps don't match real layouts. **All optimization must be validated against live server.**
+Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap is NOT from pathfinding bugs — bots move but coordinate terribly. 20% of Expert bot-rounds are wasted on oscillation. Max delivery gap is 47 rounds.
 
 ---
 
-## Open Tasks (priority order)
+## Open Tasks — Phase 2 (priority order)
 
-### T11: Improve simulator fidelity (CRITICAL)
-- **Agent**: qa-agent
-- **Status**: done
-- **Result**: Added border walls and mid-aisle barrier walls to simulator. Gap reduced from 22-50% to 5-8% for Medium/Hard/Expert. Updated test thresholds to match realistic layouts. New sim avgs: Easy 152.6, Medium 104.5, Hard 71.7, Expert 49.6. Also added wall/item position logging to bot.py for future map comparison.
-- **Priority**: 1 — blocks all other optimization work
-- **Files**: `simulator.py`, `logs/`
-- **Description**: Live server scores are 22-50% below simulator across multi-bot difficulties. The simulator's fixed symmetric aisle layout doesn't match real maps. Two approaches:
-  1. Compare logged game state (round 0) from `logs/` against simulator-generated maps to identify layout differences (wall positions, shelf placement, item types, dropoff/spawn).
-  2. Randomize map generation using the seed — vary aisle count/spacing, corridor positions, shelf item distribution, dropoff/spawn placement. This stress-tests the bot against diverse layouts instead of overfitting to one pattern.
-- **Success**: Simulator scores within 10% of live server scores on same difficulty
-
-### T9: Raise score regression test thresholds
-- **Agent**: qa-agent
-- **Status**: done
-- **Result**: Updated all thresholds to match realistic simulator: Easy avg>=135 min>=130, Medium avg>=85, Hard avg>=55 min>=10, Expert avg>=38 min>=20. Tightened Easy single-seed to 130. Also adjusted spawn dispersal and delivery gap thresholds for walled maps.
-- **Priority**: 2
-- **Files**: `test_bot.py`
-- **Description**: Current score regression tests have low thresholds that let performance regressions slip through. Raise minimum score requirements based on current benchmarks: Easy >= 125, Medium >= 130, Hard >= 110, Expert >= 85. Add per-difficulty multi-seed regression tests (5+ seeds each) so that regressions in any difficulty are caught before merging.
-- **Success**: Tests fail if any difficulty drops below threshold
-- **Depends on**: T11 (thresholds should reflect realistic maps)
-
-### T2: Wire Hungarian assignment into RoundPlanner
+### T12: Cooperative Pathfinding with Pre-Prediction
 - **Agent**: pathfinding-agent
 - **Status**: done
-- **Result**: Added `assign_items_to_bots()` to GameState — high-level API that takes (bot_id, pos, slots) tuples and item dicts, handles adjacency/zones, uses Hungarian for small matrices and greedy fallback. Returns dict of bot_id -> item list.
+- **Result**: Implemented pre-prediction pass in `_pre_predict()` — estimates where each bot will move before detailed planning begins. Delivering bots predicted toward dropoff, assigned bots toward their first item, others stay put. Temporal BFS now has better info about undecided bots. Reservation table approach was tested but abandoned (too expensive, unreliable paths). Medium +2.3, Hard +3.4, Expert +1.0. Oscillation Expert 690→622.
+- **Priority**: 1
+- **Files**: `movement.py`, `round_planner.py`, `game_state.py`
+- **Depends on**: none
+
+### T13: Multi-Order Pipeline with Parallel Picking
+- **Agent**: strategy-agent
+- **Status**: done (partial)
+- **Result**: Full pipeline model (ceil(items/3) active bots) regressed Hard/Medium due to dropoff congestion. Partial gains kept: (1) Step 6 force_slots conditional — 6+ bots only fill all preview slots when active_on_shelves==0, preventing inventory clog; (2) Step 7b non-active delivery limited to 1 concurrent deliverer for 5+ bots, reducing dropoff congestion. Expert 47.5→50.4 (+2.9), all others neutral. Root cause analysis: 1033 bot-rounds/game with full non-active inventory clogging, Step 7/7b oscillation between clear-dropoff and deliver-for-points.
+- **Priority**: 2
+- **Files**: `round_planner.py`
+- **Depends on**: T12
+
+### T14: Corridor-Aware Idle Positioning
+- **Agent**: strategy-agent
+- **Status**: open
 - **Priority**: 3
-- **Files**: `game_state.py`
-- **Description**: `hungarian_assign()` exists in game_state.py but RoundPlanner still uses greedy assignment. Expose a clean API that RoundPlanner can call. Do NOT modify round_planner.py — add a task for strategy-agent to wire it in.
-- **Depends on**: none
+- **Files**: `idle.py`, `game_state.py`
+- **Description**: Infrastructure already added in game_state.py (`idle_spots`, `corridor_y`). Currently idle bots target item shelf positions (blocked cells they can never reach) using `bid % len(xs)`, causing oscillation near shelves. Change to:
+  1. Use precomputed `gs.idle_spots` (walkable aisle-entrance positions on corridor rows)
+  2. Assign each bot a unique zone of idle spots (divide spots by bot count)
+  3. Keep greedy 1-step movement style (don't use full BFS for idle — it interferes)
+  4. Use predicted positions of other bots (not just current) for crowd avoidance
+- **Success**: Expert idle% < 5% (currently 15%). No oscillation increase.
+- **Depends on**: none (game_state.py infra already committed)
 
-### T3: Wire Hungarian into round decisions
+### T15: Dropoff Congestion Prevention
 - **Agent**: strategy-agent
-- **Status**: done
-- **Result**: Hungarian used when bots outnumber items (Expert/Hard), greedy for multi-slot scenarios (Easy/Medium). Hard improved 71.7->76.2. Expert slightly worse due to wall-constrained layouts. Extracted _greedy_assign method for fallback.
+- **Status**: open
 - **Priority**: 4
-- **Files**: `round_planner.py`
-- **Description**: Once T2 is done, call the Hungarian assignment API from RoundPlanner instead of greedy. A/B test with benchmarks.
-- **Depends on**: T2
+- **Files**: `round_planner.py`, `delivery.py`
+- **Description**: Multiple bots arriving at the single dropoff cell creates a bottleneck — bots queue up and block each other. Current max delivery gap is 47 rounds.
+  1. **Stagger deliveries**: When 2+ bots have active items and are heading to dropoff, the further bot should pick up 1 more item (preview or active) instead of racing to dropoff
+  2. **Dropoff reservation**: Only 1 bot should target the dropoff at a time. Others pick or pre-position.
+  3. **Clear-dropoff for blocking bots**: If an idle bot is within 2 cells of dropoff AND a deliverer is within 5 cells, the idle bot should yield (move away from dropoff path) BEFORE trying preview prepick
+- **Success**: Max delivery gap < 25 rounds on Expert. No score regression.
+- **Depends on**: T12 (reservation table helps coordinate dropoff access)
 
-### T4: Wire interleaved delivery into RoundPlanner
-- **Agent**: strategy-agent
-- **Status**: done
-- **Result**: Added interleaved delivery in Step 5: when bot has 2+ active items, more items remain on shelves, and distance to dropoff <= 3, deliver partial load first. Minimal impact in practice since Step 4 handles most pickup-before-deliver scenarios, but provides a small optimization for tight layouts.
+### T16: Aisle-Aware Route Planning
+- **Agent**: pathfinding-agent
+- **Status**: open
 - **Priority**: 5
-- **Files**: `round_planner.py`
-- **Description**: `plan_interleaved_route()` exists in game_state.py but isn't called. Integrate it into the delivery decision in Step 5. Only use interleaved when detour < 3 steps.
+- **Files**: `pathfinding.py`, `game_state.py`
+- **Description**: Current BFS finds shortest paths but doesn't account for map structure. Bots enter narrow aisles from the wrong end, meet head-on, and deadlock. Fix:
+  1. **Precompute aisle topology**: For each aisle (walkway column between two shelf columns), record its entry points (top and bottom where it meets a corridor)
+  2. **Prefer corridor routes**: Add a small cost penalty (0.5) for non-corridor cells in pathfinding, so bots prefer to travel via corridors and enter aisles only when close to their target
+  3. **One-way aisle preference**: When 2+ bots need the same aisle, the one closer to the shelf entry goes first; the other routes to the opposite entry point
+- **Success**: Hard/Expert oscillation reduced by 50%. No increase in average path length > 10%.
 - **Depends on**: none
 
-### T6: Add tests for multi-bot collision edge cases
-- **Agent**: qa-agent
-- **Status**: done
-- **Result**: Added 7 tests in TestMultiBotCollisionEdgeCases: head-on corridor collision, yield-to-delivering-bot, spawn dispersal, dropoff congestion (3 bots), 5-bot no-deadlock, oscillation detection, corridor swap prevention. All 137 tests pass.
+### T17: Full-Path Caching and Commitment
+- **Agent**: pathfinding-agent
+- **Status**: open
 - **Priority**: 6
-- **Files**: `test_bot.py`
-- **Depends on**: none
+- **Files**: `pathfinding.py`, `game_state.py`, `movement.py`
+- **Description**: Currently bots recompute BFS every round, which can flip-flop between equally-good paths. Instead:
+  1. When a bot starts heading to a target, compute the full path using `bfs_full_path`
+  2. Cache it on GameState (`bot_planned_paths: dict[bot_id] -> list[pos]`)
+  3. Follow the cached path step-by-step unless: (a) target changed, (b) next step is blocked by a new obstacle, (c) a shorter path opened up (check every 5 rounds)
+  4. This eliminates path flip-flopping which is a major cause of oscillation
+- **Success**: Oscillation count reduced by 30%+ vs T12 baseline.
+- **Depends on**: T12
 
-### T10: Refactor round_planner.py — extract focused modules
-- **Agent**: strategy-agent
-- **Status**: done
-- **Result**: Split 1368-line RoundPlanner into 6 mixin modules via inheritance. round_planner.py (386 lines) orchestrator + movement.py (117) + assignment.py (228) + pickup.py (321) + delivery.py (111) + idle.py (73). All 130 tests pass, no module > 400 lines. Updated CLAUDE.md file ownership.
-- **Priority**: 7
-- **Files**: `round_planner.py`, `movement.py`, `assignment.py`, `pickup.py`, `delivery.py`, `idle.py`
-- **Depends on**: T9
-
-### T7: Benchmark after all changes
+### T18: Benchmark Phase 2 Changes
 - **Agent**: qa-agent
-- **Status**: done
-- **Result**: Full benchmark (seeds 1-20, all difficulties). Easy 152.6, Medium 104.3, Hard 76.2, Expert 45.3. Simulator within 5-15% of live server. All 137 tests pass. Report in docs/benchmark_results.md.
-- **Priority**: 8 — run last
-- **Files**: `benchmark.py`, `docs/benchmark_results.md`
-- **Depends on**: T2, T3, T4, T11
+- **Status**: open
+- **Priority**: 7 — run after T12-T17
+- **Files**: `test_bot.py`, `benchmark.py`, `docs/benchmark_results.md`
+- **Description**: Full benchmark and regression test update after Phase 2.
+  1. Run 20-seed benchmark across all difficulties
+  2. Update score regression thresholds to new baselines
+  3. Profile per-round timing (must stay under 2s/round for live server)
+  4. Run on live server to validate simulator results
+- **Success**: All tests pass. Live server scores within 15% of simulator.
+- **Depends on**: T12, T13, T14, T15, T16, T17
 
 ---
 
-## Completed Tasks
+## Completed Tasks (Phase 1)
 
 ### T1: Fix Medium deadlocks (seeds 12, 13, 15)
-- **Result**: Already fixed by recent commits. Medium avg 142.6 (was 110.3), no seeds below 100.
+- **Result**: Fixed. Medium avg 142.6 (was 110.3).
+
+### T2: Wire Hungarian assignment into RoundPlanner
+- **Result**: Added `assign_items_to_bots()` API to GameState.
+
+### T3: Wire Hungarian into round decisions
+- **Result**: Hungarian for bots > items, greedy for multi-slot. Hard +4.5.
+
+### T4: Wire interleaved delivery into RoundPlanner
+- **Result**: Partial delivery when near dropoff. Minimal impact.
 
 ### T5: Benchmark current state (baseline)
-- **Result**: Baseline captured. Easy 134.4, Medium 142.6, Hard 113.3, Expert 91.0 (simulator, 20 seeds).
+- **Result**: Baseline captured.
+
+### T6: Add tests for multi-bot collision edge cases
+- **Result**: 7 new tests, all pass.
+
+### T7: Benchmark after all changes
+- **Result**: Easy 152.6, Medium 104.3, Hard 76.2, Expert 45.3.
 
 ### T8: Investigate Hard/Expert score regression
-- **Result**: Two fixes: Step 7b (idle bots deliver non-active inventory, capped at n//3) and preview walker cap (n//2). Hard 113.3->118.2, Expert 91.0->92.5.
+- **Result**: Two fixes applied. Hard/Expert improved.
+
+### T9: Raise score regression test thresholds
+- **Result**: Thresholds updated to realistic simulator values.
+
+### T10: Refactor round_planner.py — extract focused modules
+- **Result**: Split into 6 mixin modules.
+
+### T11: Improve simulator fidelity
+- **Result**: Gap reduced to 5-8%.
 
 ---
 
@@ -112,3 +143,4 @@ Single-bot is accurate. Multi-bot diverges sharply — simulator maps don't matc
 - When completing a task, move it to "Completed Tasks" with a one-line result
 - If a task is blocked, set status to `blocked` and note why
 - **All optimization must be validated on live server** — simulator scores alone are insufficient
+- **Phase 2 goal**: Expert >= 200, Hard >= 150, Medium >= 180

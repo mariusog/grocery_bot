@@ -33,6 +33,47 @@ class MovementMixin:
             return {"bot": bid, "action": direction_to(bx, by, alt[0], alt[1])}
         return {"bot": bid, "action": "wait"}
 
+    def _pre_predict(self):
+        """Estimate where each bot will move BEFORE detailed planning.
+
+        Gives temporal BFS better information about undecided bots.
+        Predictions are stored in self.predicted and get overwritten
+        by actual decisions during _decide_bot.
+        """
+        if len(self.bots) <= 1:
+            return
+
+        for b in self.bots:
+            bid = b["id"]
+            pos = tuple(b["position"])
+            has_active = self.bot_has_active.get(bid, False)
+            inv = b["inventory"]
+
+            # Delivering bots with full inventory or no items left to pick
+            if has_active and (len(inv) >= 3 or self.active_on_shelves == 0):
+                nxt = bfs(pos, self.drop_off, self.gs.blocked_static)
+                if nxt:
+                    self.predicted[bid] = nxt
+                    continue
+
+            # Bots at dropoff with active items will drop off (stay put)
+            if pos == self.drop_off and has_active:
+                self.predicted[bid] = pos
+                continue
+
+            # Bots with assigned items move toward first assigned item
+            if bid in self.bot_assignments and self.bot_assignments[bid]:
+                first_item = self.bot_assignments[bid][0]
+                cell, _ = self.gs.find_best_item_target(pos, first_item)
+                if cell:
+                    nxt = bfs(pos, cell, self.gs.blocked_static)
+                    if nxt:
+                        self.predicted[bid] = nxt
+                        continue
+
+            # Default: stay in place
+            self.predicted[bid] = pos
+
     def _build_moving_obstacles(self, bid):
         """Build moving obstacle list for temporal BFS (other bots only)."""
         obstacles = []

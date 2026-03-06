@@ -15,6 +15,10 @@ class GameState:
         self.last_pickup = {}
         self.pickup_fail_count = {}
         self.blacklisted_items = set()
+        self.corridor_y = []
+        self.idle_spots = []
+        self.grid_width = 0
+        self.grid_height = 0
 
     def reset(self):
         self.__init__()
@@ -26,6 +30,8 @@ class GameState:
 
         walls = {tuple(w) for w in state["grid"]["walls"]}
         width, height = state["grid"]["width"], state["grid"]["height"]
+        self.grid_width = width
+        self.grid_height = height
         item_positions = {tuple(it["position"]) for it in state["items"]}
 
         blocked = set(walls)
@@ -43,6 +49,50 @@ class GameState:
             self.adj_cache[ipos] = find_adjacent_positions(
                 ipos[0], ipos[1], self.blocked_static
             )
+
+        self._compute_idle_spots(width, height, item_positions)
+
+    def _compute_idle_spots(self, width, height, item_positions):
+        """Precompute strategic idle positions along the middle corridor.
+
+        Idle spots are walkable cells at the walkway columns (between shelf
+        pairs) on the middle corridor row(s). Bots at these positions can
+        quickly enter any aisle to pick items.
+        """
+        # Find middle corridor rows
+        mid = height // 2
+        corridor_rows = [mid]
+        if height > 10:
+            corridor_rows.append(mid - 1)
+        self.corridor_y = [y for y in corridor_rows if 1 <= y < height - 1]
+
+        # Find walkway columns (columns between shelf pairs)
+        shelf_xs = {pos[0] for pos in item_positions}
+        walkway_xs = set()
+        for sx in shelf_xs:
+            for dx in [-1, 1]:
+                ax = sx + dx
+                if 0 < ax < width - 1 and ax not in shelf_xs:
+                    walkway_xs.add(ax)
+
+        # Generate idle spots at corridor + walkway intersections
+        self.idle_spots = []
+        for cy in self.corridor_y:
+            for wx in sorted(walkway_xs):
+                pos = (wx, cy)
+                if pos not in self.blocked_static:
+                    self.idle_spots.append(pos)
+
+        # Overflow spots: one row above/below corridor
+        for cy in self.corridor_y:
+            for dy in [-1, 1]:
+                ny = cy + dy
+                if ny < 1 or ny >= height - 1:
+                    continue
+                for wx in sorted(walkway_xs):
+                    pos = (wx, ny)
+                    if pos not in self.blocked_static:
+                        self.idle_spots.append(pos)
 
     def get_distances_from(self, source):
         if source not in self.dist_cache:
