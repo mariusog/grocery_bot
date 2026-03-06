@@ -1333,7 +1333,8 @@ class TestPreviewDoesntBlockActive:
             if len(last_actions) > 10:
                 last_actions.pop(0)
                 # Check if last 10 actions repeat a 2-round cycle
-                if len(set(last_actions)) <= 2:
+                # Allow endgame idle (last 30 rounds) — bot may legitimately wait
+                if len(set(last_actions)) <= 2 and sim.round < 270:
                     assert False, (
                         f"Bot stuck in loop at round {sim.round}: {last_actions}"
                     )

@@ -860,6 +860,10 @@ class RoundPlanner:
         return None
 
     def _build_greedy_route(self, pos, inv):
+        # Single-bot: use optimized item selection
+        if len(self.bots) <= 1:
+            return self._build_single_bot_route(pos, inv)
+
         candidates = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)
@@ -875,14 +879,11 @@ class RoundPlanner:
             return None
 
         # Phase 4.2: Item proximity clustering
-        # When multiple same-type items exist, prefer ones closer to other
-        # needed items (center-of-mass tiebreaker)
         if len(candidates) > 1:
             candidates = self._cluster_select(candidates)
 
         slots = min(3 - len(inv), self.max_claim)
 
-        # Select best item per type, up to what's still needed
         selected = []
         selected_types = {}
         for it, cell, d in candidates:
@@ -897,6 +898,130 @@ class RoundPlanner:
         if len(selected) > slots:
             return self.gs.plan_multi_trip(pos, selected, self.drop_off, slots)
         return self.gs.tsp_route(pos, selected, self.drop_off)
+
+    def _build_single_bot_route(self, pos, inv):
+        """Optimized route for single bot: prefer closest shelves to dropoff.
+
+        Key insight: items restock immediately, so for type needing N items,
+        use the shelf closest to dropoff N times rather than visiting N
+        distant shelves. Also considers ALL adjacent cells per shelf for
+        better approach angles.
+        """
+        slots = 3 - len(inv)
+        if slots <= 0:
+            return None
+
+        # For each needed type, find the best shelf (lowest d_drop)
+        type_shelves = {}  # type -> list of (item, best_adj_cell, d_drop)
+        for it, _ in self._iter_needed_items(self.net_active):
+            t = it["type"]
+            ipos = tuple(it["position"])
+            # Pick the adjacent cell closest to dropoff for this shelf
+            best_ac = None
+            best_d_drop = float("inf")
+            for ac in self.gs.adj_cache.get(ipos, []):
+                dd = self.gs.dist_static(ac, self.drop_off)
+                if dd < best_d_drop:
+                    best_d_drop = dd
+                    best_ac = ac
+            if best_ac is None:
+                continue
+            type_shelves.setdefault(t, []).append((it, best_ac, best_d_drop))
+
+        if not type_shelves:
+            return None
+
+        # For each type, pick the shelf closest to dropoff
+        type_best = {}
+        for t, shelves in type_shelves.items():
+            shelves.sort(key=lambda s: s[2])
+            type_best[t] = shelves[0]  # (item, cell, d_drop)
+
+        # Build candidate list: each needed item uses the closest shelf
+        candidates = []
+        for t, (it, cell, d_drop) in type_best.items():
+            count = min(self.net_active.get(t, 0), slots - len(candidates))
+            if count <= 0:
+                continue
+            d_bot = self.gs.dist_static(pos, cell)
+            if d_bot + 1 + d_drop >= self.rounds_left:
+                continue
+            candidates.append((it, cell, d_bot + d_drop))
+
+        if not candidates:
+            return None
+
+        # Sort by round-trip cost and select up to slots
+        candidates.sort(key=lambda c: c[2])
+        selected = [(it, cell) for it, cell, _ in candidates[:slots]]
+
+        if not selected:
+            return None
+        # Use flexible TSP that considers all adjacent cells per item
+        return self._flexible_tsp(pos, selected, self.drop_off)
+
+    def _flexible_tsp(self, bot_pos, item_targets, drop_off):
+        """TSP that considers ALL adjacent cells per item for better routes.
+
+        For each item, evaluates every walkable adjacent cell (not just the
+        closest one to bot). Uses dropoff proximity as tiebreaker.
+        """
+        from itertools import permutations
+
+        n = len(item_targets)
+        if n <= 1:
+            # Still optimize the single item's cell
+            if n == 1:
+                it, _ = item_targets[0]
+                ipos = tuple(it["position"])
+                best_cell = None
+                best_cost = float("inf")
+                for ac in self.gs.adj_cache.get(ipos, []):
+                    cost = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(ac, drop_off)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_cell = ac
+                if best_cell:
+                    return [(it, best_cell)]
+            return item_targets
+
+        # For each item, get all possible adjacent cells
+        item_cells = []
+        for it, default_cell in item_targets:
+            ipos = tuple(it["position"])
+            cells = self.gs.adj_cache.get(ipos, [default_cell])
+            if not cells:
+                cells = [default_cell]
+            item_cells.append((it, cells))
+
+        best_order = None
+        best_cost = float("inf")
+
+        for perm in permutations(range(n)):
+            # For this permutation, greedily pick best cell per item
+            cost = 0
+            prev = bot_pos
+            cells_chosen = []
+            for idx in perm:
+                it, cells = item_cells[idx]
+                # Pick the cell that minimizes distance from prev
+                bc = min(cells, key=lambda c: self.gs.dist_static(prev, c))
+                d = self.gs.dist_static(prev, bc)
+                cost += d
+                if cost >= best_cost:
+                    break
+                prev = bc
+                cells_chosen.append((idx, bc))
+            else:
+                cost += self.gs.dist_static(prev, drop_off)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_order = cells_chosen
+
+        if best_order is None:
+            return item_targets
+
+        return [(item_cells[idx][0], cell) for idx, cell in best_order]
 
     def _cluster_select(self, candidates):
         """For same-type items, prefer the one closest to other needed items.
