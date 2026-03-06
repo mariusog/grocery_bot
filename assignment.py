@@ -1,12 +1,14 @@
 """Bot-to-item assignment logic for RoundPlanner."""
 
+from typing import Any, Optional
+
 from constants import MAX_INVENTORY, MEDIUM_TEAM_MIN, ZONE_CROSS_PENALTY
 
 
 class AssignmentMixin:
     """Mixin providing bot assignment, preview bot selection, and urgency."""
 
-    def _is_delivering(self, bot):
+    def _is_delivering(self, bot: dict[str, Any]) -> bool:
         """True if bot is busy delivering (shouldn't count as idle)."""
         has_ai = self.bot_has_active[bot["id"]]
         if has_ai and (len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0):
@@ -15,13 +17,13 @@ class AssignmentMixin:
             return True
         return False
 
-    def _assign_preview_bot(self):
+    def _assign_preview_bot(self) -> None:
         """Assign bots furthest from remaining active items as preview-only bots.
 
         For 2+ bots, allow up to (num_idle - active_on_shelves - 1) preview bots,
         keeping at least 1 more idle bot than needed for active items.
         """
-        idle_for_active = []
+        idle_for_active: list[dict[str, Any]] = []
         for bot in self.bots:
             if self._is_delivering(bot):
                 continue
@@ -30,7 +32,7 @@ class AssignmentMixin:
         if len(idle_for_active) <= self.active_on_shelves:
             return
 
-        active_item_positions = []
+        active_item_positions: list[tuple[int, int]] = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, _ = self.gs.find_best_item_target(self.drop_off, it)
             if cell:
@@ -46,7 +48,7 @@ class AssignmentMixin:
             return
         max_preview = max(1, surplus - 1) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
 
-        candidates = []
+        candidates: list[tuple[float, int]] = []
         for bot in idle_for_active:
             if self.bot_has_active[bot["id"]]:
                 continue
@@ -68,7 +70,7 @@ class AssignmentMixin:
         elif self.preview_bot_ids:
             self.preview_bot_id = next(iter(self.preview_bot_ids))
 
-    def _bot_delivery_completes_order(self, bot):
+    def _bot_delivery_completes_order(self, bot: dict[str, Any]) -> bool:
         """Check if THIS bot's delivery alone completes the order."""
         bot_active = self.bot_carried_active[bot["id"]]
         for item_type, still_need in self.active_needed.items():
@@ -76,14 +78,14 @@ class AssignmentMixin:
                 return False
         return True
 
-    def _compute_bot_assignments(self):
+    def _compute_bot_assignments(self) -> None:
         """Pre-assign active items to bots (multi-bot optimization)."""
-        self.bot_assignments = {}
+        self.bot_assignments: dict[int, list[dict[str, Any]]] = {}
         if len(self.bots) <= 1 or not self.net_active:
             return
 
-        candidates = []
-        seen_types = {}
+        candidates: list[dict[str, Any]] = []
+        seen_types: dict[str, int] = {}
         for it, _ in self._iter_needed_items(self.net_active):
             t = it["type"]
             if seen_types.get(t, 0) >= self.net_active[t]:
@@ -94,7 +96,7 @@ class AssignmentMixin:
             candidates.append(it)
             seen_types[t] = seen_types.get(t, 0) + 1
 
-        assignable = []
+        assignable: list[tuple[int, tuple[int, int], int]] = []
         for b in self.bots:
             if self._is_delivering(b):
                 continue
@@ -105,9 +107,9 @@ class AssignmentMixin:
         if not assignable or not candidates:
             return
 
-        map_width = self.full_state["grid"]["width"]
+        map_width: int = self.full_state["grid"]["width"]
         num_zones = max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
-        zone_width = (map_width / num_zones) if num_zones > 1 else None
+        zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
 
         max_slots = max(s for _, _, s in assignable)
         if max_slots == 1 or len(assignable) >= len(candidates):
@@ -116,14 +118,19 @@ class AssignmentMixin:
             )
         else:
             self._greedy_assign(assignable, candidates, zone_width)
-        taken_items = {it["id"] for items in self.bot_assignments.values()
+        taken_items: set[str] = {it["id"] for items in self.bot_assignments.values()
                        for it in items}
 
         self._stagger_aisle_assignments(assignable, candidates, taken_items)
 
-    def _greedy_assign(self, assignable, candidates, zone_width):
+    def _greedy_assign(
+        self,
+        assignable: list[tuple[int, tuple[int, int], int]],
+        candidates: list[dict[str, Any]],
+        zone_width: Optional[float],
+    ) -> None:
         """Greedy distance-sorted assignment supporting multi-slot bots."""
-        pairs = []
+        pairs: list[tuple[float, int, int]] = []
         for bi, (_, bot_pos, _) in enumerate(assignable):
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
             for ii, it in enumerate(candidates):
@@ -134,8 +141,8 @@ class AssignmentMixin:
                 pairs.append((d, bi, ii))
         pairs.sort()
 
-        bot_counts = {}
-        taken = set()
+        bot_counts: dict[int, int] = {}
+        taken: set[int] = set()
         for d, bi, ii in pairs:
             bot_id, _, slots = assignable[bi]
             if bot_counts.get(bi, 0) >= slots or ii in taken:
@@ -144,21 +151,26 @@ class AssignmentMixin:
             bot_counts[bi] = bot_counts.get(bi, 0) + 1
             self.bot_assignments.setdefault(bot_id, []).append(candidates[ii])
 
-    def _stagger_aisle_assignments(self, assignable, candidates, taken_items):
+    def _stagger_aisle_assignments(
+        self,
+        assignable: list[tuple[int, tuple[int, int], int]],
+        candidates: list[dict[str, Any]],
+        taken_items: set[str],
+    ) -> None:
         """If 2+ bots target items in the same aisle column, reassign the furthest."""
         if len(self.bot_assignments) < 2:
             return
 
-        bot_columns = {}
+        bot_columns: dict[int, set[int]] = {}
         for bid, items in self.bot_assignments.items():
-            cols = set()
+            cols: set[int] = set()
             for it in items:
                 cols.add(it["position"][0])
             bot_columns[bid] = cols
 
-        col_bots = {}
+        col_bots: dict[int, list[tuple[int, float]]] = {}
         for bid, cols in bot_columns.items():
-            bot_pos = None
+            bot_pos: Optional[tuple[int, int]] = None
             for b_id, b_pos, _ in assignable:
                 if b_id == bid:
                     bot_pos = b_pos
@@ -184,7 +196,7 @@ class AssignmentMixin:
 
             for old_item in items_in_col:
                 old_type = old_item["type"]
-                best_alt = None
+                best_alt: Optional[dict[str, Any]] = None
                 best_alt_d = float("inf")
                 bot_pos = None
                 for b_id, b_pos, _ in assignable:
@@ -216,7 +228,7 @@ class AssignmentMixin:
                     taken_items.add(best_alt["id"])
                     break
 
-    def _bot_urgency(self, b):
+    def _bot_urgency(self, b: dict[str, Any]) -> int:
         has_ai = self.bot_has_active[b["id"]]
         n = len(b["inventory"])
         if has_ai and n >= MAX_INVENTORY:

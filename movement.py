@@ -1,5 +1,7 @@
 """Movement, collision avoidance, and action emission for RoundPlanner."""
 
+from typing import Any, Optional
+
 from pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, _predict_pos
 from constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
 
@@ -7,7 +9,7 @@ from constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
 class MovementMixin:
     """Mixin providing movement, BFS, and action emission methods."""
 
-    def _emit(self, bid, bx, by, action_dict):
+    def _emit(self, bid: int, bx: int, by: int, action_dict: dict[str, Any]) -> None:
         """Record action with yield-redirect for higher-urgency bots."""
         if self._yield_to and action_dict["action"].startswith("move_"):
             predicted = _predict_pos(bx, by, action_dict["action"])
@@ -20,8 +22,14 @@ class MovementMixin:
         if action_dict["action"] == "pick_up":
             self.gs.last_pickup[bid] = (action_dict["item_id"], len(self.bots_by_id[bid]["inventory"]))
 
-    def _find_yield_alternative(self, bid, bx, by, blocked_target):
-        occupied = {
+    def _find_yield_alternative(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        blocked_target: tuple[int, int],
+    ) -> dict[str, Any]:
+        occupied: set[tuple[int, int]] = {
             self.predicted.get(b["id"], tuple(b["position"]))
             for b in self.bots if b["id"] != bid
         }
@@ -34,7 +42,7 @@ class MovementMixin:
             return {"bot": bid, "action": direction_to(bx, by, alt[0], alt[1])}
         return {"bot": bid, "action": "wait"}
 
-    def _pre_predict(self):
+    def _pre_predict(self) -> None:
         """Estimate where each bot will move BEFORE detailed planning.
 
         Gives temporal BFS better information about undecided bots.
@@ -45,10 +53,10 @@ class MovementMixin:
             return
 
         for b in self.bots:
-            bid = b["id"]
-            pos = tuple(b["position"])
-            has_active = self.bot_has_active.get(bid, False)
-            inv = b["inventory"]
+            bid: int = b["id"]
+            pos: tuple[int, int] = tuple(b["position"])
+            has_active: bool = self.bot_has_active.get(bid, False)
+            inv: list[str] = b["inventory"]
 
             # Delivering bots with full inventory or no items left to pick
             if has_active and (len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0):
@@ -75,18 +83,26 @@ class MovementMixin:
             # Default: stay in place
             self.predicted[bid] = pos
 
-    def _build_moving_obstacles(self, bid):
+    def _build_moving_obstacles(
+        self, bid: int
+    ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
         """Build moving obstacle list for temporal BFS (other bots only)."""
-        obstacles = []
+        obstacles: list[tuple[tuple[int, int], tuple[int, int]]] = []
         for b in self.bots:
             if b["id"] == bid:
                 continue
-            cur = tuple(b["position"])
-            pred = self.predicted.get(b["id"], cur)
+            cur: tuple[int, int] = tuple(b["position"])
+            pred: tuple[int, int] = self.predicted.get(b["id"], cur)
             obstacles.append((cur, pred))
         return obstacles
 
-    def _bfs_smart(self, bid, pos, target, blocked):
+    def _bfs_smart(
+        self,
+        bid: int,
+        pos: tuple[int, int],
+        target: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> Optional[tuple[int, int]]:
         """Use temporal BFS for multi-bot, standard BFS for single bot."""
         if len(self.bots) > 1:
             obstacles = self._build_moving_obstacles(bid)
@@ -99,7 +115,15 @@ class MovementMixin:
             return None
         return result
 
-    def _emit_move(self, bid, bx, by, pos, target, blocked):
+    def _emit_move(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        target: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
         """BFS to target and emit. Returns True if a move was emitted."""
         next_pos = self._bfs_smart(bid, pos, target, blocked)
         if next_pos:
@@ -110,19 +134,27 @@ class MovementMixin:
             return True
         return False
 
-    def _would_oscillate(self, bid, next_pos):
+    def _would_oscillate(self, bid: int, next_pos: tuple[int, int]) -> bool:
         """Check if moving to next_pos would create an oscillation pattern."""
         history = self.gs.bot_history.get(bid)
         if not history or len(history) < 2:
             return False
         return next_pos == history[-2]
 
-    def _emit_move_or_wait(self, bid, bx, by, pos, target, blocked):
+    def _emit_move_or_wait(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        target: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> None:
         """Move toward target with unstick fallback and oscillation detection."""
         next_pos = self._bfs_smart(bid, pos, target, blocked)
 
         if next_pos and self._would_oscillate(bid, next_pos):
-            alt_pos = None
+            alt_pos: Optional[tuple[int, int]] = None
             for dx, dy in DIRECTIONS:
                 npos = (bx + dx, by + dy)
                 if npos not in blocked and npos != next_pos and not self._would_oscillate(bid, npos):
@@ -145,15 +177,17 @@ class MovementMixin:
         else:
             self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
 
-    def _build_blocked(self, bid):
+    def _build_blocked(self, bid: int) -> set[tuple[int, int]]:
         """Build blocked set for a specific bot (static + nearby other bots)."""
-        pos = tuple(self.bots_by_id[bid]["position"])
-        max_dist = BLOCKING_RADIUS_LARGE_TEAM if len(self.bots) >= MEDIUM_TEAM_MIN else float("inf")
-        other = set()
+        pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
+        max_dist: float = (
+            BLOCKING_RADIUS_LARGE_TEAM if len(self.bots) >= MEDIUM_TEAM_MIN else float("inf")
+        )
+        other: set[tuple[int, int]] = set()
         for b in self.bots:
             if b["id"] == bid:
                 continue
-            bp = self.predicted.get(b["id"], tuple(b["position"]))
+            bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
             if max_dist == float("inf") or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist:
                 other.add(bp)
         return self.gs.blocked_static | other

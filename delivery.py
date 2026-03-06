@@ -6,9 +6,11 @@ from constants import MAX_INVENTORY
 class DeliveryMixin:
     """Mixin providing delivery timing, end-game estimation, and item maximization."""
 
-    def _estimate_rounds_to_complete(self, pos, inv):
+    def _estimate_rounds_to_complete(
+        self, pos: tuple[int, int], inv: list[str]
+    ) -> float:
         """Estimate rounds needed to pick up all remaining active items and deliver."""
-        remaining = []
+        remaining: list[tuple[dict, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)
             if cell and d < float("inf"):
@@ -17,7 +19,7 @@ class DeliveryMixin:
             return self.gs.dist_static(pos, self.drop_off) + 1
 
         remaining.sort(key=lambda c: c[2])
-        total_dist = 0
+        total_dist: float = 0
         current = pos
         picked = 0
         for it, cell, _ in remaining:
@@ -33,7 +35,7 @@ class DeliveryMixin:
             total_dist += self.gs.dist_static(current, self.drop_off) + 1
         return total_dist
 
-    def _should_deliver_early(self, pos, inv):
+    def _should_deliver_early(self, pos: tuple[int, int], inv: list[str]) -> bool:
         """Return True if delivering now and starting fresh is cheaper than filling up."""
         if not inv or self.active_on_shelves == 0:
             return False
@@ -42,7 +44,7 @@ class DeliveryMixin:
 
         cost_deliver = self.gs.dist_static(pos, self.drop_off) + 1
 
-        remaining = []
+        remaining: list[tuple[dict, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d_from_drop = self.gs.find_best_item_target(self.drop_off, it)
             if cell:
@@ -52,7 +54,7 @@ class DeliveryMixin:
             return False
 
         remaining.sort(key=lambda c: c[2])
-        cost_remaining = 0
+        cost_remaining: float = 0
         cur = self.drop_off
         picked = 0
         for _, cell, _ in remaining:
@@ -72,7 +74,7 @@ class DeliveryMixin:
         if not fill_items:
             return False
 
-        cost_fill = 0
+        cost_fill: float = 0
         cur = pos
         for _, cell, _ in fill_items:
             cost_fill += self.gs.dist_static(cur, cell) + 1
@@ -95,7 +97,15 @@ class DeliveryMixin:
 
         return total_deliver_now < cost_fill - 2
 
-    def _try_maximize_items(self, bid, bx, by, pos, inv, blocked):
+    def _try_maximize_items(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        inv: list[str],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
         """End-game: maximize individual item deliveries when order can't complete."""
         has_active = self.bot_has_active[bid]
         if has_active and len(inv) > 0:

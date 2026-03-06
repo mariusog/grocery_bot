@@ -2,7 +2,6 @@
 
 from collections import deque
 from tests.conftest import make_planner, make_state, get_action
-from round_planner import BotContext
 import bot
 
 

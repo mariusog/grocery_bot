@@ -171,7 +171,6 @@ class TestClaim:
 class TestPickup:
     def test_pickup_returns_correct_action(self):
         """_pickup should return a pick_up action dict."""
-        result = make_planner.__wrapped__ if hasattr(make_planner, '__wrapped__') else None
         from round_planner import RoundPlanner
         action = RoundPlanner._pickup(0, {"id": "i0", "type": "cheese"})
         assert action == {"bot": 0, "action": "pick_up", "item_id": "i0"}

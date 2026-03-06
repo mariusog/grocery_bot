@@ -1,6 +1,7 @@
 """Pickup logic (active items, preview pre-pick, routing) for RoundPlanner."""
 
 from itertools import permutations
+from typing import Any, Optional
 
 from pathfinding import DIRECTIONS
 from constants import (
@@ -15,7 +16,15 @@ from constants import (
 class PickupMixin:
     """Mixin providing active item pickup, preview pre-pick, and route building."""
 
-    def _try_active_pickup(self, bid, bx, by, pos, inv, blocked):
+    def _try_active_pickup(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        inv: list[str],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
         """Pick up adjacent active items, or navigate via TSP route."""
         # Adjacent pickup via position lookup (zero cost - always take it)
         if len(inv) < MAX_INVENTORY:
@@ -65,8 +74,10 @@ class PickupMixin:
 
         return False
 
-    def _build_assigned_route(self, bid, pos):
-        assigned = []
+    def _build_assigned_route(
+        self, bid: int, pos: tuple[int, int]
+    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
+        assigned: list[tuple[Any, tuple[int, int]]] = []
         for it in self.bot_assignments[bid]:
             if it["id"] in self.claimed:
                 continue
@@ -77,12 +88,14 @@ class PickupMixin:
             return self.gs.tsp_route(pos, assigned, self.drop_off)
         return None
 
-    def _build_greedy_route(self, pos, inv):
+    def _build_greedy_route(
+        self, pos: tuple[int, int], inv: list[str]
+    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
         # Single-bot: use optimized item selection
         if len(self.bots) <= 1:
             return self._build_single_bot_route(pos, inv)
 
-        candidates = []
+        candidates: list[tuple[Any, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)
             if not cell or d == float("inf"):
@@ -102,8 +115,8 @@ class PickupMixin:
 
         slots = min(MAX_INVENTORY - len(inv), self.max_claim)
 
-        selected = []
-        selected_types = {}
+        selected: list[tuple[Any, tuple[int, int]]] = []
+        selected_types: dict[str, int] = {}
         for it, cell, d in candidates:
             t = it["type"]
             still_needed = self.net_active.get(t, 0) - selected_types.get(t, 0)
@@ -117,17 +130,19 @@ class PickupMixin:
             return self.gs.plan_multi_trip(pos, selected, self.drop_off, slots)
         return self.gs.tsp_route(pos, selected, self.drop_off)
 
-    def _build_single_bot_route(self, pos, inv):
+    def _build_single_bot_route(
+        self, pos: tuple[int, int], inv: list[str]
+    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
         """Optimized route for single bot: prefer closest shelves to dropoff."""
         slots = MAX_INVENTORY - len(inv)
         if slots <= 0:
             return None
 
-        type_shelves = {}
+        type_shelves: dict[str, list[tuple[Any, tuple[int, int], float]]] = {}
         for it, _ in self._iter_needed_items(self.net_active):
             t = it["type"]
             ipos = tuple(it["position"])
-            best_ac = None
+            best_ac: Optional[tuple[int, int]] = None
             best_d_drop = float("inf")
             for ac in self.gs.adj_cache.get(ipos, []):
                 dd = self.gs.dist_static(ac, self.drop_off)
@@ -141,12 +156,12 @@ class PickupMixin:
         if not type_shelves:
             return None
 
-        type_best = {}
+        type_best: dict[str, tuple[Any, tuple[int, int], float]] = {}
         for t, shelves in type_shelves.items():
             shelves.sort(key=lambda s: s[2])
             type_best[t] = shelves[0]
 
-        candidates = []
+        candidates: list[tuple[Any, tuple[int, int], float]] = []
         for t, (it, cell, d_drop) in type_best.items():
             if len(candidates) >= slots:
                 break
@@ -159,20 +174,27 @@ class PickupMixin:
             return None
 
         candidates.sort(key=lambda c: c[2])
-        selected = [(it, cell) for it, cell, _ in candidates[:slots]]
+        selected: list[tuple[Any, tuple[int, int]]] = [
+            (it, cell) for it, cell, _ in candidates[:slots]
+        ]
 
         if not selected:
             return None
         return self._flexible_tsp(pos, selected, self.drop_off)
 
-    def _flexible_tsp(self, bot_pos, item_targets, drop_off):
+    def _flexible_tsp(
+        self,
+        bot_pos: tuple[int, int],
+        item_targets: list[tuple[Any, tuple[int, int]]],
+        drop_off: tuple[int, int],
+    ) -> list[tuple[Any, tuple[int, int]]]:
         """TSP that considers ALL adjacent cells per item for better routes."""
         n = len(item_targets)
         if n <= 1:
             if n == 1:
                 it, _ = item_targets[0]
                 ipos = tuple(it["position"])
-                best_cell = None
+                best_cell: Optional[tuple[int, int]] = None
                 best_cost = float("inf")
                 for ac in self.gs.adj_cache.get(ipos, []):
                     cost = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(ac, drop_off)
@@ -183,7 +205,7 @@ class PickupMixin:
                     return [(it, best_cell)]
             return item_targets
 
-        item_cells = []
+        item_cells: list[tuple[Any, list[tuple[int, int]]]] = []
         for it, default_cell in item_targets:
             ipos = tuple(it["position"])
             cells = self.gs.adj_cache.get(ipos, [default_cell])
@@ -191,13 +213,13 @@ class PickupMixin:
                 cells = [default_cell]
             item_cells.append((it, cells))
 
-        best_order = None
+        best_order: Optional[list[tuple[int, tuple[int, int]]]] = None
         best_cost = float("inf")
 
         for perm in permutations(range(n)):
-            cost = 0
+            cost: float = 0
             prev = bot_pos
-            cells_chosen = []
+            cells_chosen: list[tuple[int, tuple[int, int]]] = []
             for idx in perm:
                 it, cells = item_cells[idx]
                 bc = min(cells, key=lambda c: self.gs.dist_static(prev, c))
@@ -218,7 +240,9 @@ class PickupMixin:
 
         return [(item_cells[idx][0], cell) for idx, cell in best_order]
 
-    def _cluster_select(self, candidates):
+    def _cluster_select(
+        self, candidates: list[tuple[Any, tuple[int, int], float]]
+    ) -> list[tuple[Any, tuple[int, int], float]]:
         """For same-type items, prefer the one closest to other needed items."""
         all_positions = [cell for _, cell, _ in candidates]
         if len(all_positions) < 2:
@@ -226,19 +250,19 @@ class PickupMixin:
         cx = sum(p[0] for p in all_positions) / len(all_positions)
         cy = sum(p[1] for p in all_positions) / len(all_positions)
 
-        by_type = {}
+        by_type: dict[str, list[tuple[Any, tuple[int, int], float]]] = {}
         for entry in candidates:
             t = entry[0]["type"]
             by_type.setdefault(t, []).append(entry)
 
-        result = []
+        result: list[tuple[Any, tuple[int, int], float]] = []
         for t, entries in by_type.items():
             needed = self.net_active.get(t, 0)
             if len(entries) <= needed:
                 entries.sort(key=lambda e: e[2])
                 result.extend(entries)
             else:
-                scored = []
+                scored: list[tuple[Any, tuple[int, int], float, float]] = []
                 for entry in entries:
                     _, cell, d = entry
                     cluster_d = abs(cell[0] - cx) + abs(cell[1] - cy)
@@ -249,7 +273,16 @@ class PickupMixin:
         result.sort(key=lambda c: c[2])
         return result
 
-    def _try_preview_prepick(self, bid, bx, by, pos, inv, blocked, force_slots=False):
+    def _try_preview_prepick(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        inv: list[str],
+        blocked: set[tuple[int, int]],
+        force_slots: bool = False,
+    ) -> bool:
         if not self.preview:
             return False
         free = MAX_INVENTORY - len(inv)
@@ -277,7 +310,7 @@ class PickupMixin:
                 return False
             self._preview_walkers += 1
 
-        best = None
+        best: Optional[dict[str, Any]] = None
         best_dist = float("inf")
         best_cascade = False
         for it, is_cascade in self._iter_needed_items(self.net_preview):
@@ -296,10 +329,17 @@ class PickupMixin:
             return self._emit_move(bid, bx, by, pos, target, blocked)
         return False
 
-    def _find_detour_item(self, pos, needed, max_detour=MAX_DETOUR_STEPS, prefer_cascade=False):
+    def _find_detour_item(
+        self,
+        pos: tuple[int, int],
+        needed: dict[str, int],
+        max_detour: int = MAX_DETOUR_STEPS,
+        prefer_cascade: bool = False,
+    ) -> tuple[Optional[dict[str, Any]], Optional[tuple[int, int]]]:
         """Find item worth detouring for on the way to drop-off."""
         direct = self.gs.dist_static(pos, self.drop_off)
-        best_item = best_cell = None
+        best_item: Optional[dict[str, Any]] = None
+        best_cell: Optional[tuple[int, int]] = None
         best_cost = float("inf")
         best_cascade = False
 
@@ -322,9 +362,11 @@ class PickupMixin:
             return best_item, best_cell
         return None, None
 
-    def _find_nearest_active_item_pos(self, pos):
+    def _find_nearest_active_item_pos(
+        self, pos: tuple[int, int]
+    ) -> Optional[tuple[int, int]]:
         """Find the position of the nearest reachable active item on shelves."""
-        best_cell = None
+        best_cell: Optional[tuple[int, int]] = None
         best_d = float("inf")
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)

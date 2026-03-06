@@ -1,10 +1,14 @@
 """Pure pathfinding functions and movement helpers."""
 
 from collections import deque
+from typing import Optional
 
-DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+DIRECTIONS: list[tuple[int, int]] = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
-def bfs_all(source, blocked):
+def bfs_all(
+    source: tuple[int, int],
+    blocked: set[tuple[int, int]],
+) -> dict[tuple[int, int], int]:
     """BFS from source to ALL reachable cells. Returns {pos: distance}.
 
     Args:
@@ -14,7 +18,7 @@ def bfs_all(source, blocked):
     Returns:
         dict mapping (x, y) -> int distance from source.
     """
-    distances = {source: 0}
+    distances: dict[tuple[int, int], int] = {source: 0}
     queue = deque([source])
     while queue:
         pos = queue.popleft()
@@ -27,7 +31,11 @@ def bfs_all(source, blocked):
     return distances
 
 
-def bfs(start, goal, blocked):
+def bfs(
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    blocked: set[tuple[int, int]],
+) -> Optional[tuple[int, int]]:
     """BFS pathfinding from start to goal. Returns next position to move to.
 
     Searches backwards from goal so the returned position is the first step
@@ -60,7 +68,11 @@ def bfs(start, goal, blocked):
     return None
 
 
-def bfs_full_path(start, goal, blocked):
+def bfs_full_path(
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    blocked: set[tuple[int, int]],
+) -> list[tuple[int, int]]:
     """BFS returning the full shortest path from start to goal (inclusive).
 
     Args:
@@ -74,7 +86,7 @@ def bfs_full_path(start, goal, blocked):
     """
     if start == goal:
         return [start]
-    parent = {start: None}
+    parent: dict[tuple[int, int], Optional[tuple[int, int]]] = {start: None}
     queue = deque([start])
     while queue:
         pos = queue.popleft()
@@ -84,8 +96,8 @@ def bfs_full_path(start, goal, blocked):
                 parent[npos] = pos
                 if npos == goal:
                     # Reconstruct path
-                    path = []
-                    cur = goal
+                    path: list[tuple[int, int]] = []
+                    cur: Optional[tuple[int, int]] = goal
                     while cur is not None:
                         path.append(cur)
                         cur = parent[cur]
@@ -95,7 +107,12 @@ def bfs_full_path(start, goal, blocked):
     return []
 
 
-def bfs_temporal(start, goal, blocked_static, moving_obstacles):
+def bfs_temporal(
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    blocked_static: set[tuple[int, int]],
+    moving_obstacles: list[tuple[tuple[int, int], tuple[int, int]]],
+) -> Optional[tuple[int, int]]:
     """BFS pathfinding that avoids both current and predicted positions of
     moving obstacles (other bots).
 
@@ -126,8 +143,8 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
         return bfs(start, goal, blocked_static)
 
     # Positions blocked at time step 0: both current and predicted positions
-    current_positions = set()
-    predicted_positions = set()
+    current_positions: set[tuple[int, int]] = set()
+    predicted_positions: set[tuple[int, int]] = set()
     for cur_pos, pred_pos in moving_obstacles:
         current_positions.add(cur_pos)
         predicted_positions.add(pred_pos)
@@ -149,8 +166,10 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
     # Forward BFS from start
     # State: (pos, time_step) but we cap time_step at 1 since blocking rules
     # are the same for all steps >= 1
-    visited = {(start, 0)}
-    queue = deque([(start, 0, None)])  # (pos, time, first_move)
+    visited: set[tuple[tuple[int, int], int]] = {(start, 0)}
+    queue: deque[tuple[tuple[int, int], int, Optional[tuple[int, int]]]] = deque(
+        [(start, 0, None)]
+    )
 
     while queue:
         pos, t, first_move = queue.popleft()
@@ -179,7 +198,7 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
     return bfs(start, goal, fallback_blocked)
 
 
-def direction_to(sx, sy, tx, ty):
+def direction_to(sx: int, sy: int, tx: int, ty: int) -> str:
     """Convert a single step into a move action string.
 
     Args:
@@ -201,7 +220,7 @@ def direction_to(sx, sy, tx, ty):
     return "wait"
 
 
-def _predict_pos(bx, by, action):
+def _predict_pos(bx: int, by: int, action: str) -> tuple[int, int]:
     """Predict bot position after an action."""
     if action == "move_up":
         return (bx, by - 1)
@@ -215,9 +234,13 @@ def _predict_pos(bx, by, action):
 
 
 
-def find_adjacent_positions(ix, iy, blocked_static):
+def find_adjacent_positions(
+    ix: int,
+    iy: int,
+    blocked_static: set[tuple[int, int]],
+) -> list[tuple[int, int]]:
     """Find walkable positions adjacent to an item shelf."""
-    adj = []
+    adj: list[tuple[int, int]] = []
     for dx, dy in DIRECTIONS:
         pos = (ix + dx, iy + dy)
         if pos not in blocked_static:

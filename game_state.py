@@ -1,6 +1,7 @@
 """GameState — persistent map caches, cross-round tracking, and algorithms."""
 
 from itertools import combinations, permutations
+from typing import Any, Optional
 
 from pathfinding import bfs_all, find_adjacent_positions
 from constants import (
@@ -14,7 +15,19 @@ from constants import (
 class GameState:
     """Encapsulates all mutable game state and caches for a single game."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        self.blocked_static: Optional[set[tuple[int, int]]] = None
+        self.dist_cache: dict[tuple[int, int], dict[tuple[int, int], int]] = {}
+        self.adj_cache: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        self.last_pickup: dict[int, tuple[str, int]] = {}
+        self.pickup_fail_count: dict[str, int] = {}
+        self.blacklisted_items: set[str] = set()
+        self.corridor_y: list[int] = []
+        self.idle_spots: list[tuple[int, int]] = []
+        self.grid_width: int = 0
+        self.grid_height: int = 0
+
+    def reset(self) -> None:
         self.blocked_static = None
         self.dist_cache = {}
         self.adj_cache = {}
@@ -26,30 +39,19 @@ class GameState:
         self.grid_width = 0
         self.grid_height = 0
 
-    def reset(self):
-        self.blocked_static = None
-        self.dist_cache = {}
-        self.adj_cache = {}
-        self.last_pickup = {}
-        self.pickup_fail_count = {}
-        self.blacklisted_items = set()
-        self.corridor_y = []
-        self.idle_spots = []
-        self.grid_width = 0
-        self.grid_height = 0
-
-    def init_static(self, state):
+    def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
         self.dist_cache = {}
         self.adj_cache = {}
 
         walls = {tuple(w) for w in state["grid"]["walls"]}
-        width, height = state["grid"]["width"], state["grid"]["height"]
+        width: int = state["grid"]["width"]
+        height: int = state["grid"]["height"]
         self.grid_width = width
         self.grid_height = height
         item_positions = {tuple(it["position"]) for it in state["items"]}
 
-        blocked = set(walls)
+        blocked: set[tuple[int, int]] = set(walls)
         for x in range(-1, width + 1):
             blocked.add((x, -1))
             blocked.add((x, height))
@@ -67,7 +69,9 @@ class GameState:
 
         self._compute_idle_spots(width, height, item_positions)
 
-    def _compute_idle_spots(self, width, height, item_positions):
+    def _compute_idle_spots(
+        self, width: int, height: int, item_positions: set[tuple[int, int]]
+    ) -> None:
         """Precompute strategic idle positions along the middle corridor.
 
         Idle spots are walkable cells at the walkway columns (between shelf
@@ -82,8 +86,8 @@ class GameState:
         self.corridor_y = [y for y in corridor_rows if 1 <= y < height - 1]
 
         # Find walkway columns (columns between shelf pairs)
-        shelf_xs = {pos[0] for pos in item_positions}
-        walkway_xs = set()
+        shelf_xs: set[int] = {pos[0] for pos in item_positions}
+        walkway_xs: set[int] = set()
         for sx in shelf_xs:
             for dx in [-1, 1]:
                 ax = sx + dx
@@ -109,17 +113,21 @@ class GameState:
                     if pos not in self.blocked_static:
                         self.idle_spots.append(pos)
 
-    def get_distances_from(self, source):
+    def get_distances_from(
+        self, source: tuple[int, int]
+    ) -> dict[tuple[int, int], int]:
         if source not in self.dist_cache:
             self.dist_cache[source] = bfs_all(source, self.blocked_static)
         return self.dist_cache[source]
 
-    def dist_static(self, a, b):
+    def dist_static(self, a: tuple[int, int], b: tuple[int, int]) -> float:
         if a == b:
             return 0
         return self.get_distances_from(a).get(b, float("inf"))
 
-    def find_best_item_target(self, pos, item):
+    def find_best_item_target(
+        self, pos: tuple[int, int], item: dict[str, Any]
+    ) -> tuple[Optional[tuple[int, int]], float]:
         """Find the closest adjacent cell to reach an item shelf."""
         ipos = tuple(item["position"])
         adj_cells = self.adj_cache.get(
@@ -127,7 +135,7 @@ class GameState:
         )
         if not adj_cells:
             return None, float("inf")
-        best_cell = None
+        best_cell: Optional[tuple[int, int]] = None
         best_d = float("inf")
         for ac in adj_cells:
             d = self.dist_static(pos, ac)
@@ -136,11 +144,16 @@ class GameState:
                 best_cell = ac
         return best_cell, best_d
 
-    def tsp_route(self, bot_pos, item_targets, drop_off):
+    def tsp_route(
+        self,
+        bot_pos: tuple[int, int],
+        item_targets: list[tuple[Any, tuple[int, int]]],
+        drop_off: tuple[int, int],
+    ) -> list[tuple[Any, tuple[int, int]]]:
         """Find optimal pickup order via brute-force TSP."""
         if len(item_targets) <= 1:
             return item_targets
-        best_order = None
+        best_order: Optional[tuple[int, ...]] = None
         best_cost = float("inf")
         for perm in permutations(range(len(item_targets))):
             cost = 0
@@ -160,8 +173,13 @@ class GameState:
             return item_targets
         return [item_targets[i] for i in best_order]
 
-    def tsp_cost(self, bot_pos, item_targets, drop_off):
-        cost = 0
+    def tsp_cost(
+        self,
+        bot_pos: tuple[int, int],
+        item_targets: list[tuple[Any, tuple[int, int]]],
+        drop_off: tuple[int, int],
+    ) -> float:
+        cost: float = 0
         prev = bot_pos
         for _, cell in item_targets:
             cost += self.dist_static(prev, cell)
@@ -169,13 +187,19 @@ class GameState:
         cost += self.dist_static(prev, drop_off)
         return cost
 
-    def plan_multi_trip(self, bot_pos, all_candidates, drop_off, capacity=MAX_INVENTORY):
+    def plan_multi_trip(
+        self,
+        bot_pos: tuple[int, int],
+        all_candidates: list[tuple[Any, tuple[int, int]]],
+        drop_off: tuple[int, int],
+        capacity: int = MAX_INVENTORY,
+    ) -> list[tuple[Any, tuple[int, int]]]:
         """Find optimal split into trip1/trip2 for large orders."""
         n = len(all_candidates)
         if n <= capacity:
             return self.tsp_route(bot_pos, all_candidates, drop_off)
         best_cost = float("inf")
-        best_trip1 = None
+        best_trip1: Optional[list[tuple[Any, tuple[int, int]]]] = None
         for trip1_size in range(max(1, n - capacity), min(capacity, n) + 1):
             for trip1_indices in combinations(range(n), trip1_size):
                 trip2_indices = tuple(i for i in range(n) if i not in trip1_indices)
@@ -197,7 +221,13 @@ class GameState:
     # Phase 1.3: Interleaved Pickup-Delivery
     # ------------------------------------------------------------------
 
-    def plan_interleaved_route(self, bot_pos, item_targets, drop_off, capacity=MAX_INVENTORY):
+    def plan_interleaved_route(
+        self,
+        bot_pos: tuple[int, int],
+        item_targets: list[tuple[Any, tuple[int, int]]],
+        drop_off: tuple[int, int],
+        capacity: int = MAX_INVENTORY,
+    ) -> list[tuple[str, Any]]:
         """Compare full-pickup-then-deliver vs deliver-when-passing-dropoff.
 
         Returns list of (action_type, target) tuples:
@@ -215,7 +245,9 @@ class GameState:
             full_route = self.tsp_route(bot_pos, item_targets, drop_off)
             full_cost = self.tsp_cost(bot_pos, full_route, drop_off)
             best_cost = full_cost
-            best_plan = [("pickup", it) for it in full_route] + [("deliver", drop_off)]
+            best_plan: Optional[list[tuple[str, Any]]] = (
+                [("pickup", it) for it in full_route] + [("deliver", drop_off)]
+            )
         else:
             best_cost = float("inf")
             best_plan = None
@@ -250,14 +282,18 @@ class GameState:
                         + [("deliver", drop_off)]
                     )
 
-        return best_plan
+        return best_plan or []
 
     # ------------------------------------------------------------------
     # Phase 3.1: Hungarian Algorithm
     # ------------------------------------------------------------------
 
-    def assign_items_to_bots(self, assignable_bots, candidate_items,
-                              zone_width=None):
+    def assign_items_to_bots(
+        self,
+        assignable_bots: list[tuple[int, tuple[int, int], int]],
+        candidate_items: list[dict[str, Any]],
+        zone_width: Optional[float] = None,
+    ) -> dict[int, list[dict[str, Any]]]:
         """Assign items to bots optimally using Hungarian algorithm.
 
         Args:
@@ -272,9 +308,9 @@ class GameState:
             return {}
 
         # Build cost matrix: rows=bots, cols=items
-        cost_matrix = []
+        cost_matrix: list[list[float]] = []
         for bi, (_, bot_pos, _) in enumerate(assignable_bots):
-            row = []
+            row: list[float] = []
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
             for ii, it in enumerate(candidate_items):
                 _, d = self.find_best_item_target(bot_pos, it)
@@ -291,13 +327,14 @@ class GameState:
             pairs = _hungarian_solve(cost_matrix)
         else:
             pairs = []
-            flat = []
+            flat: list[tuple[float, int, int]] = []
             for i, row in enumerate(cost_matrix):
                 for j, d in enumerate(row):
                     if d < float("inf"):
                         flat.append((d, i, j))
             flat.sort()
-            used_b, used_i = set(), set()
+            used_b: set[int] = set()
+            used_i: set[int] = set()
             for d, bi, ii in flat:
                 if bi not in used_b and ii not in used_i:
                     pairs.append((bi, ii))
@@ -305,8 +342,8 @@ class GameState:
                     used_i.add(ii)
 
         # Convert pairs to bot_id -> items, respecting slot limits
-        result = {}
-        bot_counts = {}
+        result: dict[int, list[dict[str, Any]]] = {}
+        bot_counts: dict[int, int] = {}
         for bi, ii in sorted(pairs, key=lambda p: cost_matrix[p[0]][p[1]]):
             bot_id, _, slots = assignable_bots[bi]
             if bot_counts.get(bot_id, 0) >= slots:
@@ -316,7 +353,12 @@ class GameState:
 
         return result
 
-    def hungarian_assign(self, bot_positions, item_positions, dist_fn=None):
+    def hungarian_assign(
+        self,
+        bot_positions: list[tuple[int, int]],
+        item_positions: list[tuple[int, int]],
+        dist_fn: Optional[Any] = None,
+    ) -> list[tuple[int, int]]:
         """Optimal bot-to-item assignment. Falls back to greedy for >100 pairs."""
         if not bot_positions or not item_positions:
             return []
@@ -330,9 +372,9 @@ class GameState:
         if n_bots * n_items > HUNGARIAN_MAX_PAIRS:
             return _greedy_assign(bot_positions, item_positions, dist_fn)
 
-        cost_matrix = []
+        cost_matrix: list[list[float]] = []
         for i in range(n_bots):
-            row = []
+            row: list[float] = []
             for j in range(n_items):
                 row.append(dist_fn(bot_positions[i], item_positions[j]))
             cost_matrix.append(row)
@@ -344,7 +386,7 @@ class GameState:
 # Hungarian algorithm internals (module-level for reuse)
 # ------------------------------------------------------------------
 
-def _hungarian_solve(cost_matrix):
+def _hungarian_solve(cost_matrix: list[list[float]]) -> list[tuple[int, int]]:
     """Solve assignment problem using Hungarian/Munkres algorithm O(n^3)."""
     if not cost_matrix or not cost_matrix[0]:
         return []
@@ -363,9 +405,9 @@ def _hungarian_solve(cost_matrix):
     )
     pad_val = max_finite * n + 1
 
-    matrix = []
+    matrix: list[list[float]] = []
     for i in range(n):
-        row = []
+        row: list[float] = []
         for j in range(n):
             if i < n_rows and j < n_cols:
                 val = cost_matrix[i][j]
@@ -374,16 +416,16 @@ def _hungarian_solve(cost_matrix):
                 row.append(pad_val)
         matrix.append(row)
 
-    u = [0.0] * (n + 1)
-    v = [0.0] * (n + 1)
-    p = [0] * (n + 1)
-    way = [0] * (n + 1)
+    u: list[float] = [0.0] * (n + 1)
+    v: list[float] = [0.0] * (n + 1)
+    p: list[int] = [0] * (n + 1)
+    way: list[int] = [0] * (n + 1)
 
     for i in range(1, n + 1):
         p[0] = i
         j0 = 0
-        min_v = [INF] * (n + 1)
-        used = [False] * (n + 1)
+        min_v: list[float] = [INF] * (n + 1)
+        used: list[bool] = [False] * (n + 1)
 
         while True:
             used[j0] = True
@@ -420,7 +462,7 @@ def _hungarian_solve(cost_matrix):
             p[j0] = p[way[j0]]
             j0 = way[j0]
 
-    result = []
+    result: list[tuple[int, int]] = []
     for j in range(1, n + 1):
         row_idx = p[j] - 1
         col_idx = j - 1
@@ -430,9 +472,13 @@ def _hungarian_solve(cost_matrix):
     return result
 
 
-def _greedy_assign(bot_positions, item_positions, dist_fn):
+def _greedy_assign(
+    bot_positions: list[tuple[int, int]],
+    item_positions: list[tuple[int, int]],
+    dist_fn: Any,
+) -> list[tuple[int, int]]:
     """Greedy fallback for large inputs."""
-    pairs = []
+    pairs: list[tuple[float, int, int]] = []
     for i, bp in enumerate(bot_positions):
         for j, ip in enumerate(item_positions):
             d = dist_fn(bp, ip)
@@ -440,9 +486,9 @@ def _greedy_assign(bot_positions, item_positions, dist_fn):
                 pairs.append((d, i, j))
     pairs.sort()
 
-    assigned_bots = set()
-    assigned_items = set()
-    result = []
+    assigned_bots: set[int] = set()
+    assigned_items: set[int] = set()
+    result: list[tuple[int, int]] = []
     for d, bi, ii in pairs:
         if bi in assigned_bots or ii in assigned_items:
             continue

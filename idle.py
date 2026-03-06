@@ -1,5 +1,7 @@
 """Idle positioning and dropoff clearing for RoundPlanner."""
 
+from typing import Optional
+
 from pathfinding import DIRECTIONS, direction_to
 from constants import (
     DROPOFF_CLEAR_RADIUS,
@@ -17,13 +19,20 @@ from constants import (
 class IdleMixin:
     """Mixin providing idle bot positioning and dropoff area clearing."""
 
-    def _try_clear_dropoff(self, bid, bx, by, pos, blocked):
+    def _try_clear_dropoff(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
         if len(self.bots) <= 1:
             return False
         dist_to_drop = self.gs.dist_static(pos, self.drop_off)
         if dist_to_drop > DROPOFF_CLEAR_RADIUS:
             return False
-        best_away = None
+        best_away: Optional[tuple[int, int]] = None
         best_dist = dist_to_drop
         for dx, dy in DIRECTIONS:
             npos = (bx + dx, by + dy)
@@ -41,7 +50,14 @@ class IdleMixin:
             return True
         return False
 
-    def _try_idle_positioning(self, bid, bx, by, pos, blocked):
+    def _try_idle_positioning(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
         """Corridor-aware idle positioning with crowd avoidance.
 
         For large teams, idle bots spread across precomputed walkable
@@ -58,7 +74,7 @@ class IdleMixin:
         # For smaller teams, stick with current positions (predictions
         # can hurt when there are few bots and corridors are narrow).
         use_predictions = len(self.bots) >= PREDICTION_TEAM_MIN
-        other_bot_positions = []
+        other_bot_positions: list[tuple[int, int]] = []
         for b in self.bots:
             if b["id"] == bid:
                 continue
@@ -85,7 +101,7 @@ class IdleMixin:
 
         # Target: use idle_spots for unique spread targeting on Expert
         # (10 bots), fall back to shelf-column targeting for smaller teams
-        item_target = None
+        item_target: Optional[tuple[int, int]] = None
         if idle_spots and len(self.bots) >= PREDICTION_TEAM_MIN:
             # Large teams: assign each bot a unique idle spot for spread
             n_bots = len(self.bots)
@@ -108,7 +124,7 @@ class IdleMixin:
                         target_y = col_ys[len(col_ys) // 2]
                         item_target = (target_x, target_y)
 
-        def _score(p):
+        def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
             s = 0.0
             # Penalize being near dropoff
@@ -128,7 +144,7 @@ class IdleMixin:
 
         stay_score = _score(pos)
 
-        best = None
+        best: Optional[tuple[int, int]] = None
         best_score = stay_score
         for dx, dy in DIRECTIONS:
             npos = (bx + dx, by + dy)
