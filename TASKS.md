@@ -138,6 +138,14 @@ Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap
 ### T11: Improve simulator fidelity
 - **Result**: Gap reduced to 5-8%.
 
+### T19: Single-Responsibility Refactoring and Unit Test Coverage
+- **Agent**: qa-agent
+- **Status**: done
+- **Result**: All 4 sub-tasks completed: (1) Eliminated 6 module globals + sync functions in bot.py, tests updated to use bot._gs.*. (2) corridor_cells was already removed from pathfinding.py. (3) Added 33 new unit tests for untested mixin/planner methods (197->230 non-slow tests). (4) Type hints added to all public signatures in 9 production files. Ruff clean, 230 tests pass.
+- **Priority**: 1 (blocks all other work)
+- **Files**: ALL source files + `tests/`
+- **Depends on**: none
+
 ---
 
 ## Notes
