@@ -1,7 +1,7 @@
 """Tests for GameState: TSP, distance cache, multi-trip planning."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import make_state, reset_bot
 
 
 class TestMultiTripPlanning:

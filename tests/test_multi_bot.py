@@ -499,7 +499,7 @@ class TestMultiBotCollisionEdgeCases:
         )
         actions = bot.decide_actions(state)
         a0 = get_action(actions, 0)
-        a1 = get_action(actions, 1)
+        _ = get_action(actions, 1)
         # Both bots produce valid actions
         assert len(actions) == 2
         # Bot 1 (at dropoff with active item) should drop_off

@@ -1,7 +1,6 @@
 """Unit tests for DeliveryMixin methods (delivery.py)."""
 
-from tests.conftest import make_planner, make_state, get_action
-import bot
+from tests.conftest import make_planner
 
 
 def _active_order(items_required, items_delivered=None):

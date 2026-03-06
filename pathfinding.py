@@ -214,8 +214,6 @@ def _predict_pos(bx, by, action):
     return (bx, by)
 
 
-from orders import get_needed_items  # noqa: F401 — re-export for backward compat
-
 
 def find_adjacent_positions(ix, iy, blocked_static):
     """Find walkable positions adjacent to an item shelf."""

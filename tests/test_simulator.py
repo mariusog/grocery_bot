@@ -4,7 +4,7 @@ import time
 
 import bot
 from simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import reset_bot
 
 
 class TestSimulatorEdgeCases:

@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 import bot
-from simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
 
 
 def pytest_configure(config):
@@ -87,7 +86,6 @@ def make_planner(
     Returns the planner object for inspection.
     """
     from round_planner import RoundPlanner
-    from game_state import GameState
 
     state = make_state(
         bots=bots or [],

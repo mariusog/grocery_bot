@@ -1,7 +1,7 @@
 """Tests for pathfinding helper functions and distance calculations."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import make_state, reset_bot
 
 
 class TestHelperFunctions:
