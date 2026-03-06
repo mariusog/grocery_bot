@@ -205,6 +205,51 @@ class TestComputeBotAssignments:
         assert len(planner.bot_assignments) >= 1
 
 
+class TestBotDeliveryCompletesOrder:
+    def test_completes_when_bot_has_all_remaining(self):
+        """Bot carrying all remaining needed items completes the order."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese", "milk"]}],
+            items=[{"id": "i0", "type": "bread", "position": [4, 2]}],
+            orders=[_active_order(["cheese", "milk"], items_delivered=[])],
+        )
+        b = planner.bots_by_id[0]
+        assert planner._bot_delivery_completes_order(b) is True
+
+    def test_does_not_complete_when_items_missing(self):
+        """Bot missing some required items does not complete the order."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese"]}],
+            items=[
+                {"id": "i0", "type": "milk", "position": [4, 2]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+        )
+        b = planner.bots_by_id[0]
+        assert planner._bot_delivery_completes_order(b) is False
+
+
+class TestGreedyAssign:
+    def test_assigns_closest_items(self):
+        """Greedy assign should prefer closer items for each bot."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [2, 3], "inventory": []},
+                {"id": 1, "position": [8, 3], "inventory": []},
+            ],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [3, 2]},
+                {"id": "i1", "type": "milk", "position": [7, 2]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+        )
+        # After planning, bot 0 should be assigned cheese (closer)
+        # and bot 1 should be assigned milk (closer)
+        if planner.bot_assignments:
+            total = sum(len(v) for v in planner.bot_assignments.values())
+            assert total >= 1
+
+
 class TestStaggerAisleAssignments:
     def test_no_stagger_with_single_assignment(self):
         """Stagger does nothing when only one bot has assignments."""

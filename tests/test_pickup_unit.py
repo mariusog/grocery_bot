@@ -210,3 +210,99 @@ class TestClusterSelect:
         assert len(result) == 3
         # First result should have lowest combined score
         assert result[0][2] <= result[1][2] or result[0][2] <= result[2][2]
+
+
+class TestBuildSingleBotRoute:
+    def test_returns_route_for_single_bot(self):
+        """Single bot route builder should find items."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": []}],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [4, 6]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+        )
+        # Reset state for direct call
+        planner.claimed = set()
+        planner.net_active = {"cheese": 1, "milk": 1}
+        route = planner._build_single_bot_route((1, 4), [])
+        assert route is not None
+        assert len(route) >= 1
+
+    def test_returns_none_with_full_inventory(self):
+        """Returns None when inventory is full."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": ["a", "b", "c"]}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese", "a", "b", "c"])],
+        )
+        planner.claimed = set()
+        planner.net_active = {"cheese": 1}
+        route = planner._build_single_bot_route((1, 4), ["a", "b", "c"])
+        assert route is None
+
+
+class TestFlexibleTsp:
+    def test_single_item_uses_best_adjacent(self):
+        """Flexible TSP for 1 item should pick the best adjacent cell."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": []}],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+            ],
+            orders=[_active_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        item = {"id": "i0", "type": "cheese", "position": [4, 2]}
+        result = planner._flexible_tsp((1, 4), [(item, (3, 2))], (1, 8))
+        assert len(result) == 1
+        assert result[0][0] == item
+
+    def test_multi_item_returns_all(self):
+        """Flexible TSP for multiple items returns all of them."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": []}],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [4, 6]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+            drop_off=[1, 8],
+        )
+        items = [
+            ({"id": "i0", "type": "cheese", "position": [4, 2]}, (3, 2)),
+            ({"id": "i1", "type": "milk", "position": [4, 6]}, (3, 6)),
+        ]
+        result = planner._flexible_tsp((1, 4), items, (1, 8))
+        assert len(result) == 2
+
+
+class TestFindNearestActiveItemPos:
+    def test_finds_nearest_item(self):
+        """Should return position of nearest reachable active item."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": []}],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [8, 6]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+        )
+        # Reset claims so items are available
+        planner.claimed = set()
+        planner.net_active = {"cheese": 1, "milk": 1}
+        result = planner._find_nearest_active_item_pos((1, 4))
+        assert result is not None
+
+    def test_returns_none_when_no_items(self):
+        """Should return None when no active items on shelves."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [1, 4], "inventory": ["cheese"]}],
+            items=[{"id": "i0", "type": "bread", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        # All active items already carried -> net_active empty
+        planner.claimed = set()
+        result = planner._find_nearest_active_item_pos((1, 4))
+        assert result is None
