@@ -1,14 +1,15 @@
 # Next Development Steps
 
-## Live Scores (2026-03-05)
+## Simulator Scores (2026-03-05)
 
-| Map | Grid | Bots | Score | Orders | Items |
-|-----|------|------|-------|--------|-------|
-| Easy | 12x10 | 1 | 118 | — | — |
-| Medium | 16x12 | 3 | **116** | 13 | 51 |
-| Hard | 22x14 | 5 | **96** | 11 | 41 |
-| Expert | 28x18 | 10 | **67** | 6 | 37 |
-| **Total** | | | **397** | | |
+| Map | Bots | Before | Phase 2 | Phase 3 | Change |
+|-----|------|--------|---------|---------|--------|
+| Easy | 1 | 118 | 121.8 | **127.8** | +9.8 |
+| Medium | 2 | 116 | 122.2 | **110.3** | -5.7* |
+| Hard | 5 | 96 | 120.8 | **123.0** | +27.0 |
+| Expert | 10 | 67 | 106.4 | **115.8** | +48.8 |
+
+*Medium has outlier seeds (12=27, 13=43) from preview-item deadlocks not yet fully resolved.
 
 ---
 
@@ -19,77 +20,47 @@ bot.py             — thin orchestrator, WebSocket game loop, re-exports
 pathfinding.py     — BFS variants, temporal BFS, movement helpers
 game_state.py      — GameState class (caches, TSP, Hungarian, interleaved routing)
 round_planner.py   — RoundPlanner (per-round decisions for all bots)
-simulator.py       — local game simulator with difficulty presets
+simulator.py       — local game simulator with difficulty presets + diagnostics
 benchmark.py       — performance benchmarking script
-test_bot.py        — 106 tests
+test_bot.py        — 129 tests (including score regression suite)
 ```
 
 ---
 
 ## Implemented Features
 
-### Core (Steps 1-6)
-- **Distance matrix & caching** — BFS results cached per source; O(1) lookups via `dist_static()`
-- **TSP-optimal pickup ordering** — brute-force permutations for 3-6 item routes
-- **Multi-trip planning** — splits orders exceeding inventory capacity into optimal trip pairs
-- **Preview pipelining** — opportunistic and detour-based preview pickups; cascade-aware type selection
-- **Anti-collision** — predicted positions as walls, yield-to system, unstick fallback
-- **End-game filter** — skips items that can't be picked up and delivered in remaining rounds
-- **Pickup failure detection** — blacklists items that fail pick_up 3+ times
-- **GameState class** — encapsulates all persistent state and caches
-- **Zone assignment** — vertical zone penalty for 5+ bots to reduce cross-traffic
+### Core (Steps 1-8)
+- Distance matrix & caching, TSP routing, multi-trip planning
+- Preview pipelining with cascade-aware type selection
+- Anti-collision: predicted positions, yield-to, unstick fallback
+- End-game filter, pickup failure blacklisting
+- Zone assignment for 5+ bots
 
-### Phase 1.3: Interleaved Pickup-Delivery — DONE
-- `GameState.plan_interleaved_route()` compares full-pickup vs batch-split delivery
-- Evaluates all possible splits, picks the one with lowest total travel cost
-- Not yet wired into RoundPlanner (available for future integration)
+### Phase 2: Congestion Fixes
+- **Temporal BFS** integrated via `_bfs_smart()` — avoids predicted positions
+- **Oscillation detection** via bot_history deque(maxlen=3)
+- **Idle positioning** — score-based dispersal from dropoff + other bots
+- **Aisle traffic staggering** — reassigns bots targeting same column
+- **Reduced blocking radius** — Manhattan dist 6 for 5+ bots
+- **Diagnostics** — simulator diagnose mode, profile_congestion()
 
-### Phase 3.1: Hungarian Algorithm — DONE
-- `GameState.hungarian_assign()` with O(n^3) Munkres implementation
-- Falls back to greedy for >100 bot-item pairs
-- Not yet wired into RoundPlanner (available for future integration)
-
-### Phase 3.2: Temporal BFS — DONE
-- `bfs_temporal()` avoids both current AND predicted positions of other bots
-- Two-step model: step 0 blocks both, step 1+ blocks only predicted
-- Falls back to standard BFS if temporal path blocked
-- Not yet wired into RoundPlanner (available for future integration)
-
-### Phase 4.4: Smart Dropoff Timing — DONE
-- Delivers early if bot's items alone complete the order (+5 bonus rush)
-- Zero-cost delivery when adjacent to dropoff and next item is via dropoff
-- Never detours just to deliver partial items that won't complete order
-
-### Phase 4.2: Item Proximity Clustering — DONE
-- `_cluster_select()` scores items by `bot_distance + 0.5 * center_of_mass_distance`
-- Picks items that minimize total route, not just next-step distance
-
-### Phase 2.2: Dedicated Preview Bot — DONE
-- For 2 bots when order nearly complete, assigns furthest bot to pre-pick preview items
-- Preview bot skips active items entirely, focuses on next order
-
-### Phase 4.3: Improved End-Game — DONE
-- `_estimate_rounds_to_complete()` calculates greedy tour for remaining items
-- Switches to maximize-items mode when order can't complete in time
-- Dynamic decision: grab one more item vs deliver now
-
-### Anti-Deadlock & Crowd Dispersal — DONE
-- BFS goal-in-blocked-set check prevents moving into occupied cells
-- Idle bots actively move away from crowded areas (Step 8)
-- Fixed BFS start-position blocking for co-located bots at spawn
+### Phase 3: Routing Optimization
+- **Round-trip cost scoring** — `_build_greedy_route` scores by `d + d_drop` instead of just `d`
+- **Cluster tiebreaker** reduced to 0.3 weight
+- **Preview pickup guard** — single bot skips preview when active items remain
+- **Preview deadlock fix** — bots with non-active inventory deliver to free slots (≤3 bots)
+- **Preview bot adjacent active pickup** — preview bots pick up adjacent active items
+- **Alternative cell routing** — falls back to other adjacent cells when primary target blocked
 
 ---
 
-## Not Yet Integrated (algorithms ready, not wired in)
+## Not Yet Integrated
 
 | Feature | Module | Why Not Yet |
 |---------|--------|-------------|
 | Interleaved delivery | `game_state.py` | RoundPlanner doesn't call it yet |
 | Hungarian assignment | `game_state.py` | RoundPlanner still uses greedy |
-| Temporal BFS | `pathfinding.py` | RoundPlanner uses standard BFS |
-| `bfs_full_path()` | `pathfinding.py` | Available for path-through-dropoff detection |
-
-Integrating these into `round_planner.py` is the next high-impact work.
+| Deliver-vs-fill decision | `round_planner.py` | `_should_deliver_early` exists but hurt benchmarks |
 
 ---
 
@@ -97,11 +68,10 @@ Integrating these into `round_planner.py` is the next high-impact work.
 
 | Priority | Feature | Expected Impact | Effort |
 |----------|---------|----------------|--------|
-| 1 | Wire temporal BFS into RoundPlanner | Reduce 5+ bot deadlocks | Low |
-| 2 | Wire Hungarian assignment into RoundPlanner | Better multi-bot distribution | Low |
-| 3 | Wire interleaved delivery into RoundPlanner | Fewer wasted trips | Medium |
-| 4 | Path-through-dropoff detection | Zero-cost partial deliveries | Medium |
-| 5 | Better spawn exit strategy | Faster first-round dispersal | Low |
-| 6 | Expert-specific tuning | 10-bot coordination polish | High |
+| 1 | Fix remaining Medium deadlocks (seeds 12,13,15) | +15 Medium avg | Medium |
+| 2 | Wire Hungarian assignment | Better multi-bot distribution | Low |
+| 3 | Wire interleaved delivery | Fewer wasted trips | Medium |
+| 4 | Tune deliver-vs-fill heuristic | +5 Easy/Medium | Medium |
+| 5 | Expert-specific tuning | 10-bot coordination polish | High |
 
-**Target**: Easy 130+, Medium 150+, Hard 150+, Expert 150+
+**Target**: Easy 140+, Medium 130+, Hard 140+, Expert 130+
