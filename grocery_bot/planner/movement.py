@@ -119,16 +119,46 @@ class MovementMixin:
         target: tuple[int, int],
         blocked: set[tuple[int, int]],
     ) -> Optional[tuple[int, int]]:
-        """Use temporal BFS for multi-bot, standard BFS for single bot."""
+        """Use cached full-path, then temporal BFS, then standard BFS.
+
+        T17: First tries the cached deterministic path to avoid flip-flopping.
+        Falls back to temporal / standard BFS when the cached step is blocked,
+        and stores the resulting path for future rounds.
+        """
+        # T17: Try cached path first (avoids oscillation from BFS ties).
+        use_cache = True
+        if use_cache:
+            dynamic_blocked = blocked - self.gs.blocked_static
+            current_round = getattr(self, "current_round", 0)
+            had_cache = bid in self.gs.bot_planned_paths
+            cached = self.gs.get_cached_next_step(
+                bid, pos, target, dynamic_blocked, current_round
+            )
+            if cached is not None and cached not in blocked:
+                return cached
+
+        # Cached path unavailable or blocked — fall back to live BFS
+        result: Optional[tuple[int, int]] = None
         if len(self.bots) > 1:
             obstacles = self._build_moving_obstacles(bid)
             result = bfs_temporal(pos, target, self.gs.blocked_static, obstacles)
-            if result and result not in blocked:
-                return result
-        # Fallback to standard BFS
-        result = bfs(pos, target, blocked)
-        if result and result in blocked:
-            return None
+            if result and result in blocked:
+                result = None
+        if result is None:
+            result = bfs(pos, target, blocked)
+            if result and result in blocked:
+                result = None
+
+        # T17: Store the full path when no cache exists yet, or when the
+        # cache was invalidated (target changed, position mismatch, or
+        # shorter path found).  Don't overwrite when the cache is merely
+        # skipped due to temporary dynamic blocking.
+        if use_cache and result is not None:
+            if not had_cache or bid not in self.gs.bot_planned_paths:
+                self.gs.store_path_for_step(
+                    bid, pos, result, target, current_round
+                )
+
         return result
 
     def _emit_move(

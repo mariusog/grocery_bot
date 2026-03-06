@@ -3,7 +3,7 @@
 from itertools import combinations, permutations
 from typing import Any, Optional
 
-from grocery_bot.pathfinding import bfs_all, find_adjacent_positions
+from grocery_bot.pathfinding import bfs_all, bfs_full_path, find_adjacent_positions
 from grocery_bot.constants import (
     CORRIDOR_HEIGHT_THRESHOLD,
     HUNGARIAN_MAX_PAIRS,
@@ -41,6 +41,11 @@ class GameState:
         # Current active items remaining on shelves (set by RoundPlanner)
         self.active_on_shelves: int = 0
 
+        # T17: Full-path caching — bot_id -> (target, path_remaining, last_recheck_round)
+        self.bot_planned_paths: dict[
+            int, tuple[tuple[int, int], list[tuple[int, int]], int]
+        ] = {}
+
         # --- Persistent coordination state (T15) ---
         # Delivery queue: ordered list of bot IDs waiting to deliver
         self.delivery_queue: list[int] = []
@@ -64,6 +69,7 @@ class GameState:
         self.best_pair_route = {}
         self.best_triple_route = {}
         self.active_on_shelves = 0
+        self.bot_planned_paths = {}
         self.delivery_queue = []
         self.bot_tasks = {}
         self.last_active_order_id = None
@@ -334,6 +340,109 @@ class GameState:
                 best_d = d
                 best_cell = ac
         return best_cell, best_d
+
+    # ------------------------------------------------------------------
+    # T17: Full-Path Caching and Commitment
+    # ------------------------------------------------------------------
+
+    # How often (in rounds) to recheck whether a shorter path has opened.
+    PATH_RECHECK_INTERVAL = 5
+
+    def get_cached_next_step(
+        self,
+        bot_id: int,
+        pos: tuple[int, int],
+        target: tuple[int, int],
+        dynamic_blocked: set[tuple[int, int]],
+        current_round: int,
+    ) -> Optional[tuple[int, int]]:
+        """Return the next step toward *target* using a cached full path.
+
+        Computes a full path with ``bfs_full_path`` and caches it so that
+        subsequent rounds simply pop the next waypoint.  The cache is
+        invalidated when:
+        (a) the target changed,
+        (b) the bot is not on the expected position (got bumped / yielded),
+        (c) the next step is dynamically blocked (another bot occupies it),
+        (d) every ``PATH_RECHECK_INTERVAL`` rounds a cheaper path exists.
+
+        Returns the next position to move to, or ``None`` when at the target
+        or no path exists.
+        """
+        if pos == target:
+            self.bot_planned_paths.pop(bot_id, None)
+            return None
+
+        entry = self.bot_planned_paths.get(bot_id)
+
+        if entry is None:
+            # No cached path — return None so the caller uses live BFS.
+            # The caller should then call ``store_path_step`` after choosing
+            # a step via its own BFS so we can build the cache.
+            return None
+
+        cached_target, cached_path, last_recheck = entry
+
+        # (a) target changed
+        if cached_target != target:
+            self.bot_planned_paths.pop(bot_id, None)
+            return None
+
+        # (b) bot not on expected position (got bumped / yielded)
+        if not cached_path or cached_path[0] != pos:
+            self.bot_planned_paths.pop(bot_id, None)
+            return None
+
+        if len(cached_path) < 2:
+            self.bot_planned_paths.pop(bot_id, None)
+            return None
+
+        next_step = cached_path[1]
+
+        # (c) next step dynamically blocked — skip cache this round but
+        #     keep it so we can resume following it next round.
+        if next_step in dynamic_blocked:
+            return None
+
+        # (d) periodic recheck for shorter path
+        if current_round - last_recheck >= self.PATH_RECHECK_INTERVAL:
+            new_dist = self.dist_static(pos, target)
+            if new_dist < len(cached_path) - 1:
+                # A shorter path opened up — invalidate and let caller re-BFS
+                self.bot_planned_paths.pop(bot_id, None)
+                return None
+            # Update recheck timestamp
+            last_recheck = current_round
+
+        # Advance the cached path (remove current position)
+        remaining = cached_path[1:]
+        self.bot_planned_paths[bot_id] = (target, remaining, last_recheck)
+        return next_step
+
+    def store_path_for_step(
+        self,
+        bot_id: int,
+        pos: tuple[int, int],
+        next_pos: tuple[int, int],
+        target: tuple[int, int],
+        current_round: int,
+    ) -> None:
+        """Build and cache the full path after the caller chose a BFS step.
+
+        Called by the movement layer after ``get_cached_next_step`` returned
+        ``None`` and the caller resolved a step via live BFS.  We compute the
+        full path from *pos* to *target* and store it so future rounds can
+        follow it deterministically.
+        """
+        if pos == target:
+            return
+        path = bfs_full_path(pos, target, self.blocked_static)
+        if path and len(path) >= 2:
+            self.bot_planned_paths[bot_id] = (target, path, current_round)
+
+    def invalidate_path(self, bot_id: int) -> None:
+        """Remove cached path for a bot (e.g. when target changes)."""
+        self.bot_planned_paths.pop(bot_id, None)
 
     def tsp_route(
         self,
