@@ -1,6 +1,8 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
-from pathfinding import DIRECTIONS, bfs, direction_to, get_needed_items, _predict_pos
+from collections import deque
+
+from pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, get_needed_items, _predict_pos
 
 
 class RoundPlanner:
@@ -16,6 +18,7 @@ class RoundPlanner:
         self.items = state["items"]
         self.orders = state["orders"]
         self.drop_off = tuple(state["drop_off"])
+        self.current_round = state["round"]
         self.rounds_left = state["max_rounds"] - state["round"]
         self.endgame = self.rounds_left <= 30
 
@@ -34,6 +37,27 @@ class RoundPlanner:
 
     def plan(self):
         """Main entry: return list of action dicts for all bots."""
+        # Initialize bot history tracking on gs (persists across rounds)
+        # Detect game reset: after GameState.reset(), dist_cache is empty {}
+        # and last_pickup is empty {}, but bot_history persists as stale data.
+        # Use a generation counter to detect resets.
+        gen = id(self.gs.dist_cache)  # new dict object after reset
+        needs_reset = (
+            not hasattr(self.gs, 'bot_history')
+            or not hasattr(self.gs, '_history_gen')
+            or self.gs._history_gen != gen
+        )
+        if needs_reset:
+            self.gs.bot_history = {}
+            self.gs._history_gen = gen
+
+        for b in self.bots:
+            bid = b["id"]
+            pos = tuple(b["position"])
+            if bid not in self.gs.bot_history:
+                self.gs.bot_history[bid] = deque(maxlen=3)
+            self.gs.bot_history[bid].append(pos)
+
         self._detect_pickup_failures()
 
         if self.gs.blocked_static is None:
@@ -150,9 +174,10 @@ class RoundPlanner:
         )
 
         # Dedicated preview bot assignment (Phase 2.2)
-        # Only for exactly 2 bots; more bots benefit more from all focusing on active
-        self.preview_bot_id = None
-        if (self.order_nearly_complete and len(self.bots) == 2
+        # Support for 2+ bots: allow multiple preview bots when there are spare bots
+        self.preview_bot_id = None  # kept for backward compat
+        self.preview_bot_ids = set()
+        if (self.order_nearly_complete and len(self.bots) >= 2
                 and self.preview and self.net_preview):
             self._assign_preview_bot()
 
@@ -166,10 +191,10 @@ class RoundPlanner:
         return False
 
     def _assign_preview_bot(self):
-        """Assign the bot furthest from remaining active items as preview-only bot.
+        """Assign bots furthest from remaining active items as preview-only bots.
 
-        Only assigns when there are more idle bots than active items on shelves,
-        so pulling one bot away doesn't leave active items unattended.
+        For 2+ bots, allow up to (num_idle - active_on_shelves - 1) preview bots,
+        keeping at least 1 more idle bot than needed for active items.
         """
         # Count bots that could pick active items (idle, no active in inv)
         idle_for_active = []
@@ -196,20 +221,40 @@ class RoundPlanner:
         cx = sum(p[0] for p in active_item_positions) / len(active_item_positions)
         cy = sum(p[1] for p in active_item_positions) / len(active_item_positions)
 
-        # Find idle bot furthest from active items center that has no active items
-        best_bid = None
-        best_dist = -1
+        # How many preview bots can we afford?
+        # Keep at least active_on_shelves idle bots for active work.
+        surplus = len(idle_for_active) - self.active_on_shelves
+        if surplus <= 0:
+            return
+        # Allow at most 1 preview bot regardless of team size.
+        # Multiple preview bots risk filling inventories with items that
+        # become useless after order transitions.
+        max_preview = 1
+
+        # Rank idle bots by distance from active items center (furthest first)
+        # Only consider bots without active items in inventory
+        candidates = []
         for bot in idle_for_active:
             if self.bot_has_active[bot["id"]]:
                 continue  # don't pull a bot that has active items
+            if len(bot["inventory"]) >= 3:
+                continue  # can't pick up preview items with full inventory
             bx, by = bot["position"]
             d = abs(bx - cx) + abs(by - cy)
-            if d > best_dist:
-                best_dist = d
-                best_bid = bot["id"]
+            candidates.append((d, bot["id"]))
 
-        if best_bid is not None:
-            self.preview_bot_id = best_bid
+        candidates.sort(reverse=True)  # furthest first
+
+        for i, (_, bid) in enumerate(candidates):
+            if i >= max_preview:
+                break
+            self.preview_bot_ids.add(bid)
+
+        # Backward compat: set single preview_bot_id if exactly one assigned
+        if len(self.preview_bot_ids) == 1:
+            self.preview_bot_id = next(iter(self.preview_bot_ids))
+        elif self.preview_bot_ids:
+            self.preview_bot_id = next(iter(self.preview_bot_ids))
 
     def _bot_delivery_completes_order(self, bot):
         """Check if THIS bot's delivery alone completes the order.
@@ -282,6 +327,89 @@ class RoundPlanner:
             bot_counts[bi] = bot_counts.get(bi, 0) + 1
             self.bot_assignments.setdefault(bot_id, []).append(candidates[ii])
 
+        # Aisle traffic management: if 2+ bots target items in the same
+        # column (x coordinate), reassign the furthest bot to a different column
+        self._stagger_aisle_assignments(assignable, candidates, taken_items)
+
+    def _stagger_aisle_assignments(self, assignable, candidates, taken_items):
+        """If 2+ bots target items in the same aisle column, reassign the furthest."""
+        if len(self.bot_assignments) < 2:
+            return
+
+        # Map bot_id -> set of target columns (x coords)
+        bot_columns = {}
+        for bid, items in self.bot_assignments.items():
+            cols = set()
+            for it in items:
+                cols.add(it["position"][0])
+            bot_columns[bid] = cols
+
+        # Find columns targeted by 2+ bots
+        col_bots = {}  # column -> list of (bot_id, distance_to_column)
+        for bid, cols in bot_columns.items():
+            bot_pos = None
+            for b_id, b_pos, _ in assignable:
+                if b_id == bid:
+                    bot_pos = b_pos
+                    break
+            if bot_pos is None:
+                continue
+            for col in cols:
+                d = abs(bot_pos[0] - col)
+                col_bots.setdefault(col, []).append((bid, d))
+
+        for col, bots_in_col in col_bots.items():
+            if len(bots_in_col) < 2:
+                continue
+
+            # Sort by distance: furthest bot is the one to reassign
+            bots_in_col.sort(key=lambda x: x[1], reverse=True)
+            furthest_bid = bots_in_col[0][0]
+
+            # Find alternative items in different columns
+            current_items = self.bot_assignments.get(furthest_bid, [])
+            items_in_col = [it for it in current_items if it["position"][0] == col]
+
+            if not items_in_col:
+                continue
+
+            # Find alternative items of the same types in different columns
+            for old_item in items_in_col:
+                old_type = old_item["type"]
+                # Look for same-type item in a different column
+                best_alt = None
+                best_alt_d = float("inf")
+                bot_pos = None
+                for b_id, b_pos, _ in assignable:
+                    if b_id == furthest_bid:
+                        bot_pos = b_pos
+                        break
+                if bot_pos is None:
+                    continue
+
+                for cand in candidates:
+                    if cand["id"] in taken_items and cand["id"] != old_item["id"]:
+                        continue
+                    if cand["type"] != old_type:
+                        continue
+                    if cand["position"][0] == col:
+                        continue  # same column, no help
+                    _, d = self.gs.find_best_item_target(bot_pos, cand)
+                    if d < best_alt_d:
+                        best_alt_d = d
+                        best_alt = cand
+
+                if best_alt is not None:
+                    # Swap: remove old item, add new one
+                    self.bot_assignments[furthest_bid] = [
+                        it for it in self.bot_assignments[furthest_bid]
+                        if it["id"] != old_item["id"]
+                    ]
+                    self.bot_assignments[furthest_bid].append(best_alt)
+                    taken_items.discard(old_item["id"])
+                    taken_items.add(best_alt["id"])
+                    break  # one reassignment per column conflict
+
     def _bot_urgency(self, b):
         has_ai = self.bot_has_active[b["id"]]
         n = len(b["inventory"])
@@ -308,13 +436,21 @@ class RoundPlanner:
         has_active = self.bot_has_active[bid]
 
         # Phase 2.2: dedicated preview bot skips active items entirely
-        if bid == self.preview_bot_id and not has_active:
-            if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
-                return
-            if self._try_clear_dropoff(bid, bx, by, pos, blocked):
-                return
-            self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
-            return
+        # BUT: if adjacent to a needed active item, pick it up instead
+        # If preview bot can't do preview work (full inv), fall through to normal logic
+        if bid in self.preview_bot_ids and not has_active:
+            # Check if adjacent to active item first — don't skip opportunity
+            if len(inv) < 3:
+                for dx, dy in DIRECTIONS:
+                    for it in self.items_at_pos.get((bx + dx, by + dy), []):
+                        if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
+                            self._claim(it, self.net_active)
+                            self._emit(bid, bx, by, self._pickup(bid, it))
+                            return
+            if self._spare_slots(inv) > 0:
+                if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
+                    return
+            # Fall through to normal logic (active pickup, deliver, idle positioning)
 
         # Step 1: at drop-off with active items -> deliver
         if pos == self.drop_off and has_active:
@@ -353,7 +489,9 @@ class RoundPlanner:
             return
 
         # Step 3: opportunistic adjacent preview pickup (spare slots only)
-        if self.preview and self._spare_slots(inv) > 0:
+        # Skip for single bot when many active items remain — don't waste slots
+        if (self.preview and self._spare_slots(inv) > 0
+                and not (len(self.bots) == 1 and self.active_on_shelves > 1)):
             adj = self._find_adjacent_needed(
                 bx, by, self.net_preview, prefer_cascade=True
             )
@@ -416,17 +554,29 @@ class RoundPlanner:
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return
 
+        # Step 5b: bot has non-active items clogging inventory while active
+        # items remain on shelves. Deliver to free up slots.
+        # This prevents deadlock where bots fill up on preview items.
+        # Only for ≤3 bots to avoid dropoff congestion with many bots.
+        if (not has_active and len(inv) >= 2 and self.active_on_shelves > 0
+                and len(self.bots) <= 3):
+            if pos == self.drop_off:
+                self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
+                return
+            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+            return
+
         # Step 6: pre-pick preview items
         if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
             return
 
-        # Step 7: clear dropoff area or move out of others' way when idle
+        # Step 7: clear dropoff area when idle
         if self._try_clear_dropoff(bid, bx, by, pos, blocked):
             return
 
-        # Step 8: idle bot at spawn or blocking — move to a less crowded spot
+        # Step 8: idle bot positioning — spread out from other bots
         if len(self.bots) > 1:
-            if self._try_move_away_from_crowd(bid, bx, by, pos, blocked):
+            if self._try_idle_positioning(bid, bx, by, pos, blocked):
                 return
 
         self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
@@ -546,6 +696,76 @@ class RoundPlanner:
             total_dist += self.gs.dist_static(current, self.drop_off) + 1
         return total_dist
 
+    def _should_deliver_early(self, pos, inv):
+        """Return True if delivering now and starting fresh is cheaper than filling up."""
+        if not inv or self.active_on_shelves == 0:
+            return False
+
+        slots_left = 3 - len(inv)
+
+        # Cost to deliver now then do remaining from dropoff
+        cost_deliver = self.gs.dist_static(pos, self.drop_off) + 1  # +1 for dropoff action
+
+        # Estimate remaining items trip from dropoff
+        remaining = []
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, d_from_drop = self.gs.find_best_item_target(self.drop_off, it)
+            if cell:
+                remaining.append((it, cell, d_from_drop))
+
+        if not remaining:
+            return False
+
+        # Cost from dropoff to pick remaining and deliver
+        remaining.sort(key=lambda c: c[2])
+        # Greedy estimate: nearest-neighbor from dropoff
+        cost_remaining = 0
+        cur = self.drop_off
+        picked = 0
+        for _, cell, _ in remaining:
+            cost_remaining += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+            picked += 1
+            if picked >= 3:
+                cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
+                cur = self.drop_off
+                picked = 0
+        if picked > 0:
+            cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
+
+        total_deliver_now = cost_deliver + cost_remaining
+
+        # Cost to fill up first, then deliver
+        # Pick slots_left more items from current position, then deliver all
+        fill_items = remaining[:slots_left]
+        if not fill_items:
+            return False
+
+        cost_fill = 0
+        cur = pos
+        for _, cell, _ in fill_items:
+            cost_fill += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+        cost_fill += self.gs.dist_static(cur, self.drop_off) + 1  # deliver
+
+        # Remaining items after filling
+        leftover = remaining[slots_left:]
+        cur = self.drop_off
+        picked = 0
+        for _, cell, _ in leftover:
+            cost_fill += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+            picked += 1
+            if picked >= 3:
+                cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+                cur = self.drop_off
+                picked = 0
+        if picked > 0:
+            cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+
+        # Deliver early if it saves at least 2 rounds (margin for estimation error)
+        return total_deliver_now < cost_fill - 2
+
     def _try_maximize_items(self, bid, bx, by, pos, inv, blocked):
         """End-game: maximize individual item deliveries when order can't complete.
 
@@ -602,6 +822,13 @@ class RoundPlanner:
                     self._claim(it, self.net_active)
                 if self._emit_move(bid, bx, by, pos, route[0][1], blocked):
                     return True
+                # Try alternative adjacent cells if first target blocked
+                first_item = route[0][0]
+                ipos = tuple(first_item["position"])
+                for ac in self.gs.adj_cache.get(ipos, []):
+                    if ac != route[0][1] and ac not in blocked:
+                        if self._emit_move(bid, bx, by, pos, ac, blocked):
+                            return True
 
         # Greedy fallback: find reachable items and plan TSP route
         route = self._build_greedy_route(pos, inv)
@@ -610,6 +837,13 @@ class RoundPlanner:
                 self._claim(it, self.net_active)
             if self._emit_move(bid, bx, by, pos, route[0][1], blocked):
                 return True
+            # First target blocked by another bot — try alternative adjacent cells
+            first_item = route[0][0]
+            ipos = tuple(first_item["position"])
+            for ac in self.gs.adj_cache.get(ipos, []):
+                if ac != route[0][1] and ac not in blocked:
+                    if self._emit_move(bid, bx, by, pos, ac, blocked):
+                        return True
 
         return False
 
@@ -631,9 +865,11 @@ class RoundPlanner:
             cell, d = self.gs.find_best_item_target(pos, it)
             if not cell or d == float("inf"):
                 continue
-            round_trip = d + 1 + self.gs.dist_static(cell, self.drop_off)
+            d_drop = self.gs.dist_static(cell, self.drop_off)
+            round_trip = d + 1 + d_drop
             if round_trip < self.rounds_left:
-                candidates.append((it, cell, d))
+                score = d + d_drop if len(self.bots) <= 5 else d
+                candidates.append((it, cell, score))
 
         if not candidates:
             return None
@@ -695,7 +931,7 @@ class RoundPlanner:
                 for entry in entries:
                     _, cell, d = entry
                     cluster_d = abs(cell[0] - cx) + abs(cell[1] - cy)
-                    scored.append((*entry, d + 0.5 * cluster_d))
+                    scored.append((*entry, d + 0.3 * cluster_d))
                 scored.sort(key=lambda e: e[3])
                 result.extend((it, cell, d) for it, cell, d, _ in scored)
 
@@ -711,7 +947,7 @@ class RoundPlanner:
         if not self.preview or self._spare_slots(inv) <= 0:
             return False
 
-        is_preview_bot = (bid == self.preview_bot_id)
+        is_preview_bot = (bid in self.preview_bot_ids)
 
         # Pass 1: check adjacent items via position lookup (free pickup)
         adj = self._find_adjacent_needed(bx, by, self.net_preview, prefer_cascade=True)
@@ -773,31 +1009,48 @@ class RoundPlanner:
             return True
         return False
 
-    def _try_move_away_from_crowd(self, bid, bx, by, pos, blocked):
-        """Idle bot moves toward less crowded area to avoid blocking others."""
-        # Count nearby bots (within Manhattan distance 2)
-        nearby = sum(
-            1 for b in self.bots
-            if b["id"] != bid
-            and abs(b["position"][0] - bx) + abs(b["position"][1] - by) <= 2
-        )
-        if nearby == 0:
+    def _try_idle_positioning(self, bid, bx, by, pos, blocked):
+        """Unified idle positioning: spread out from dropoff and other bots.
+
+        Combines clearing dropoff area with moving away from crowds.
+        Picks the neighbor cell that minimizes a penalty score.
+        """
+        if len(self.bots) <= 1:
             return False
-        # Move to the neighbor with fewest adjacent bots
+
+        # Other bot positions (for crowd avoidance)
+        other_bot_positions = [
+            tuple(b["position"]) for b in self.bots if b["id"] != bid
+        ]
+
+        def _score(p):
+            """Lower is better."""
+            s = 0.0
+            # Penalize being near dropoff (want dist > 3)
+            drop_dist = self.gs.dist_static(p, self.drop_off)
+            if drop_dist <= 3:
+                s += (4 - drop_dist) * 3
+            # Penalize being near other bots (want dist > 2)
+            for ob_pos in other_bot_positions:
+                ob_dist = abs(p[0] - ob_pos[0]) + abs(p[1] - ob_pos[1])
+                if ob_dist <= 2:
+                    s += (3 - ob_dist) * 2
+            return s
+
+        stay_score = _score(pos)
+
+        # Score each neighbor cell
         best = None
-        best_crowd = nearby
+        best_score = stay_score
         for dx, dy in DIRECTIONS:
             npos = (bx + dx, by + dy)
             if npos in blocked:
                 continue
-            crowd = sum(
-                1 for b in self.bots
-                if b["id"] != bid
-                and abs(b["position"][0] - npos[0]) + abs(b["position"][1] - npos[1]) <= 2
-            )
-            if crowd < best_crowd:
-                best_crowd = crowd
+            s = _score(npos)
+            if s < best_score:
+                best_score = s
                 best = npos
+
         if best:
             self._emit(
                 bid, bx, by,
@@ -837,11 +1090,33 @@ class RoundPlanner:
             return {"bot": bid, "action": direction_to(bx, by, alt[0], alt[1])}
         return {"bot": bid, "action": "wait"}
 
+    def _build_moving_obstacles(self, bid):
+        """Build moving obstacle list for temporal BFS (other bots only)."""
+        obstacles = []
+        for b in self.bots:
+            if b["id"] == bid:
+                continue
+            cur = tuple(b["position"])
+            pred = self.predicted.get(b["id"], cur)
+            obstacles.append((cur, pred))
+        return obstacles
+
+    def _bfs_smart(self, bid, pos, target, blocked):
+        """Use temporal BFS for multi-bot, standard BFS for single bot."""
+        if len(self.bots) > 1:
+            obstacles = self._build_moving_obstacles(bid)
+            result = bfs_temporal(pos, target, self.gs.blocked_static, obstacles)
+            if result and result not in blocked:
+                return result
+        # Fallback to standard BFS
+        result = bfs(pos, target, blocked)
+        if result and result in blocked:
+            return None
+        return result
+
     def _emit_move(self, bid, bx, by, pos, target, blocked):
         """BFS to target and emit. Returns True if a move was emitted."""
-        next_pos = bfs(pos, target, blocked)
-        if next_pos and next_pos in blocked:
-            next_pos = None
+        next_pos = self._bfs_smart(bid, pos, target, blocked)
         if next_pos:
             self._emit(
                 bid, bx, by,
@@ -850,12 +1125,31 @@ class RoundPlanner:
             return True
         return False
 
+    def _would_oscillate(self, bid, next_pos):
+        """Check if moving to next_pos would create an oscillation pattern."""
+        history = self.gs.bot_history.get(bid)
+        if not history or len(history) < 2:
+            return False
+        # If next_pos == position from 2 rounds ago, we're oscillating
+        return next_pos == history[-2]
+
     def _emit_move_or_wait(self, bid, bx, by, pos, target, blocked):
-        """Move toward target with unstick fallback, or wait."""
-        next_pos = bfs(pos, target, blocked)
-        # BFS may return a position that's blocked (goal occupied by another bot)
-        if next_pos and next_pos in blocked:
-            next_pos = None
+        """Move toward target with unstick fallback and oscillation detection."""
+        next_pos = self._bfs_smart(bid, pos, target, blocked)
+
+        # Oscillation detection: if we'd go back to where we were 2 rounds ago,
+        # try a different direction to break the deadlock cycle
+        if next_pos and self._would_oscillate(bid, next_pos):
+            alt_pos = None
+            for dx, dy in DIRECTIONS:
+                npos = (bx + dx, by + dy)
+                if npos not in blocked and npos != next_pos and not self._would_oscillate(bid, npos):
+                    alt_pos = npos
+                    break
+            if alt_pos:
+                next_pos = alt_pos
+            # If no alternative, still use the oscillating move (better than waiting)
+
         if not next_pos:
             # Unstick: try any unblocked neighbor
             for dx, dy in DIRECTIONS:
@@ -872,11 +1166,20 @@ class RoundPlanner:
             self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
 
     def _build_blocked(self, bid):
-        """Build blocked set for a specific bot (static + other bots)."""
-        other = {
-            self.predicted.get(b["id"], tuple(b["position"]))
-            for b in self.bots if b["id"] != bid
-        }
+        """Build blocked set for a specific bot (static + nearby other bots).
+
+        For 5+ bots, only block bots within Manhattan distance 6 to avoid
+        over-blocking that makes BFS find no path.
+        """
+        pos = tuple(self.bots_by_id[bid]["position"])
+        max_dist = 6 if len(self.bots) >= 5 else float("inf")
+        other = set()
+        for b in self.bots:
+            if b["id"] == bid:
+                continue
+            bp = self.predicted.get(b["id"], tuple(b["position"]))
+            if max_dist == float("inf") or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist:
+                other.add(bp)
         return self.gs.blocked_static | other
 
     # ------------------------------------------------------------------
