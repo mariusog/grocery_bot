@@ -20,9 +20,9 @@ from pathfinding import (  # noqa: F401
     bfs_all,
     direction_to,
     find_adjacent_positions,
-    get_needed_items,
     _predict_pos,
 )
+from orders import get_needed_items  # noqa: F401
 from game_state import GameState  # noqa: F401
 from round_planner import RoundPlanner  # noqa: F401
 
@@ -105,8 +105,7 @@ def decide_actions(state):
         _gs.init_static(state)
         _sync_globals_from_gs()
 
-    planner = RoundPlanner(_gs, state)
-    planner._full_state = state  # for grid access in assignments
+    planner = RoundPlanner(_gs, state, full_state=state)
     result = planner.plan()
 
     _sync_globals_from_gs()

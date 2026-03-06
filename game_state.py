@@ -27,7 +27,16 @@ class GameState:
         self.grid_height = 0
 
     def reset(self):
-        self.__init__()
+        self.blocked_static = None
+        self.dist_cache = {}
+        self.adj_cache = {}
+        self.last_pickup = {}
+        self.pickup_fail_count = {}
+        self.blacklisted_items = set()
+        self.corridor_y = []
+        self.idle_spots = []
+        self.grid_width = 0
+        self.grid_height = 0
 
     def init_static(self, state):
         """Compute static blocked set and caches on round 0."""
@@ -262,18 +271,7 @@ class GameState:
         if not assignable_bots or not candidate_items:
             return {}
 
-        # Build item targets (adjacent walkable cells)
-        item_targets = []
-        for it in candidate_items:
-            _, d = self.find_best_item_target(
-                assignable_bots[0][1], it  # dummy pos, just need adjacency
-            )
-            item_targets.append(it)
-
         # Build cost matrix: rows=bots, cols=items
-        bot_positions = [bp for _, bp, _ in assignable_bots]
-        item_positions = [tuple(it["position"]) for it in candidate_items]
-
         cost_matrix = []
         for bi, (_, bot_pos, _) in enumerate(assignable_bots):
             row = []

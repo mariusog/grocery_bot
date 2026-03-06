@@ -105,7 +105,7 @@ class AssignmentMixin:
         if not assignable or not candidates:
             return
 
-        map_width = self._full_state["grid"]["width"]
+        map_width = self.full_state["grid"]["width"]
         num_zones = max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
         zone_width = (map_width / num_zones) if num_zones > 1 else None
 

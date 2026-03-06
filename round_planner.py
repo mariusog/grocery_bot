@@ -1,8 +1,9 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
-from collections import deque
+from collections import deque, namedtuple
 
-from pathfinding import DIRECTIONS, get_needed_items
+from pathfinding import DIRECTIONS
+from orders import get_needed_items
 
 from movement import MovementMixin
 from assignment import AssignmentMixin
@@ -23,6 +24,9 @@ from constants import (
     SMALL_TEAM_MAX,
 )
 
+# Bundles per-bot context passed through the step chain.
+BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active")
+
 
 class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, IdleMixin):
     """Plans actions for all bots in a single round.
@@ -31,8 +35,9 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
     and provides reusable methods for common item search patterns.
     """
 
-    def __init__(self, gs, state):
+    def __init__(self, gs, state, full_state=None):
         self.gs = gs
+        self.full_state = full_state if full_state is not None else state
         self.bots = state["bots"]
         self.items = state["items"]
         self.orders = state["orders"]
@@ -115,7 +120,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
 
     def _state_grid(self):
         """Extract grid from the state for init_static compatibility."""
-        return self._full_state["grid"]
+        return self.full_state["grid"]
 
     # ------------------------------------------------------------------
     # Initialization helpers
@@ -197,167 +202,210 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
     # Per-bot decision (steps 1-8)
     # ------------------------------------------------------------------
 
+    # Step chain: each method returns True if it handled the bot.
+    _STEP_CHAIN = None  # populated after class definition
+
     def _decide_bot(self, bot):
+        ctx = self._build_bot_context(bot)
+        for step in self._STEP_CHAIN:
+            if step(self, ctx):
+                return
+        self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "wait"})
+
+    def _build_bot_context(self, bot):
         bid = bot["id"]
         bx, by = bot["position"]
-        pos = (bx, by)
-        inv = bot["inventory"]
-        blocked = self._build_blocked(bid)
-        has_active = self.bot_has_active[bid]
+        return BotContext(
+            bot=bot,
+            bid=bid,
+            bx=bx,
+            by=by,
+            pos=(bx, by),
+            inv=bot["inventory"],
+            blocked=self._build_blocked(bid),
+            has_active=self.bot_has_active[bid],
+        )
 
-        # Phase 2.2: dedicated preview bot skips active items entirely
-        if bid in self.preview_bot_ids and not has_active:
-            if len(inv) < MAX_INVENTORY:
-                for dx, dy in DIRECTIONS:
-                    for it in self.items_at_pos.get((bx + dx, by + dy), []):
-                        if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
-                            self._claim(it, self.net_active)
-                            self._emit(bid, bx, by, self._pickup(bid, it))
-                            return
-            if self._spare_slots(inv) > 0:
-                if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
-                    return
+    # ------------------------------------------------------------------
+    # Individual decision steps
+    # ------------------------------------------------------------------
 
-        # Step 1: at drop-off with active items -> deliver
-        if pos == self.drop_off and has_active:
-            self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
-            return
+    def _step_preview_bot(self, ctx):
+        """Phase 2.2: dedicated preview bot skips active items entirely."""
+        if ctx.bid not in self.preview_bot_ids or ctx.has_active:
+            return False
+        if len(ctx.inv) < MAX_INVENTORY:
+            for dx, dy in DIRECTIONS:
+                for it in self.items_at_pos.get((ctx.bx + dx, ctx.by + dy), []):
+                    if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
+                        self._claim(it, self.net_active)
+                        self._emit(ctx.bid, ctx.bx, ctx.by, self._pickup(ctx.bid, it))
+                        return True
+        if self._spare_slots(ctx.inv) > 0:
+            if self._try_preview_prepick(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked):
+                return True
+        return False
 
-        # Phase 4.4: deliver partial items if it COMPLETES the order (+5 bonus)
-        if (has_active and self.active_on_shelves > 0
-                and len(inv) < MAX_INVENTORY
-                and self._bot_delivery_completes_order(bot)):
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-            return
+    def _step_deliver_at_dropoff(self, ctx):
+        """Step 1: at drop-off with active items -> deliver."""
+        if ctx.pos == self.drop_off and ctx.has_active:
+            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
+            return True
+        return False
 
-        # Step 2: all active items picked up -> rush to deliver
-        if has_active and self.active_on_shelves == 0:
-            if self.preview and len(inv) < MAX_INVENTORY:
-                adj = self._find_adjacent_needed(
-                    bx, by, self.net_preview, prefer_cascade=True
-                )
-                if adj:
-                    self._claim(adj, self.net_preview)
-                    self._emit(bid, bx, by, self._pickup(bid, adj))
-                    return
-                item, cell = self._find_detour_item(
-                    pos, self.net_preview, prefer_cascade=True
-                )
-                if item:
-                    self._claim(item, self.net_preview)
-                    if self._emit_move(bid, bx, by, pos, cell, blocked):
-                        return
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-            return
+    def _step_deliver_completes_order(self, ctx):
+        """Phase 4.4: deliver partial items if it COMPLETES the order (+5 bonus)."""
+        if (ctx.has_active and self.active_on_shelves > 0
+                and len(ctx.inv) < MAX_INVENTORY
+                and self._bot_delivery_completes_order(ctx.bot)):
+            self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+            return True
+        return False
 
-        # Step 3: opportunistic adjacent preview pickup (spare slots only)
-        if (self.preview and self._spare_slots(inv) > 0
-                and not (len(self.bots) == 1 and self.active_on_shelves > 1)):
+    def _step_rush_deliver(self, ctx):
+        """Step 2: all active items picked up -> rush to deliver."""
+        if not (ctx.has_active and self.active_on_shelves == 0):
+            return False
+        if self.preview and len(ctx.inv) < MAX_INVENTORY:
             adj = self._find_adjacent_needed(
-                bx, by, self.net_preview, prefer_cascade=True
+                ctx.bx, ctx.by, self.net_preview, prefer_cascade=True
             )
             if adj:
                 self._claim(adj, self.net_preview)
-                self._emit(bid, bx, by, self._pickup(bid, adj))
-                return
+                self._emit(ctx.bid, ctx.bx, ctx.by, self._pickup(ctx.bid, adj))
+                return True
+            item, cell = self._find_detour_item(
+                ctx.pos, self.net_preview, prefer_cascade=True
+            )
+            if item:
+                self._claim(item, self.net_preview)
+                if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
+                    return True
+        self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+        return True
 
-        # Step 3b: inventory full -> deliver
-        if has_active and len(inv) >= MAX_INVENTORY:
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-            return
+    def _step_opportunistic_preview(self, ctx):
+        """Step 3: opportunistic adjacent preview pickup (spare slots only)."""
+        if not (self.preview and self._spare_slots(ctx.inv) > 0
+                and not (len(self.bots) == 1 and self.active_on_shelves > 1)):
+            return False
+        adj = self._find_adjacent_needed(
+            ctx.bx, ctx.by, self.net_preview, prefer_cascade=True
+        )
+        if adj:
+            self._claim(adj, self.net_preview)
+            self._emit(ctx.bid, ctx.bx, ctx.by, self._pickup(ctx.bid, adj))
+            return True
+        return False
 
-        # Phase 4.4: zero-cost delivery — deliver if adjacent to dropoff
-        if (has_active and pos != self.drop_off
-                and self.gs.dist_static(pos, self.drop_off) == 1
-                and not self._bot_delivery_completes_order(bot)):
-            next_item_pos = self._find_nearest_active_item_pos(pos)
-            if next_item_pos is not None:
-                dist_via_dropoff = 1 + self.gs.dist_static(self.drop_off, next_item_pos)
-                dist_direct = self.gs.dist_static(pos, next_item_pos)
-                if dist_via_dropoff <= dist_direct + 1:
-                    self._emit_move_or_wait(
-                        bid, bx, by, pos, self.drop_off, blocked
-                    )
-                    return
+    def _step_inventory_full_deliver(self, ctx):
+        """Step 3b: inventory full -> deliver."""
+        if ctx.has_active and len(ctx.inv) >= MAX_INVENTORY:
+            self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+            return True
+        return False
 
-        # Phase 4.3: improved end-game strategy
-        if self.endgame and inv:
-            d = self.gs.dist_static(pos, self.drop_off)
-            if d + 1 >= self.rounds_left:
-                self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-                return
-            if has_active and self.active_on_shelves > 0:
-                rounds_to_complete = self._estimate_rounds_to_complete(pos, inv)
-                if rounds_to_complete > self.rounds_left:
-                    if self._try_maximize_items(bid, bx, by, pos, inv, blocked):
-                        return
+    def _step_zero_cost_delivery(self, ctx):
+        """Phase 4.4: zero-cost delivery -- deliver if adjacent to dropoff."""
+        if not (ctx.has_active and ctx.pos != self.drop_off
+                and self.gs.dist_static(ctx.pos, self.drop_off) == 1
+                and not self._bot_delivery_completes_order(ctx.bot)):
+            return False
+        next_item_pos = self._find_nearest_active_item_pos(ctx.pos)
+        if next_item_pos is not None:
+            dist_via_dropoff = 1 + self.gs.dist_static(self.drop_off, next_item_pos)
+            dist_direct = self.gs.dist_static(ctx.pos, next_item_pos)
+            if dist_via_dropoff <= dist_direct + 1:
+                self._emit_move_or_wait(
+                    ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+                )
+                return True
+        return False
 
-        # Step 4: pick up active items (adjacent first, then TSP route)
-        if self._try_active_pickup(bid, bx, by, pos, inv, blocked):
-            return
+    def _step_endgame(self, ctx):
+        """Phase 4.3: improved end-game strategy."""
+        if not (self.endgame and ctx.inv):
+            return False
+        d = self.gs.dist_static(ctx.pos, self.drop_off)
+        if d + 1 >= self.rounds_left:
+            self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+            return True
+        if ctx.has_active and self.active_on_shelves > 0:
+            rounds_to_complete = self._estimate_rounds_to_complete(ctx.pos, ctx.inv)
+            if rounds_to_complete > self.rounds_left:
+                if self._try_maximize_items(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked):
+                    return True
+        return False
 
-        # Step 5: deliver active items
-        if has_active:
-            d_to_drop = self.gs.dist_static(pos, self.drop_off)
-            if (self.active_on_shelves > 0 and len(inv) >= 2
-                    and d_to_drop <= DELIVER_WHEN_CLOSE_DIST):
-                self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-                return
+    def _step_active_pickup(self, ctx):
+        """Step 4: pick up active items (adjacent first, then TSP route)."""
+        return self._try_active_pickup(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked)
 
-            spare = self._spare_slots(inv)
-            if self.preview and spare > 0 and not self.order_nearly_complete:
-                item, cell = self._find_detour_item(pos, self.net_preview)
-                if item:
-                    self._claim(item, self.net_preview)
-                    if self._emit_move(bid, bx, by, pos, cell, blocked):
-                        return
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-            return
+    def _step_deliver_active(self, ctx):
+        """Step 5: deliver active items."""
+        if not ctx.has_active:
+            return False
+        d_to_drop = self.gs.dist_static(ctx.pos, self.drop_off)
+        if (self.active_on_shelves > 0 and len(ctx.inv) >= 2
+                and d_to_drop <= DELIVER_WHEN_CLOSE_DIST):
+            self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+            return True
 
-        # Step 5b: bot has non-active items clogging inventory
-        if (not has_active and len(inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY and self.active_on_shelves > 0
-                and len(self.bots) <= SMALL_TEAM_MAX):
-            if pos == self.drop_off:
-                self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
-                return
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-            return
+        spare = self._spare_slots(ctx.inv)
+        if self.preview and spare > 0 and not self.order_nearly_complete:
+            item, cell = self._find_detour_item(ctx.pos, self.net_preview)
+            if item:
+                self._claim(item, self.net_preview)
+                if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
+                    return True
+        self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+        return True
 
-        # Step 6: pre-pick preview items
-        # Bots reaching here have no active items to pick (Step 4 failed).
+    def _step_clear_nonactive_inventory(self, ctx):
+        """Step 5b: bot has non-active items clogging inventory."""
+        if not (not ctx.has_active and len(ctx.inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY
+                and self.active_on_shelves > 0 and len(self.bots) <= SMALL_TEAM_MAX):
+            return False
+        if ctx.pos == self.drop_off:
+            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
+            return True
+        self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+        return True
+
+    def _step_preview_prepick(self, ctx):
+        """Step 6: pre-pick preview items."""
         # For 6+ bots: only force all slots when active items are done (avoid clog).
         # For smaller teams: always allow all slots (fewer bots = less clog risk).
         if len(self.bots) >= LARGE_TEAM_MIN:
             force = self.active_on_shelves == 0
         else:
             force = len(self.bots) >= SMALL_TEAM_MAX
-        if self._try_preview_prepick(bid, bx, by, pos, inv, blocked,
-                                     force_slots=force):
-            return
+        return self._try_preview_prepick(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked,
+                                         force_slots=force)
 
-        # Step 7: clear dropoff area when idle
-        if self._try_clear_dropoff(bid, bx, by, pos, blocked):
-            return
+    def _step_clear_dropoff(self, ctx):
+        """Step 7: clear dropoff area when idle."""
+        return self._try_clear_dropoff(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
 
-        # Step 7b: idle bot with non-active inventory — deliver for points
-        if inv and not has_active and len(inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY:
-                if pos == self.drop_off:
-                    self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
-                    return
-                # Large teams: limit non-active deliverers to avoid dropoff congestion
-                if len(self.bots) >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS:
-                    pass  # Fall through to idle positioning
-                else:
-                    self._nonactive_delivering += 1
-                    self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
-                    return
+    def _step_idle_nonactive_deliver(self, ctx):
+        """Step 7b: idle bot with non-active inventory -- deliver for points."""
+        if not (ctx.inv and not ctx.has_active and len(ctx.inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY):
+            return False
+        if ctx.pos == self.drop_off:
+            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
+            return True
+        # Large teams: limit non-active deliverers to avoid dropoff congestion
+        if len(self.bots) >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS:
+            return False  # Fall through to idle positioning
+        self._nonactive_delivering += 1
+        self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked)
+        return True
 
-        # Step 8: idle bot positioning — spread out from other bots
+    def _step_idle_positioning(self, ctx):
+        """Step 8: idle bot positioning -- spread out from other bots."""
         if len(self.bots) > 1:
-            if self._try_idle_positioning(bid, bx, by, pos, blocked):
-                return
-
-        self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
+            return self._try_idle_positioning(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
+        return False
 
     # ------------------------------------------------------------------
     # Reusable item search helpers
@@ -408,3 +456,23 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
     @staticmethod
     def _pickup(bid, item):
         return {"bot": bid, "action": "pick_up", "item_id": item["id"]}
+
+
+# Populate the step chain after class definition so all methods exist.
+RoundPlanner._STEP_CHAIN = [
+    RoundPlanner._step_preview_bot,
+    RoundPlanner._step_deliver_at_dropoff,
+    RoundPlanner._step_deliver_completes_order,
+    RoundPlanner._step_rush_deliver,
+    RoundPlanner._step_opportunistic_preview,
+    RoundPlanner._step_inventory_full_deliver,
+    RoundPlanner._step_zero_cost_delivery,
+    RoundPlanner._step_endgame,
+    RoundPlanner._step_active_pickup,
+    RoundPlanner._step_deliver_active,
+    RoundPlanner._step_clear_nonactive_inventory,
+    RoundPlanner._step_preview_prepick,
+    RoundPlanner._step_clear_dropoff,
+    RoundPlanner._step_idle_nonactive_deliver,
+    RoundPlanner._step_idle_positioning,
+]
