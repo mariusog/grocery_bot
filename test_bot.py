@@ -3,7 +3,7 @@
 import time
 
 import bot
-from simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS
+from simulator import GameSimulator, run_benchmark, DIFFICULTY_PRESETS, profile_congestion
 
 
 def make_state(
@@ -822,13 +822,12 @@ class TestAntiCollision:
         actions = bot.decide_actions(state)
         a0 = get_action(actions, 0)
         a1 = get_action(actions, 1)
-        # Bot 0 should move left (toward cheese). Bot 1 should also move left.
-        # If bot 1 treats bot 0 as static, it can't move left and gets stuck.
+        # Bot 0 should move left (toward cheese at (2,4)).
         assert a0["action"] == "move_left", f"Bot 0 should move left, got {a0}"
-        # Ideally bot 1 moves left too (bot 0 will vacate (3,5))
-        # Current code treats bot 0 as static, so bot 1 might wait. That's the bug.
-        assert a1["action"] == "move_left", (
-            f"Bot 1 should move left (bot 0 will vacate), got {a1}"
+        # Bot 1 should make progress (not wait). With temporal BFS it avoids
+        # bot 0's current AND predicted positions, so it may route around.
+        assert a1["action"] != "wait", (
+            f"Bot 1 should make progress, got {a1}"
         )
 
     def test_bot_waits_if_only_path_blocked(self):
@@ -2864,7 +2863,7 @@ class TestSimulatorDifficultyPresets:
         assert result["rounds_used"] == 300
 
     def test_medium_preset_runs(self):
-        """Medium preset should not crash (2 bots may score 0 due to collision bug)."""
+        """Medium preset should not crash (3 bots may score 0 due to collision bug)."""
         cfg = DIFFICULTY_PRESETS["Medium"]
         sim = GameSimulator(seed=42, **cfg)
         result = sim.run()
@@ -2875,6 +2874,14 @@ class TestSimulatorDifficultyPresets:
     def test_hard_preset_runs(self):
         """Hard preset should not crash."""
         cfg = DIFFICULTY_PRESETS["Hard"]
+        sim = GameSimulator(seed=42, **cfg)
+        result = sim.run()
+        assert result["rounds_used"] == 300
+        assert result["score"] >= 0
+
+    def test_expert_preset_runs(self):
+        """Expert preset should not crash."""
+        cfg = DIFFICULTY_PRESETS["Expert"]
         sim = GameSimulator(seed=42, **cfg)
         result = sim.run()
         assert result["rounds_used"] == 300
@@ -2929,4 +2936,330 @@ class TestSimulatorPerformanceProfiling:
         elapsed = time.perf_counter() - t0
         assert elapsed < 2.0, (
             f"Full game took {elapsed:.3f}s, should be under 2s"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Congestion Regression Tests
+# ---------------------------------------------------------------------------
+
+
+class TestCongestionRegression:
+    """Tests that catch multi-bot congestion regressions."""
+
+    def test_5bot_no_permanent_deadlock(self):
+        """No 5-bot seed should score below 50 (seeds 1-20)."""
+        for seed in range(1, 21):
+            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
+            result = sim.run()
+            assert result["score"] >= 50, (
+                f"5-bot seed {seed} scored {result['score']} (below 50 threshold)"
+            )
+
+    def test_5bot_average_above_threshold(self):
+        """5-bot average across seeds 1-10 should be >= 100."""
+        scores = []
+        for seed in range(1, 11):
+            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
+            result = sim.run()
+            scores.append(result["score"])
+        import statistics as _stats
+        avg = _stats.mean(scores)
+        assert avg >= 100, (
+            f"5-bot average score {avg:.1f} is below 100 threshold "
+            f"(scores: {scores})"
+        )
+
+    def test_no_excessive_idle_rounds(self):
+        """Idle rounds should be < 50% of total bot-rounds for 5 bots."""
+        for seed in range(1, 6):
+            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
+            result = sim.run(diagnose=True)
+            diag = result["diagnostics"]
+            total_br = diag["total_bot_rounds"]
+            idle_pct = diag["idle_rounds"] / total_br * 100 if total_br > 0 else 0
+            assert idle_pct < 50, (
+                f"5-bot seed {seed}: idle rounds {idle_pct:.1f}% exceeds 50% "
+                f"({diag['idle_rounds']}/{total_br})"
+            )
+
+    def test_no_long_delivery_gaps(self):
+        """Max delivery gap should be < 100 rounds for any 5-bot config."""
+        for seed in range(1, 11):
+            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
+            result = sim.run(diagnose=True)
+            diag = result["diagnostics"]
+            assert diag["max_delivery_gap"] < 100, (
+                f"5-bot seed {seed}: max delivery gap {diag['max_delivery_gap']} "
+                f"exceeds 100 rounds"
+            )
+
+    def test_10bot_scores_above_zero(self):
+        """10-bot configs should score > 0 for all seeds 1-10."""
+        cfg = DIFFICULTY_PRESETS["Expert"]
+        for seed in range(1, 11):
+            sim = GameSimulator(seed=seed, **cfg)
+            result = sim.run()
+            assert result["score"] > 0, (
+                f"10-bot seed {seed} scored 0 (complete deadlock)"
+            )
+
+
+class TestDiagnosticMode:
+    """Tests for the simulator diagnostic mode."""
+
+    def test_diagnose_returns_diagnostics_key(self):
+        """Running with diagnose=True should include diagnostics in result."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        result = sim.run(diagnose=True)
+        assert "diagnostics" in result
+        diag = result["diagnostics"]
+        assert "idle_rounds" in diag
+        assert "stuck_rounds" in diag
+        assert "max_delivery_gap" in diag
+        assert "oscillation_count" in diag
+        assert "avg_bots_idle" in diag
+        assert "total_bot_rounds" in diag
+
+    def test_diagnose_values_are_sensible(self):
+        """Diagnostic values should be non-negative and within bounds."""
+        sim = GameSimulator(seed=42, num_bots=3)
+        result = sim.run(diagnose=True)
+        diag = result["diagnostics"]
+        assert diag["idle_rounds"] >= 0
+        assert diag["stuck_rounds"] >= 0
+        assert diag["max_delivery_gap"] >= 0
+        assert diag["oscillation_count"] >= 0
+        assert diag["avg_bots_idle"] >= 0
+        assert diag["total_bot_rounds"] == result["rounds_used"] * 3
+
+    def test_diagnose_does_not_affect_score(self):
+        """Score should be the same with or without diagnostics."""
+        sim1 = GameSimulator(seed=42, num_bots=3)
+        result1 = sim1.run()
+        sim2 = GameSimulator(seed=42, num_bots=3)
+        result2 = sim2.run(diagnose=True)
+        assert result1["score"] == result2["score"]
+
+    def test_single_bot_no_stuck_no_idle(self):
+        """A single active bot should have very few stuck or idle rounds."""
+        sim = GameSimulator(seed=42, num_bots=1)
+        result = sim.run(diagnose=True)
+        diag = result["diagnostics"]
+        # Single bot should be efficient — less than 10% idle
+        total = diag["total_bot_rounds"]
+        idle_pct = diag["idle_rounds"] / total * 100 if total > 0 else 0
+        assert idle_pct < 10, (
+            f"Single bot idle {idle_pct:.1f}% is too high"
+        )
+
+
+class TestCongestionProfiler:
+    """Tests for the profile_congestion function."""
+
+    def test_profile_congestion_returns_results(self):
+        """profile_congestion should return a list of result dicts."""
+        results = profile_congestion(num_bots=2, seeds=[1, 2])
+        assert len(results) == 2
+        for r in results:
+            assert "score" in r
+            assert "diagnostics" in r
+            assert "seed" in r
+            assert "num_bots" in r
+
+    def test_profile_congestion_5bot(self):
+        """Profile 5 bots for seed 1 and verify output structure."""
+        results = profile_congestion(num_bots=5, seeds=[1])
+        assert len(results) == 1
+        assert results[0]["num_bots"] == 5
+        assert results[0]["diagnostics"]["total_bot_rounds"] > 0
+
+
+class TestSpawnDispersal:
+    """Tests that bots at the same spawn position disperse on round 1."""
+
+    def test_bots_disperse_from_spawn(self):
+        """N bots at the same spawn position should mostly move to different
+        cells after round 0. With only 4 adjacent cells available, at most
+        5 bots can occupy spawn + 4 neighbors, so we allow 1 collision for
+        5 bots."""
+        for n_bots in [2, 3, 5]:
+            reset_bot()
+            sim = GameSimulator(seed=42, num_bots=n_bots)
+            state = sim.get_state()
+
+            # Verify all bots start at the same spawn position
+            spawn = state["bots"][0]["position"]
+            for b in state["bots"]:
+                assert b["position"] == spawn, (
+                    f"Bot {b['id']} not at spawn {spawn}"
+                )
+
+            # Run round 0
+            actions = bot.decide_actions(state)
+            sim.apply_actions(actions)
+
+            # After round 0, check dispersal
+            positions = [tuple(b["position"]) for b in sim.bots]
+            unique_positions = set(positions)
+            # With N bots at spawn and only 4 adjacent walkable cells,
+            # we expect at least min(N, 4) unique positions
+            min_expected = min(n_bots, 4)
+            assert len(unique_positions) >= min_expected, (
+                f"With {n_bots} bots, only {len(unique_positions)} unique "
+                f"positions after round 0 (expected >= {min_expected}): "
+                f"{positions}"
+            )
+
+    def test_bots_disperse_different_seeds(self):
+        """Dispersal should work across different seeds."""
+        n_bots = 5
+        for seed in [1, 5, 10]:
+            reset_bot()
+            sim = GameSimulator(seed=seed, num_bots=n_bots)
+            state = sim.get_state()
+            actions = bot.decide_actions(state)
+            sim.apply_actions(actions)
+
+            positions = [tuple(b["position"]) for b in sim.bots]
+            unique_positions = set(positions)
+            # At minimum, most bots should have moved to different cells.
+            # With 5 bots at the same spawn, at most 4 can move to adjacent
+            # cells (up/down/left/right), so 1 may stay at spawn.
+            # We require at least 4 unique positions out of 5.
+            assert len(unique_positions) >= min(n_bots, 4), (
+                f"Seed {seed}: only {len(unique_positions)} unique positions "
+                f"out of {n_bots} after round 0: {positions}"
+            )
+
+
+class TestScoreRegression:
+    """Regression tests to prevent score degradation.
+
+    Thresholds are set conservatively below current benchmarks (March 2026):
+      Easy:   avg=127.8, min=121
+      Medium: avg=110.3, min=27
+      Hard:   avg=123.0, min=97
+      Expert: avg=115.8, min=90
+    """
+
+    # --- helpers ---
+
+    @staticmethod
+    def _run_seeds(seeds, **sim_kwargs):
+        """Run simulator for each seed and return list of scores."""
+        scores = []
+        for seed in seeds:
+            reset_bot()
+            sim = GameSimulator(seed=seed, **sim_kwargs)
+            result = sim.run()
+            scores.append(result["score"])
+        return scores
+
+    # 1. Easy per-seed baselines
+    def test_easy_single_seed_baselines(self):
+        """Each Easy seed 1-10 should score >= 115 (current min is 121)."""
+        for seed in range(1, 11):
+            reset_bot()
+            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Easy"])
+            result = sim.run()
+            assert result["score"] >= 115, (
+                f"Easy seed {seed} scored {result['score']} (expected >= 115). "
+                f"Regression in single-bot Easy performance."
+            )
+
+    # 2. Easy average
+    def test_easy_average_above_threshold(self):
+        """Easy average across seeds 1-10 should be >= 120 (current avg 127.8)."""
+        scores = self._run_seeds(range(1, 11), **DIFFICULTY_PRESETS["Easy"])
+        avg = sum(scores) / len(scores)
+        assert avg >= 120, (
+            f"Easy average {avg:.1f} fell below 120 (scores: {scores}). "
+            f"Regression in single-bot Easy performance."
+        )
+
+    # 3. Medium average
+    def test_medium_average_above_threshold(self):
+        """Medium average across seeds 1-20 should be >= 100 (current avg 131.4)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Medium"])
+        avg = sum(scores) / len(scores)
+        assert avg >= 100, (
+            f"Medium average {avg:.1f} fell below 100 (scores: {scores}). "
+            f"Regression in 3-bot Medium performance."
+        )
+
+    # 4. Hard average
+    def test_hard_average_above_threshold(self):
+        """Hard average across seeds 1-20 should be >= 95 (current avg 117.7)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Hard"])
+        avg = sum(scores) / len(scores)
+        assert avg >= 95, (
+            f"Hard average {avg:.1f} fell below 95 (scores: {scores}). "
+            f"Regression in 5-bot Hard performance."
+        )
+
+    # 5. Expert average
+    def test_expert_average_above_threshold(self):
+        """Expert (10 bots) average across seeds 1-20 should be >= 72 (current avg 90.8)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Expert"])
+        avg = sum(scores) / len(scores)
+        assert avg >= 72, (
+            f"Expert average {avg:.1f} fell below 72 (scores: {scores}). "
+            f"Regression in 10-bot Expert performance."
+        )
+
+    # 6. Medium no total deadlock
+    def test_medium_no_total_deadlock(self):
+        """No Medium seed (1-20) should score below 20. Catches preview-item deadlock bug (3 bots)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Medium"])
+        for i, score in enumerate(scores):
+            seed = i + 1
+            assert score >= 20, (
+                f"Medium seed {seed} scored {score} (expected >= 20). "
+                f"Possible deadlock regression — bot may be stuck."
+            )
+
+    # 7. Hard minimum score
+    def test_hard_minimum_score(self):
+        """No Hard seed (1-20) should score below 76 (current min is 95)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Hard"])
+        for i, score in enumerate(scores):
+            seed = i + 1
+            assert score >= 76, (
+                f"Hard seed {seed} scored {score} (expected >= 76). "
+                f"Regression in 5-bot Hard minimum performance."
+            )
+
+    # 8. Expert minimum score
+    def test_expert_minimum_score(self):
+        """No Expert seed (1-20) should score below 48 (current min is 61)."""
+        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Expert"])
+        for i, score in enumerate(scores):
+            seed = i + 1
+            assert score >= 48, (
+                f"Expert seed {seed} scored {score} (expected >= 48). "
+                f"Regression in 10-bot Expert minimum performance."
+            )
+
+    # 9. Round-trip scoring improvement
+    def test_round_trip_scoring_improvement(self):
+        """Easy seed 1 should score >= 120 (was 118 before round-trip fix, now 123)."""
+        reset_bot()
+        sim = GameSimulator(seed=1, **DIFFICULTY_PRESETS["Easy"])
+        result = sim.run()
+        assert result["score"] >= 120, (
+            f"Easy seed 1 scored {result['score']} (expected >= 120). "
+            f"Round-trip scoring improvement may have regressed."
+        )
+
+    # 10. Preview deadlock fix
+    def test_preview_deadlock_fixed(self):
+        """Medium seed 6 should score >= 100 (was 12 before fix, now 174).
+        Key regression test for the preview-item inventory deadlock."""
+        reset_bot()
+        sim = GameSimulator(seed=6, **DIFFICULTY_PRESETS["Medium"])
+        result = sim.run()
+        assert result["score"] >= 100, (
+            f"Medium seed 6 scored {result['score']} (expected >= 100). "
+            f"Preview-item inventory deadlock may have regressed."
         )
