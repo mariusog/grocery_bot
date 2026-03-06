@@ -80,11 +80,27 @@ Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap
 - **Success**: Oscillation count reduced by 30%+ vs T12 baseline.
 - **Depends on**: T12
 
+### T20: Package Structure Refactoring
+- **Agent**: qa-agent
+- **Status**: open
+- **Priority**: 1
+- **Files**: ALL (structural refactoring)
+- **Description**: Reorganize flat file layout into proper package structure with matching test directories. See `.claude/agents/qa-agent.md` for full target layout.
+  1. Create `grocery_bot/` package with `__init__.py`
+  2. Move core modules (`constants.py`, `orders.py`, `pathfinding.py`, `game_state.py`, `simulator.py`) into package
+  3. Create `grocery_bot/planner/` subpackage, move mixin files + `round_planner.py`
+  4. Create matching test directories (`tests/planner/`, `tests/pathfinding/`, `tests/game_state/`, `tests/integration/`)
+  5. Move unit tests to matching directories, integration tests to `tests/integration/`
+  6. Update ALL imports (internal + tests + bot.py + benchmark.py)
+  7. Verify: all tests pass, ruff clean, benchmark unchanged
+- **Success**: Package structure matches qa-agent.md target. All 230+ tests pass. No score changes.
+- **Depends on**: T19 (done)
+
 ### T18: Benchmark Phase 2 Changes
 - **Agent**: qa-agent
 - **Status**: open
 - **Priority**: 7 — run after T12-T17
-- **Files**: `test_bot.py`, `benchmark.py`, `docs/benchmark_results.md`
+- **Files**: `benchmark.py`, `docs/benchmark_results.md`
 - **Description**: Full benchmark and regression test update after Phase 2.
   1. Run 20-seed benchmark across all difficulties
   2. Update score regression thresholds to new baselines
