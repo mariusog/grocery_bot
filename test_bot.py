@@ -2599,9 +2599,6 @@ class TestMultiBotCollisionScenarios:
         a1 = get_action(actions, 1)
         # Both should not be heading to the same item. One should wait or go elsewhere.
         # Bot 0 claims the item first, bot 1 should get nothing to do.
-        moving_bots = sum(
-            1 for a in [a0, a1] if a["action"].startswith("move_")
-        )
         # At most 1 bot should be navigating toward the single item
         # (the other should wait since there's nothing else to do)
         assert a0["action"] != "wait" or a1["action"] != "wait", (
