@@ -134,22 +134,31 @@ class GameSimulator:
         self._next_item_id = len(self.item_shelves)
 
     def _generate_map(self):
-        """Generate a realistic store with vertical aisles.
+        """Generate a store layout with border walls, vertical aisles, and
+        internal walls matching the live server structure.
 
-        Layout pattern (Easy 12x10):
-          - Horizontal corridors at y=1, y=4-5, y=7-8
-          - Vertical shelf columns with walkways between them
-          - Aisles: shelf-walkway-shelf (3 cells wide)
+        Live server wall counts: Easy ~44, Medium ~76, Hard ~108, Expert ~160.
+        These include border walls + aisle end-cap walls.
         """
-        # Aisle configuration based on map size
+        # --- Border walls (top, bottom, left, right) ---
+        for x in range(self.width):
+            self.walls.append((x, 0))
+            self.walls.append((x, self.height - 1))
+        for y in range(1, self.height - 1):
+            self.walls.append((0, y))
+            self.walls.append((self.width - 1, y))
+
+        wall_set = set(self.walls)
+
+        # --- Aisle configuration based on map size ---
         if self.width <= 12:
-            aisle_starts = [2, 7]  # 2 aisles
+            aisle_starts = [3, 7]  # 2 aisles
         elif self.width <= 16:
-            aisle_starts = [2, 6, 11]  # 3 aisles
+            aisle_starts = [3, 7, 11]  # 3 aisles
         elif self.width <= 22:
-            aisle_starts = [2, 6, 11, 16]  # 4 aisles
+            aisle_starts = [3, 7, 11, 16]  # 4 aisles
         else:
-            aisle_starts = [2, 6, 11, 16, 21]  # 5 aisles
+            aisle_starts = [3, 7, 11, 16, 21]  # 5 aisles
 
         # Shelf columns: each aisle has left shelf, walkway, right shelf
         shelf_cols = []
@@ -158,8 +167,8 @@ class GameSimulator:
             shelf_cols.append(ax + 2)  # right shelf column
 
         # Shelf rows: skip corridor rows
-        corridor_rows = {1, self.height - 3, self.height - 2}
-        # Add mid-corridor
+        corridor_rows = {1, self.height - 2}
+        # Add mid-corridor(s)
         mid = self.height // 2
         corridor_rows.add(mid)
         if self.height > 10:
@@ -167,15 +176,28 @@ class GameSimulator:
 
         shelf_rows = [y for y in range(2, self.height - 2) if y not in corridor_rows]
 
-        # Place items on shelves, cycling through item types
+        # --- Place shelves and items ---
         type_idx = 0
         for col in shelf_cols:
             for row in shelf_rows:
-                if col < self.width - 1:
+                if col < self.width - 1 and (col, row) not in wall_set:
                     itype = self.item_type_names[type_idx % len(self.item_type_names)]
                     self.item_shelves.append((col, row, itype))
                     self.shelf_positions.add((col, row))
                     type_idx += 1
+
+        # --- Internal walls: mid-aisle barriers ---
+        # Add walls between shelf blocks at the mid-corridor to create
+        # realistic chokepoints. Bots must navigate around shelf groups.
+        for ax in aisle_starts:
+            for cap_col in [ax, ax + 2]:
+                for crow in corridor_rows:
+                    if crow <= 1 or crow >= self.height - 2:
+                        continue  # don't block top/bottom corridors
+                    if (cap_col, crow) not in wall_set and \
+                       (cap_col, crow) not in self.shelf_positions:
+                        self.walls.append((cap_col, crow))
+                        wall_set.add((cap_col, crow))
 
     def _generate_orders(self, count=50):
         """Generate random orders using available item types."""
