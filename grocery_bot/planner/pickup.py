@@ -97,10 +97,16 @@ class PickupMixin:
 
         candidates: list[tuple[Any, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
-            cell, d = self.gs.find_best_item_target(pos, it)
-            if not cell or d == float("inf"):
-                continue
-            d_drop = self.gs.dist_static(cell, self.drop_off)
+            t = it["type"]
+            # Use precomputed best pickup cell when available
+            if t in self.gs.best_pickup:
+                cell, _ipos, d_drop = self.gs.best_pickup[t]
+                d = self.gs.dist_static(pos, cell)
+            else:
+                cell, d = self.gs.find_best_item_target(pos, it)
+                if not cell or d == float("inf"):
+                    continue
+                d_drop = self.gs.dist_static(cell, self.drop_off)
             round_trip = d + 1 + d_drop
             if round_trip < self.rounds_left:
                 score = d + d_drop
@@ -133,51 +139,62 @@ class PickupMixin:
     def _build_single_bot_route(
         self, pos: tuple[int, int], inv: list[str]
     ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
-        """Optimized route for single bot: prefer closest shelves to dropoff."""
+        """Optimized route for single bot: use precomputed route tables."""
         slots = MAX_INVENTORY - len(inv)
         if slots <= 0:
             return None
 
-        type_shelves: dict[str, list[tuple[Any, tuple[int, int], float]]] = {}
+        # Collect needed types with available items
+        needed_types: list[str] = []
+        type_to_item: dict[str, Any] = {}
         for it, _ in self._iter_needed_items(self.net_active):
             t = it["type"]
-            ipos = tuple(it["position"])
-            best_ac: Optional[tuple[int, int]] = None
-            best_d_drop = float("inf")
-            for ac in self.gs.adj_cache.get(ipos, []):
-                dd = self.gs.dist_static(ac, self.drop_off)
-                if dd < best_d_drop:
-                    best_d_drop = dd
-                    best_ac = ac
-            if best_ac is None:
-                continue
-            type_shelves.setdefault(t, []).append((it, best_ac, best_d_drop))
+            if t not in type_to_item:
+                type_to_item[t] = it
+                needed_types.append(t)
 
-        if not type_shelves:
+        if not needed_types:
             return None
 
-        type_best: dict[str, tuple[Any, tuple[int, int], float]] = {}
-        for t, shelves in type_shelves.items():
-            shelves.sort(key=lambda s: s[2])
-            type_best[t] = shelves[0]
+        # Try precomputed optimal route (deterministic, no per-round recomputation)
+        route_types = needed_types[:slots]
+        optimal = self.gs.get_optimal_route(route_types, pos, self.drop_off)
+        if optimal:
+            # Map (type, cell) -> (item, cell), verify reachability
+            selected: list[tuple[Any, tuple[int, int]]] = []
+            for t, cell in optimal:
+                it = type_to_item.get(t)
+                if it is None:
+                    continue
+                d_bot = self.gs.dist_static(pos, cell)
+                d_drop = self.gs.dist_static(cell, self.drop_off)
+                if d_bot + 1 + d_drop < self.rounds_left:
+                    selected.append((it, cell))
+            if selected:
+                return selected
 
+        # Fallback: manual computation if precomputed route unavailable
         candidates: list[tuple[Any, tuple[int, int], float]] = []
-        for t, (it, cell, d_drop) in type_best.items():
-            if len(candidates) >= slots:
-                break
-            d_bot = self.gs.dist_static(pos, cell)
-            if d_bot + 1 + d_drop >= self.rounds_left:
-                continue
-            candidates.append((it, cell, d_bot + d_drop))
+        for t in needed_types:
+            if t in self.gs.best_pickup:
+                cell, _ipos, d_drop = self.gs.best_pickup[t]
+                it = type_to_item[t]
+                d_bot = self.gs.dist_static(pos, cell)
+                if d_bot + 1 + d_drop < self.rounds_left:
+                    candidates.append((it, cell, d_bot + d_drop))
+            else:
+                it = type_to_item[t]
+                cell, d = self.gs.find_best_item_target(pos, it)
+                if cell and d < float("inf"):
+                    d_drop = self.gs.dist_static(cell, self.drop_off)
+                    if d + 1 + d_drop < self.rounds_left:
+                        candidates.append((it, cell, d + d_drop))
 
         if not candidates:
             return None
 
         candidates.sort(key=lambda c: c[2])
-        selected: list[tuple[Any, tuple[int, int]]] = [
-            (it, cell) for it, cell, _ in candidates[:slots]
-        ]
-
+        selected = [(it, cell) for it, cell, _ in candidates[:slots]]
         if not selected:
             return None
         return self._flexible_tsp(pos, selected, self.drop_off)

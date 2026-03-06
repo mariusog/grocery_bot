@@ -21,7 +21,7 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key finding
 
 ### T17: Full-Path Caching and Commitment
 - **Agent**: pathfinding-agent
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: 1
 - **Files**: `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py`, `grocery_bot/planner/movement.py`
 - **Description**: Currently bots recompute BFS every round, which can flip-flop between equally-good paths. Instead:
@@ -34,7 +34,7 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key finding
 
 ### T21: Integrate Precomputed Route Tables into Pickup Logic
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: done
 - **Priority**: 2
 - **Files**: `grocery_bot/planner/pickup.py`
 - **Description**: T16 added precomputed route tables to GameState (`best_pickup`, `best_pair_route`, `best_triple_route`, `get_optimal_route()`). These are not yet used by pickup logic. Integrate them:
@@ -43,6 +43,7 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key finding
   3. This eliminates route flip-flopping since routes are deterministic from round 0
 - **Success**: Easy avg maintained. Route computation time reduced.
 - **Depends on**: T16 (done)
+- **Result**: Integrated precomputed routes into both single-bot and greedy pickup. All 327 tests pass, no score regression.
 
 ### T22: Improve Multi-Bot Coordination for Expert
 - **Agent**: strategy-agent
