@@ -773,8 +773,6 @@ class RoundPlanner:
         If carrying items, decide whether to deliver now or grab one more.
         """
         has_active = self.bot_has_active[bid]
-        d_to_drop = self.gs.dist_static(pos, self.drop_off)
-
         # If carrying items, check if we should deliver now
         if has_active and len(inv) > 0:
             # Can we grab one more and still deliver?
