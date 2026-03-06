@@ -786,7 +786,7 @@ class TestEmptyOrdersAndBlacklist:
         """If all items of a needed type are blacklisted, bot should not crash."""
         reset_bot()
         # Manually blacklist the only milk item
-        bot._blacklisted_items.add("item_0")
+        bot._gs.blacklisted_items.add("item_0")
         state = make_state(
             bots=[{"id": 0, "position": [5, 5], "inventory": []}],
             items=[{"id": "item_0", "type": "milk", "position": [4, 4]}],

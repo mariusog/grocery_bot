@@ -33,43 +33,13 @@ from round_planner import RoundPlanner  # noqa: F401
 
 _gs = GameState()
 
-# Module globals kept for test introspection
-_blocked_static = None
-_dist_cache = {}
-_adj_cache = {}
-_last_pickup = {}
-_pickup_fail_count = {}
-_blacklisted_items = set()
-
-
-def _sync_globals_from_gs():
-    global _blocked_static, _dist_cache, _adj_cache
-    global _last_pickup, _pickup_fail_count, _blacklisted_items
-    _blocked_static = _gs.blocked_static
-    _dist_cache = _gs.dist_cache
-    _adj_cache = _gs.adj_cache
-    _last_pickup = _gs.last_pickup
-    _pickup_fail_count = _gs.pickup_fail_count
-    _blacklisted_items = _gs.blacklisted_items
-
-
-def _sync_gs_from_globals():
-    _gs.blocked_static = _blocked_static
-    _gs.dist_cache = _dist_cache
-    _gs.adj_cache = _adj_cache
-    _gs.last_pickup = _last_pickup
-    _gs.pickup_fail_count = _pickup_fail_count
-    _gs.blacklisted_items = _blacklisted_items
-
 
 def reset_state():
     _gs.reset()
-    _sync_globals_from_gs()
 
 
 def init_static(state):
     _gs.init_static(state)
-    _sync_globals_from_gs()
 
 
 def dist_static(a, b):
@@ -99,17 +69,11 @@ def plan_multi_trip(bot_pos, all_candidates, drop_off, capacity=3):
 
 
 def decide_actions(state):
-    _sync_gs_from_globals()
-
     if _gs.blocked_static is None:
         _gs.init_static(state)
-        _sync_globals_from_gs()
 
     planner = RoundPlanner(_gs, state, full_state=state)
-    result = planner.plan()
-
-    _sync_globals_from_gs()
-    return result
+    return planner.plan()
 
 
 # ---------------------------------------------------------------------------

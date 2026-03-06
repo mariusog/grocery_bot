@@ -40,7 +40,7 @@ class TestHelperFunctions:
     def test_find_adjacent_positions_uncached(self):
         """find_adjacent_positions works for positions not in _adj_cache."""
         reset_bot()
-        bot._adj_cache = {}  # ensure empty cache
+        bot._gs.adj_cache = {}  # ensure empty cache
         blocked = {(5, 4), (5, 6)}  # block two neighbors
         adj = bot.find_adjacent_positions(5, 5, blocked)
         assert (4, 5) in adj
@@ -86,9 +86,9 @@ class TestGetDistancesFrom:
             orders=[],
         )
         bot.init_static(state)
-        custom_blocked = set(bot._blocked_static)  # same contents, different object
+        custom_blocked = set(bot._gs.blocked_static)  # same contents, different object
         dists = bot.get_distances_from((5, 5), custom_blocked)
         assert (5, 5) in dists
         assert dists[(5, 5)] == 0
         # Should NOT have been cached since it's not the same object
-        assert (5, 5) not in bot._dist_cache
+        assert (5, 5) not in bot._gs.dist_cache
