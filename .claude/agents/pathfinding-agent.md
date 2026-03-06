@@ -12,81 +12,30 @@ Expert algorithm and pathfinding engineer. Owns all routing, distance computatio
 
 | File | Scope |
 |------|-------|
-| `pathfinding.py` | BFS, movement helpers, spatial algorithms |
-| `game_state.py` | Distance caching, TSP routing, multi-trip planning, assignment |
+| `grocery_bot/pathfinding.py` | BFS variants, movement helpers, spatial algorithms |
+| `grocery_bot/game_state.py` | Distance caching, TSP routing, multi-trip planning, assignment, route tables |
 
-**Do NOT modify**: `bot.py`, `round_planner.py`, `simulator.py`, `tests/`
-
-## Reference
-
-- `docs/CHALLENGE.md` — full game spec, protocol, constraints
-- `docs/OPTIMIZATION_PLAN.md` — phases 1, 3.1, 3.2
-- `docs/NEXT_STEPS.md` — implementation progress
-- MCP server: `claude mcp add --transport http grocery-bot https://mcp-docs.ainm.no/mcp`
+**Do NOT modify**: `bot.py`, `grocery_bot/planner/`, `grocery_bot/simulator.py`, `tests/`
 
 ## Current State
 
-Already implemented:
-- BFS with cached distances (`bfs_all`, `dist_static`)
-- TSP brute-force for 3-6 items
-- Multi-trip planning (split orders exceeding inventory capacity)
-- Greedy distance-sorted item assignment with zone penalty
-- Basic anti-collision (predicted positions as walls)
-- Adjacent position caching for item shelves
+### pathfinding.py
+- `bfs_all(source, blocked)` — BFS to all reachable cells, returns `{pos: distance}`
+- `bfs(start, goal, blocked)` — single-target BFS, returns next step
+- `bfs_full_path(start, goal, blocked)` — full shortest path (inclusive)
+- `bfs_temporal(start, goal, blocked_static, moving_obstacles)` — avoids predicted bot positions
+- `direction_to(sx, sy, tx, ty)` — converts step to move action string
+- `_predict_pos(bx, by, action)` — predicts position after action
+- `find_adjacent_positions(ix, iy, blocked_static)` — walkable cells adjacent to shelf
 
-## Tasks
-
-### Priority 1: Interleaved Pickup-Delivery (Phase 1.3)
-
-Current bot always picks up ALL items then delivers. Add evaluation of interleaved routes:
-
-```python
-def plan_interleaved_route(self, bot_pos, item_targets, drop_off, capacity=3):
-    """Compare full-pickup-then-deliver vs deliver-when-passing-dropoff.
-
-    Returns the route with lower total cost. Interleaved is better when
-    the bot passes near drop-off mid-collection and has active items.
-    """
-```
-
-- Evaluate: `pickup_all -> deliver` vs `pickup_some -> deliver -> pickup_rest -> deliver`
-- Only interleave when dropoff is genuinely "on the way" (detour < 3 steps)
-- Must respect inventory capacity (max 3)
-- Expose via `GameState` method so `RoundPlanner` can call it
-
-### Priority 2: Hungarian Algorithm (Phase 3.1)
-
-Replace greedy assignment with optimal matching for multi-bot scenarios:
-
-```python
-def hungarian_assign(self, bot_positions, item_positions):
-    """Optimal bot-to-item assignment minimizing total travel distance.
-
-    Uses Hungarian/Munkres algorithm. Falls back to greedy if matrix > 100 cells.
-    """
-```
-
-- Self-contained implementation (no external dependencies)
-- Input: list of bot (id, position, slots) and item (id, position, type) tuples
-- Output: dict mapping bot_id -> list of assigned item IDs
-- Zone penalty integration for 5+ bots
-
-### Priority 3: Temporal BFS (Phase 3.2)
-
-Path planning that accounts for other bots' predicted movement:
-
-```python
-def bfs_temporal(start, goal, blocked_static, moving_obstacles):
-    """BFS avoiding both current AND predicted next positions of other bots.
-
-    Args:
-        moving_obstacles: list of (current_pos, predicted_next_pos) tuples
-    """
-```
-
-- Blocks both current and predicted positions of moving bots
-- Prevents head-on collisions in narrow aisles
-- Falls back to standard BFS if temporal BFS finds no path
+### game_state.py (GameState class)
+- **Caches**: `dist_cache`, `adj_cache`, `blocked_static` (populated in `init_static`)
+- **Distance**: `dist_static(a, b)`, `get_distances_from(source)`
+- **Routing**: `tsp_route()`, `tsp_cost()`, `plan_multi_trip()`
+- **Assignment**: `assign_items_to_bots()` (Hungarian/greedy with last-item priority boost)
+- **Route tables** (T16): `best_pickup`, `best_pair_route`, `best_triple_route`, `get_optimal_route()`
+- **Map info**: `idle_spots`, `corridor_y`, `grid_width`, `grid_height`
+- **Persistent state**: `bot_history`, `delivery_queue`, `bot_tasks`, `last_active_order_id`
 
 ## Constraints
 
@@ -95,7 +44,7 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
 - BFS is O(V) per call — cache aggressively via `dist_cache`
 - Hungarian is O(n^3) — only use for small matrices
 - Map is static within a game — walls and shelves never change
-- Items restock at same position after pickup
+- Items restock at same position after pickup (infinite supply, fixed positions)
 
 ## Testing
 
@@ -103,8 +52,9 @@ def bfs_temporal(start, goal, blocked_static, moving_obstacles):
 python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
 ```
 
+**IMPORTANT**: Always pipe pytest output through `tail`. Never use `-v`.
+
 Add tests for new functions. Verify:
-- Interleaved route is never worse than non-interleaved
-- Hungarian assignment matches or beats greedy on total distance
-- Temporal BFS finds paths that standard BFS misses in collision scenarios
+- New pathfinding functions handle edge cases (unreachable, start==goal)
 - All existing tests still pass
+- Benchmark scores don't regress: `python benchmark.py --quick 2>&1 | tail -15`

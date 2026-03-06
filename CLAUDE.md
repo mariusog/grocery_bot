@@ -1,8 +1,52 @@
 # Grocery Bot
 
+## Project Structure
+
+```
+grocery_bot/                    # Main package
+├── __init__.py                 # Re-exports: GameState, RoundPlanner
+├── constants.py                # Named constants (tuning parameters)
+├── orders.py                   # Order helpers (get_needed_items)
+├── pathfinding.py              # BFS variants, direction helpers
+├── game_state.py               # GameState: caches, TSP, Hungarian, route tables
+├── simulator.py                # GameSimulator + DIFFICULTY_PRESETS
+└── planner/                    # Per-round decision subpackage
+    ├── __init__.py             # Re-exports: RoundPlanner
+    ├── round_planner.py        # RoundPlanner: step-chain orchestration
+    ├── movement.py             # MovementMixin: BFS dispatch, collision, emit
+    ├── assignment.py           # AssignmentMixin: bot-to-item assignment
+    ├── pickup.py               # PickupMixin: active/preview pickup, TSP routes
+    ├── delivery.py             # DeliveryMixin: delivery timing, end-game
+    └── idle.py                 # IdleMixin: dropoff clearing, idle positioning
+
+bot.py                          # Entry point: WebSocket loop, decide_actions()
+benchmark.py                    # CLI benchmark runner
+
+tests/
+├── conftest.py                 # Shared fixtures: make_planner, make_state, etc.
+├── test_simulator.py           # Simulator edge cases and presets
+├── test_regression.py          # Score regression (slow, 20-seed)
+├── integration/                # Cross-module integration tests
+│   ├── test_decision_basic.py
+│   ├── test_decision_preview.py
+│   └── test_multi_bot.py
+├── pathfinding/                # Matches grocery_bot/pathfinding.py
+│   └── test_pathfinding.py
+├── game_state/                 # Matches grocery_bot/game_state.py
+│   ├── test_game_state.py
+│   └── test_game_state_unit.py
+└── planner/                    # Matches grocery_bot/planner/
+    ├── test_round_planner_unit.py
+    ├── test_movement_unit.py
+    ├── test_assignment_unit.py
+    ├── test_pickup_unit.py
+    ├── test_delivery_unit.py
+    └── test_idle_unit.py
+```
+
 ## Multi-Agent Coordination Protocol
 
-When multiple agents run in parallel (via worktrees), they MUST follow this protocol to avoid duplicating or conflicting work.
+When multiple agents run in parallel (via worktrees), they MUST follow this protocol.
 
 ### Before Starting Work
 
@@ -35,11 +79,11 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 
 | Agent | Owned Files | Role |
 |-------|-------------|------|
-| pathfinding-agent | `pathfinding.py`, `game_state.py` | Routing, distance, collision, assignment |
-| strategy-agent | `round_planner.py`, `movement.py`, `assignment.py`, `pickup.py`, `delivery.py`, `idle.py` | Per-round decisions, order management |
-| qa-agent | `tests/`, `simulator.py`, `benchmark.py`, `docs/benchmark_results.md` | Testing, benchmarking, profiling |
+| pathfinding-agent | `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py` | Routing, distance, collision, assignment |
+| strategy-agent | `grocery_bot/planner/` (all files) | Per-round decisions, order management |
+| qa-agent | `tests/`, `grocery_bot/simulator.py`, `benchmark.py`, `docs/` | Testing, benchmarking, profiling |
 
-Shared (read-only for agents): `bot.py`, `docs/CHALLENGE.md`
+Shared (read-only for agents): `bot.py`, `grocery_bot/constants.py`, `docs/CHALLENGE.md`
 
 ## Running Tests
 
@@ -55,6 +99,9 @@ python -m pytest tests/ -q --tb=short -x 2>&1 | tail -40
 
 # Full benchmark across difficulties
 python benchmark.py
+
+# Quick single-seed benchmark
+python benchmark.py --quick
 ```
 
 **IMPORTANT for agents**: Always pipe pytest output through `tail` to avoid flooding your context with hundreds of lines. Use `-q --tb=line` by default, only switch to `--tb=short` when debugging a specific failure. Never use `-v` — it generates excessive output that wastes context memory.
