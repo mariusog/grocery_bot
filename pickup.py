@@ -83,7 +83,7 @@ class PickupMixin:
             d_drop = self.gs.dist_static(cell, self.drop_off)
             round_trip = d + 1 + d_drop
             if round_trip < self.rounds_left:
-                score = d + d_drop if len(self.bots) <= 5 else d
+                score = d + d_drop
                 candidates.append((it, cell, score))
 
         if not candidates:
@@ -242,8 +242,13 @@ class PickupMixin:
         result.sort(key=lambda c: c[2])
         return result
 
-    def _try_preview_prepick(self, bid, bx, by, pos, inv, blocked):
-        if not self.preview or self._spare_slots(inv) <= 0:
+    def _try_preview_prepick(self, bid, bx, by, pos, inv, blocked, force_slots=False):
+        if not self.preview:
+            return False
+        free = 3 - len(inv)
+        if free <= 0:
+            return False
+        if not force_slots and self._spare_slots(inv) <= 0:
             return False
 
         is_preview_bot = (bid in self.preview_bot_ids)
@@ -257,7 +262,8 @@ class PickupMixin:
 
         # Pass 2: walk to distant preview items
         if not is_preview_bot:
-            if self.active_on_shelves > 0:
+            if len(self.bots) < 5 and self.active_on_shelves > 0:
+                # Small teams: don't divert from active work
                 return False
             max_preview_walkers = max(2, len(self.bots) // 2)
             if self._preview_walkers >= max_preview_walkers:

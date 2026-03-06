@@ -310,18 +310,19 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             return
 
         # Step 6: pre-pick preview items
-        if self._try_preview_prepick(bid, bx, by, pos, inv, blocked):
+        # Bots reaching here have no active items to pick (Step 4 failed).
+        # For large teams, allow using all free slots for preview since
+        # active items are covered by other bots.
+        if self._try_preview_prepick(bid, bx, by, pos, inv, blocked,
+                                     force_slots=(len(self.bots) >= 3)):
             return
 
         # Step 7: clear dropoff area when idle
         if self._try_clear_dropoff(bid, bx, by, pos, blocked):
             return
 
-        # Step 7b: idle bot with non-active inventory — deliver to free slots
-        if inv and not has_active and self.active_on_shelves > 0:
-            max_delivering = max(2, len(self.bots) // 3)
-            if self._nonactive_delivering < max_delivering:
-                self._nonactive_delivering += 1
+        # Step 7b: idle bot with non-active inventory — deliver for points
+        if inv and not has_active and len(inv) >= 2:
                 if pos == self.drop_off:
                     self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
                     return

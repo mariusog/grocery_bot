@@ -42,7 +42,7 @@ class AssignmentMixin:
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = 1
+        max_preview = max(1, surplus - 1) if len(self.bots) >= 5 else 1
 
         candidates = []
         for bot in idle_for_active:
