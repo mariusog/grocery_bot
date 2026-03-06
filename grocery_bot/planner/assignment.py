@@ -110,9 +110,16 @@ class AssignmentMixin:
             return
 
         map_width: int = self.full_state["grid"]["width"]
-        num_zones = (
-            max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
-        )
+        # T22: Disable zone penalties for 8+ bots — with many bots and
+        # few items, Hungarian needs pure distance-optimal assignments.
+        # Zone penalties cause sub-optimal pairings when items are
+        # clustered in one area but bots are spread across the map.
+        if len(self.bots) >= 8:
+            num_zones = 1
+        else:
+            num_zones = (
+                max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
+            )
         zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
 
         max_slots = max(s for _, _, s in assignable)
