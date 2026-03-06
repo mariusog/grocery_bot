@@ -1,6 +1,17 @@
 """Idle positioning and dropoff clearing for RoundPlanner."""
 
 from pathfinding import DIRECTIONS, direction_to
+from constants import (
+    DROPOFF_CLEAR_RADIUS,
+    IDLE_BOT_PROXIMITY_FACTOR,
+    IDLE_BOT_PROXIMITY_RADIUS,
+    IDLE_DROPOFF_PENALTY_FACTOR,
+    IDLE_DROPOFF_PENALTY_RADIUS,
+    IDLE_STAY_IMPROVEMENT_THRESHOLD,
+    IDLE_TARGET_DISTANCE_WEIGHT,
+    PREDICTION_TEAM_MIN,
+    SMALL_TEAM_MAX,
+)
 
 
 class IdleMixin:
@@ -10,7 +21,7 @@ class IdleMixin:
         if len(self.bots) <= 1:
             return False
         dist_to_drop = self.gs.dist_static(pos, self.drop_off)
-        if dist_to_drop > 3:
+        if dist_to_drop > DROPOFF_CLEAR_RADIUS:
             return False
         best_away = None
         best_dist = dist_to_drop
@@ -46,7 +57,7 @@ class IdleMixin:
         # (assigned or delivering) to better anticipate where they'll be.
         # For smaller teams, stick with current positions (predictions
         # can hurt when there are few bots and corridors are narrow).
-        use_predictions = len(self.bots) >= 8
+        use_predictions = len(self.bots) >= PREDICTION_TEAM_MIN
         other_bot_positions = []
         for b in self.bots:
             if b["id"] == bid:
@@ -75,7 +86,7 @@ class IdleMixin:
         # Target: use idle_spots for unique spread targeting on Expert
         # (10 bots), fall back to shelf-column targeting for smaller teams
         item_target = None
-        if idle_spots and len(self.bots) >= 8:
+        if idle_spots and len(self.bots) >= PREDICTION_TEAM_MIN:
             # Large teams: assign each bot a unique idle spot for spread
             n_bots = len(self.bots)
             bot_ids = sorted(b["id"] for b in self.bots)
@@ -83,7 +94,7 @@ class IdleMixin:
             spot_idx = (rank * len(idle_spots)) // n_bots
             item_target = idle_spots[spot_idx]
 
-        if item_target is None and len(self.bots) >= 3 and self.items:
+        if item_target is None and len(self.bots) >= SMALL_TEAM_MAX and self.items:
             # Smaller teams or fallback: original shelf-column targeting
             item_positions = [tuple(it["position"]) for it in self.items]
             if item_positions:
@@ -102,17 +113,17 @@ class IdleMixin:
             s = 0.0
             # Penalize being near dropoff
             drop_dist = self.gs.dist_static(p, self.drop_off)
-            if drop_dist <= 3:
-                s += (4 - drop_dist) * 3
+            if drop_dist <= IDLE_DROPOFF_PENALTY_RADIUS:
+                s += (IDLE_DROPOFF_PENALTY_RADIUS + 1 - drop_dist) * IDLE_DROPOFF_PENALTY_FACTOR
             # Penalize being near other bots
             for ob_pos in other_bot_positions:
                 ob_dist = abs(p[0] - ob_pos[0]) + abs(p[1] - ob_pos[1])
-                if ob_dist <= 2:
-                    s += (3 - ob_dist) * 2
+                if ob_dist <= IDLE_BOT_PROXIMITY_RADIUS:
+                    s += (IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist) * IDLE_BOT_PROXIMITY_FACTOR
             # Reward being near target
             if item_target:
                 item_dist = abs(p[0] - item_target[0]) + abs(p[1] - item_target[1])
-                s += item_dist * 0.5
+                s += item_dist * IDLE_TARGET_DISTANCE_WEIGHT
             return s
 
         stay_score = _score(pos)
@@ -133,7 +144,7 @@ class IdleMixin:
             # only move if improvement is significant (>= 0.5 threshold).
             # This reduces oscillation from marginal score differences
             # when the bot is already well-positioned.
-            if at_idle_spot and (stay_score - best_score) < 0.5:
+            if at_idle_spot and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD:
                 return False
             self._emit(
                 bid, bx, by,

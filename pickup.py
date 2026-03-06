@@ -3,6 +3,13 @@
 from itertools import permutations
 
 from pathfinding import DIRECTIONS
+from constants import (
+    CASCADE_DETOUR_STEPS,
+    CLUSTER_DISTANCE_WEIGHT,
+    MAX_DETOUR_STEPS,
+    MAX_INVENTORY,
+    MEDIUM_TEAM_MIN,
+)
 
 
 class PickupMixin:
@@ -11,7 +18,7 @@ class PickupMixin:
     def _try_active_pickup(self, bid, bx, by, pos, inv, blocked):
         """Pick up adjacent active items, or navigate via TSP route."""
         # Adjacent pickup via position lookup (zero cost - always take it)
-        if len(inv) < 3:
+        if len(inv) < MAX_INVENTORY:
             for dx, dy in DIRECTIONS:
                 for it in self.items_at_pos.get((bx + dx, by + dy), []):
                     if not self._is_available(it):
@@ -22,7 +29,7 @@ class PickupMixin:
                     self._emit(bid, bx, by, self._pickup(bid, it))
                     return True
 
-        if len(inv) >= 3:
+        if len(inv) >= MAX_INVENTORY:
             return False
 
         # Pre-assigned route (multi-bot optimization)
@@ -93,7 +100,7 @@ class PickupMixin:
         if len(candidates) > 1:
             candidates = self._cluster_select(candidates)
 
-        slots = min(3 - len(inv), self.max_claim)
+        slots = min(MAX_INVENTORY - len(inv), self.max_claim)
 
         selected = []
         selected_types = {}
@@ -112,7 +119,7 @@ class PickupMixin:
 
     def _build_single_bot_route(self, pos, inv):
         """Optimized route for single bot: prefer closest shelves to dropoff."""
-        slots = 3 - len(inv)
+        slots = MAX_INVENTORY - len(inv)
         if slots <= 0:
             return None
 
@@ -235,7 +242,7 @@ class PickupMixin:
                 for entry in entries:
                     _, cell, d = entry
                     cluster_d = abs(cell[0] - cx) + abs(cell[1] - cy)
-                    scored.append((*entry, d + 0.3 * cluster_d))
+                    scored.append((*entry, d + CLUSTER_DISTANCE_WEIGHT * cluster_d))
                 scored.sort(key=lambda e: e[3])
                 result.extend((it, cell, d) for it, cell, d, _ in scored)
 
@@ -245,7 +252,7 @@ class PickupMixin:
     def _try_preview_prepick(self, bid, bx, by, pos, inv, blocked, force_slots=False):
         if not self.preview:
             return False
-        free = 3 - len(inv)
+        free = MAX_INVENTORY - len(inv)
         if free <= 0:
             return False
         if not force_slots and self._spare_slots(inv) <= 0:
@@ -262,7 +269,7 @@ class PickupMixin:
 
         # Pass 2: walk to distant preview items
         if not is_preview_bot:
-            if len(self.bots) < 5 and self.active_on_shelves > 0:
+            if len(self.bots) < MEDIUM_TEAM_MIN and self.active_on_shelves > 0:
                 # Small teams: don't divert from active work
                 return False
             max_preview_walkers = max(2, len(self.bots) // 2)
@@ -289,7 +296,7 @@ class PickupMixin:
             return self._emit_move(bid, bx, by, pos, target, blocked)
         return False
 
-    def _find_detour_item(self, pos, needed, max_detour=3, prefer_cascade=False):
+    def _find_detour_item(self, pos, needed, max_detour=MAX_DETOUR_STEPS, prefer_cascade=False):
         """Find item worth detouring for on the way to drop-off."""
         direct = self.gs.dist_static(pos, self.drop_off)
         best_item = best_cell = None
@@ -310,7 +317,7 @@ class PickupMixin:
                 best_cost = detour
                 best_item, best_cell = it, cell
 
-        effective_max = (6 if best_cascade else max_detour) if prefer_cascade else max_detour
+        effective_max = (CASCADE_DETOUR_STEPS if best_cascade else max_detour) if prefer_cascade else max_detour
         if best_item and best_cost <= effective_max:
             return best_item, best_cell
         return None, None

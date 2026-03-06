@@ -37,7 +37,8 @@ Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap
 
 ### T14: Corridor-Aware Idle Positioning
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: done
+- **Result**: For 8+ bots (Expert), idle bots now target precomputed walkable idle spots (unique per bot via rank-based spread) instead of unreachable shelf cells, and use predicted positions for active bots in crowd avoidance. Stay-still bias at idle spots reduces oscillation. Smaller teams keep original shelf targeting. Expert 50.4→56.5 (+6.1), all others unchanged. All 137 tests pass.
 - **Priority**: 3
 - **Files**: `idle.py`, `game_state.py`
 - **Description**: Infrastructure already added in game_state.py (`idle_spots`, `corridor_y`). Currently idle bots target item shelf positions (blocked cells they can never reach) using `bid % len(xs)`, causing oscillation near shelves. Change to:

@@ -1,6 +1,7 @@
 """Movement, collision avoidance, and action emission for RoundPlanner."""
 
 from pathfinding import DIRECTIONS, bfs, bfs_temporal, direction_to, _predict_pos
+from constants import BLOCKING_RADIUS_LARGE_TEAM, MAX_INVENTORY, MEDIUM_TEAM_MIN
 
 
 class MovementMixin:
@@ -50,7 +51,7 @@ class MovementMixin:
             inv = b["inventory"]
 
             # Delivering bots with full inventory or no items left to pick
-            if has_active and (len(inv) >= 3 or self.active_on_shelves == 0):
+            if has_active and (len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0):
                 nxt = bfs(pos, self.drop_off, self.gs.blocked_static)
                 if nxt:
                     self.predicted[bid] = nxt
@@ -147,7 +148,7 @@ class MovementMixin:
     def _build_blocked(self, bid):
         """Build blocked set for a specific bot (static + nearby other bots)."""
         pos = tuple(self.bots_by_id[bid]["position"])
-        max_dist = 6 if len(self.bots) >= 5 else float("inf")
+        max_dist = BLOCKING_RADIUS_LARGE_TEAM if len(self.bots) >= MEDIUM_TEAM_MIN else float("inf")
         other = set()
         for b in self.bots:
             if b["id"] == bid:

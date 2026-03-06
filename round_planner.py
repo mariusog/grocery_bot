@@ -9,6 +9,19 @@ from assignment import AssignmentMixin
 from pickup import PickupMixin
 from delivery import DeliveryMixin
 from idle import IdleMixin
+from constants import (
+    BOT_HISTORY_MAXLEN,
+    DELIVER_WHEN_CLOSE_DIST,
+    ENDGAME_ROUNDS_LEFT,
+    LARGE_TEAM_MIN,
+    MAX_INVENTORY,
+    MAX_NONACTIVE_DELIVERERS,
+    MEDIUM_TEAM_MIN,
+    MIN_INV_FOR_NONACTIVE_DELIVERY,
+    ORDER_NEARLY_COMPLETE_MAX,
+    PICKUP_FAIL_BLACKLIST_THRESHOLD,
+    SMALL_TEAM_MAX,
+)
 
 
 class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, IdleMixin):
@@ -26,7 +39,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
         self.drop_off = tuple(state["drop_off"])
         self.current_round = state["round"]
         self.rounds_left = state["max_rounds"] - state["round"]
-        self.endgame = self.rounds_left <= 30
+        self.endgame = self.rounds_left <= ENDGAME_ROUNDS_LEFT
 
         # Precomputed lookups
         self.bots_by_id = {b["id"]: b for b in self.bots}
@@ -59,7 +72,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             bid = b["id"]
             pos = tuple(b["position"])
             if bid not in self.gs.bot_history:
-                self.gs.bot_history[bid] = deque(maxlen=3)
+                self.gs.bot_history[bid] = deque(maxlen=BOT_HISTORY_MAXLEN)
             self.gs.bot_history[bid].append(pos)
 
         self._detect_pickup_failures()
@@ -119,7 +132,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
                 gs.pickup_fail_count[last_item_id] = (
                     gs.pickup_fail_count.get(last_item_id, 0) + 1
                 )
-                if gs.pickup_fail_count[last_item_id] >= 3:
+                if gs.pickup_fail_count[last_item_id] >= PICKUP_FAIL_BLACKLIST_THRESHOLD:
                     gs.blacklisted_items.add(last_item_id)
             else:
                 gs.pickup_fail_count.pop(last_item_id, None)
@@ -163,7 +176,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             if c - carried_preview.get(t, 0) > 0
         }
         self.active_types = set(self.active_needed.keys())
-        self.order_nearly_complete = 0 < self.active_on_shelves <= 2
+        self.order_nearly_complete = 0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
 
         idle_bots = sum(
             1 for bot in self.bots
@@ -171,7 +184,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
         )
         total = self.active_on_shelves
         self.max_claim = (
-            max(1, (total + idle_bots - 1) // idle_bots) if idle_bots > 0 else 3
+            max(1, (total + idle_bots - 1) // idle_bots) if idle_bots > 0 else MAX_INVENTORY
         )
 
         self.preview_bot_id = None
@@ -194,7 +207,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
 
         # Phase 2.2: dedicated preview bot skips active items entirely
         if bid in self.preview_bot_ids and not has_active:
-            if len(inv) < 3:
+            if len(inv) < MAX_INVENTORY:
                 for dx, dy in DIRECTIONS:
                     for it in self.items_at_pos.get((bx + dx, by + dy), []):
                         if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
@@ -212,14 +225,14 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
 
         # Phase 4.4: deliver partial items if it COMPLETES the order (+5 bonus)
         if (has_active and self.active_on_shelves > 0
-                and len(inv) < 3
+                and len(inv) < MAX_INVENTORY
                 and self._bot_delivery_completes_order(bot)):
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return
 
         # Step 2: all active items picked up -> rush to deliver
         if has_active and self.active_on_shelves == 0:
-            if self.preview and len(inv) < 3:
+            if self.preview and len(inv) < MAX_INVENTORY:
                 adj = self._find_adjacent_needed(
                     bx, by, self.net_preview, prefer_cascade=True
                 )
@@ -249,7 +262,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
                 return
 
         # Step 3b: inventory full -> deliver
-        if has_active and len(inv) >= 3:
+        if has_active and len(inv) >= MAX_INVENTORY:
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return
 
@@ -287,7 +300,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
         if has_active:
             d_to_drop = self.gs.dist_static(pos, self.drop_off)
             if (self.active_on_shelves > 0 and len(inv) >= 2
-                    and d_to_drop <= 3):
+                    and d_to_drop <= DELIVER_WHEN_CLOSE_DIST):
                 self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
                 return
 
@@ -302,8 +315,8 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             return
 
         # Step 5b: bot has non-active items clogging inventory
-        if (not has_active and len(inv) >= 2 and self.active_on_shelves > 0
-                and len(self.bots) <= 3):
+        if (not has_active and len(inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY and self.active_on_shelves > 0
+                and len(self.bots) <= SMALL_TEAM_MAX):
             if pos == self.drop_off:
                 self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
                 return
@@ -314,10 +327,10 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
         # Bots reaching here have no active items to pick (Step 4 failed).
         # For 6+ bots: only force all slots when active items are done (avoid clog).
         # For smaller teams: always allow all slots (fewer bots = less clog risk).
-        if len(self.bots) >= 6:
+        if len(self.bots) >= LARGE_TEAM_MIN:
             force = self.active_on_shelves == 0
         else:
-            force = len(self.bots) >= 3
+            force = len(self.bots) >= SMALL_TEAM_MAX
         if self._try_preview_prepick(bid, bx, by, pos, inv, blocked,
                                      force_slots=force):
             return
@@ -327,12 +340,12 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             return
 
         # Step 7b: idle bot with non-active inventory — deliver for points
-        if inv and not has_active and len(inv) >= 2:
+        if inv and not has_active and len(inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY:
                 if pos == self.drop_off:
                     self._emit(bid, bx, by, {"bot": bid, "action": "drop_off"})
                     return
                 # Large teams: limit non-active deliverers to avoid dropoff congestion
-                if len(self.bots) >= 5 and self._nonactive_delivering >= 1:
+                if len(self.bots) >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS:
                     pass  # Fall through to idle positioning
                 else:
                     self._nonactive_delivering += 1
@@ -386,7 +399,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
     # ------------------------------------------------------------------
 
     def _spare_slots(self, inv):
-        return (3 - len(inv)) - self.active_on_shelves
+        return (MAX_INVENTORY - len(inv)) - self.active_on_shelves
 
     def _claim(self, item, needed_dict):
         self.claimed.add(item["id"])

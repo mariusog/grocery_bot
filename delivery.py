@@ -1,5 +1,7 @@
 """Delivery decision logic and end-game helpers for RoundPlanner."""
 
+from constants import MAX_INVENTORY
+
 
 class DeliveryMixin:
     """Mixin providing delivery timing, end-game estimation, and item maximization."""
@@ -23,7 +25,7 @@ class DeliveryMixin:
             total_dist += d + 1
             current = cell
             picked += 1
-            if picked + len(inv) >= 3:
+            if picked + len(inv) >= MAX_INVENTORY:
                 total_dist += self.gs.dist_static(current, self.drop_off) + 1
                 current = self.drop_off
                 picked = 0
@@ -36,7 +38,7 @@ class DeliveryMixin:
         if not inv or self.active_on_shelves == 0:
             return False
 
-        slots_left = 3 - len(inv)
+        slots_left = MAX_INVENTORY - len(inv)
 
         cost_deliver = self.gs.dist_static(pos, self.drop_off) + 1
 
@@ -57,7 +59,7 @@ class DeliveryMixin:
             cost_remaining += self.gs.dist_static(cur, cell) + 1
             cur = cell
             picked += 1
-            if picked >= 3:
+            if picked >= MAX_INVENTORY:
                 cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
                 cur = self.drop_off
                 picked = 0
@@ -84,7 +86,7 @@ class DeliveryMixin:
             cost_fill += self.gs.dist_static(cur, cell) + 1
             cur = cell
             picked += 1
-            if picked >= 3:
+            if picked >= MAX_INVENTORY:
                 cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
                 cur = self.drop_off
                 picked = 0
@@ -102,7 +104,7 @@ class DeliveryMixin:
                 d_to_item = self.gs.dist_static(pos, nearest)
                 d_item_to_drop = self.gs.dist_static(nearest, self.drop_off)
                 total_with_pickup = d_to_item + 1 + d_item_to_drop + 1
-                if total_with_pickup < self.rounds_left and len(inv) < 3:
+                if total_with_pickup < self.rounds_left and len(inv) < MAX_INVENTORY:
                     return False
 
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)

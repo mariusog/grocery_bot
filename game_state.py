@@ -3,6 +3,12 @@
 from itertools import combinations, permutations
 
 from pathfinding import bfs_all, find_adjacent_positions
+from constants import (
+    CORRIDOR_HEIGHT_THRESHOLD,
+    HUNGARIAN_MAX_PAIRS,
+    MAX_INVENTORY,
+    ZONE_CROSS_PENALTY,
+)
 
 
 class GameState:
@@ -62,7 +68,7 @@ class GameState:
         # Find middle corridor rows
         mid = height // 2
         corridor_rows = [mid]
-        if height > 10:
+        if height > CORRIDOR_HEIGHT_THRESHOLD:
             corridor_rows.append(mid - 1)
         self.corridor_y = [y for y in corridor_rows if 1 <= y < height - 1]
 
@@ -154,7 +160,7 @@ class GameState:
         cost += self.dist_static(prev, drop_off)
         return cost
 
-    def plan_multi_trip(self, bot_pos, all_candidates, drop_off, capacity=3):
+    def plan_multi_trip(self, bot_pos, all_candidates, drop_off, capacity=MAX_INVENTORY):
         """Find optimal split into trip1/trip2 for large orders."""
         n = len(all_candidates)
         if n <= capacity:
@@ -182,7 +188,7 @@ class GameState:
     # Phase 1.3: Interleaved Pickup-Delivery
     # ------------------------------------------------------------------
 
-    def plan_interleaved_route(self, bot_pos, item_targets, drop_off, capacity=3):
+    def plan_interleaved_route(self, bot_pos, item_targets, drop_off, capacity=MAX_INVENTORY):
         """Compare full-pickup-then-deliver vs deliver-when-passing-dropoff.
 
         Returns list of (action_type, target) tuples:
@@ -276,14 +282,14 @@ class GameState:
                 _, d = self.find_best_item_target(bot_pos, it)
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
-                    d += abs(bot_zone - item_zone) * 3
+                    d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
                 row.append(d)
             cost_matrix.append(row)
 
         # Use Hungarian for small matrices, greedy for large
         n_bots = len(assignable_bots)
         n_items = len(candidate_items)
-        if n_bots * n_items <= 100:
+        if n_bots * n_items <= HUNGARIAN_MAX_PAIRS:
             pairs = _hungarian_solve(cost_matrix)
         else:
             pairs = []
@@ -323,7 +329,7 @@ class GameState:
         n_bots = len(bot_positions)
         n_items = len(item_positions)
 
-        if n_bots * n_items > 100:
+        if n_bots * n_items > HUNGARIAN_MAX_PAIRS:
             return _greedy_assign(bot_positions, item_positions, dist_fn)
 
         cost_matrix = []

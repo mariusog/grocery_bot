@@ -1,5 +1,7 @@
 """Bot-to-item assignment logic for RoundPlanner."""
 
+from constants import MAX_INVENTORY, MEDIUM_TEAM_MIN, ZONE_CROSS_PENALTY
+
 
 class AssignmentMixin:
     """Mixin providing bot assignment, preview bot selection, and urgency."""
@@ -7,7 +9,7 @@ class AssignmentMixin:
     def _is_delivering(self, bot):
         """True if bot is busy delivering (shouldn't count as idle)."""
         has_ai = self.bot_has_active[bot["id"]]
-        if has_ai and (len(bot["inventory"]) >= 3 or self.active_on_shelves == 0):
+        if has_ai and (len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0):
             return True
         if has_ai and tuple(bot["position"]) == self.drop_off:
             return True
@@ -42,13 +44,13 @@ class AssignmentMixin:
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = max(1, surplus - 1) if len(self.bots) >= 5 else 1
+        max_preview = max(1, surplus - 1) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
 
         candidates = []
         for bot in idle_for_active:
             if self.bot_has_active[bot["id"]]:
                 continue
-            if len(bot["inventory"]) >= 3:
+            if len(bot["inventory"]) >= MAX_INVENTORY:
                 continue
             bx, by = bot["position"]
             d = abs(bx - cx) + abs(by - cy)
@@ -96,7 +98,7 @@ class AssignmentMixin:
         for b in self.bots:
             if self._is_delivering(b):
                 continue
-            slots = min(3 - len(b["inventory"]), self.max_claim)
+            slots = min(MAX_INVENTORY - len(b["inventory"]), self.max_claim)
             if slots > 0:
                 assignable.append((b["id"], tuple(b["position"]), slots))
 
@@ -104,7 +106,7 @@ class AssignmentMixin:
             return
 
         map_width = self._full_state["grid"]["width"]
-        num_zones = max(1, len(assignable) // 2) if len(self.bots) >= 5 else 1
+        num_zones = max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
         zone_width = (map_width / num_zones) if num_zones > 1 else None
 
         max_slots = max(s for _, _, s in assignable)
@@ -128,7 +130,7 @@ class AssignmentMixin:
                 _, d = self.gs.find_best_item_target(bot_pos, it)
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
-                    d += abs(bot_zone - item_zone) * 3
+                    d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
                 pairs.append((d, bi, ii))
         pairs.sort()
 
@@ -217,7 +219,7 @@ class AssignmentMixin:
     def _bot_urgency(self, b):
         has_ai = self.bot_has_active[b["id"]]
         n = len(b["inventory"])
-        if has_ai and n >= 3:
+        if has_ai and n >= MAX_INVENTORY:
             return 0
         if has_ai and self.active_on_shelves == 0:
             return 1
