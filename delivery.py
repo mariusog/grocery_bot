@@ -1,0 +1,111 @@
+"""Delivery decision logic and end-game helpers for RoundPlanner."""
+
+
+class DeliveryMixin:
+    """Mixin providing delivery timing, end-game estimation, and item maximization."""
+
+    def _estimate_rounds_to_complete(self, pos, inv):
+        """Estimate rounds needed to pick up all remaining active items and deliver."""
+        remaining = []
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, d = self.gs.find_best_item_target(pos, it)
+            if cell and d < float("inf"):
+                remaining.append((it, cell, d))
+        if not remaining:
+            return self.gs.dist_static(pos, self.drop_off) + 1
+
+        remaining.sort(key=lambda c: c[2])
+        total_dist = 0
+        current = pos
+        picked = 0
+        for it, cell, _ in remaining:
+            d = self.gs.dist_static(current, cell)
+            total_dist += d + 1
+            current = cell
+            picked += 1
+            if picked + len(inv) >= 3:
+                total_dist += self.gs.dist_static(current, self.drop_off) + 1
+                current = self.drop_off
+                picked = 0
+        if picked > 0 or inv:
+            total_dist += self.gs.dist_static(current, self.drop_off) + 1
+        return total_dist
+
+    def _should_deliver_early(self, pos, inv):
+        """Return True if delivering now and starting fresh is cheaper than filling up."""
+        if not inv or self.active_on_shelves == 0:
+            return False
+
+        slots_left = 3 - len(inv)
+
+        cost_deliver = self.gs.dist_static(pos, self.drop_off) + 1
+
+        remaining = []
+        for it, _ in self._iter_needed_items(self.net_active):
+            cell, d_from_drop = self.gs.find_best_item_target(self.drop_off, it)
+            if cell:
+                remaining.append((it, cell, d_from_drop))
+
+        if not remaining:
+            return False
+
+        remaining.sort(key=lambda c: c[2])
+        cost_remaining = 0
+        cur = self.drop_off
+        picked = 0
+        for _, cell, _ in remaining:
+            cost_remaining += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+            picked += 1
+            if picked >= 3:
+                cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
+                cur = self.drop_off
+                picked = 0
+        if picked > 0:
+            cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
+
+        total_deliver_now = cost_deliver + cost_remaining
+
+        fill_items = remaining[:slots_left]
+        if not fill_items:
+            return False
+
+        cost_fill = 0
+        cur = pos
+        for _, cell, _ in fill_items:
+            cost_fill += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+        cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+
+        leftover = remaining[slots_left:]
+        cur = self.drop_off
+        picked = 0
+        for _, cell, _ in leftover:
+            cost_fill += self.gs.dist_static(cur, cell) + 1
+            cur = cell
+            picked += 1
+            if picked >= 3:
+                cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+                cur = self.drop_off
+                picked = 0
+        if picked > 0:
+            cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+
+        return total_deliver_now < cost_fill - 2
+
+    def _try_maximize_items(self, bid, bx, by, pos, inv, blocked):
+        """End-game: maximize individual item deliveries when order can't complete."""
+        has_active = self.bot_has_active[bid]
+        if has_active and len(inv) > 0:
+            nearest = self._find_nearest_active_item_pos(pos)
+            if nearest:
+                d_to_item = self.gs.dist_static(pos, nearest)
+                d_item_to_drop = self.gs.dist_static(nearest, self.drop_off)
+                total_with_pickup = d_to_item + 1 + d_item_to_drop + 1
+                if total_with_pickup < self.rounds_left and len(inv) < 3:
+                    return False
+
+            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+            return True
+
+        return False
