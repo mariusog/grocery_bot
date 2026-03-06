@@ -10,8 +10,10 @@ Status: `open` | `in-progress` | `done` | `blocked`
 |------------|------|--------------------|------------|----------------------|
 | Easy       | 1    | 152.6              | 133        | ~102                 |
 | Medium     | 3    | 112.7              | 110        | ~236                 |
-| Hard       | 5    | 83.1               | 70         | ~286                 |
-| Expert     | 10   | 50.4               | 46         | ~467                 |
+| Hard       | 5    | 83.4               | 70         | ~286                 |
+| Expert     | 10   | 56.5               | 46         | ~467                 |
+
+Note: Hard orders corrected to (3, 5) matching challenge spec (was incorrectly (4, 6)).
 
 Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap is NOT from pathfinding bugs — bots move but coordinate terribly. 20% of Expert bot-rounds are wasted on oscillation. Max delivery gap is 47 rounds.
 

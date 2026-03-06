@@ -14,10 +14,10 @@ class TestScoreRegression:
     """Regression tests to prevent score degradation.
 
     Thresholds are set conservatively below current benchmarks (March 2026):
-      Easy:   avg=127.8, min=121
-      Medium: avg=110.3, min=27
-      Hard:   avg=123.0, min=97
-      Expert: avg=115.8, min=90
+      Easy:   avg~153, min~140  (1 bot)
+      Medium: avg~113, min~84   (3 bots)
+      Hard:   avg~83,  min~63   (5 bots, orders 3-5)
+      Expert: avg~57,  min~36   (10 bots)
     """
 
     # --- helpers ---

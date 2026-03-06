@@ -41,7 +41,7 @@ DIFFICULTY_PRESETS = {
         "width": 22,
         "height": 14,
         "num_item_types": 12,
-        "items_per_order": (4, 6),
+        "items_per_order": (3, 5),
         "max_rounds": 300,
     },
     "Expert": {
