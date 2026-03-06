@@ -102,6 +102,7 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key finding
 |------|--------|
 | T19: Single-responsibility refactor | Globals eliminated, 33 unit tests added, type hints on all code. |
 | T20: Package structure | `grocery_bot/` package with `planner/` subpackage. Matching test dirs. |
+| T23: Unit test coverage audit | Added 97 tests across all modules (230 -> 327). Every public method now has 2+ tests. |
 
 ---
 

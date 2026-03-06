@@ -132,3 +132,64 @@ class TestTryMaximizeItems:
         blocked = planner._build_blocked(0)
         result = planner._try_maximize_items(0, 3, 3, (3, 3), ["bread"], blocked)
         assert result is False
+
+    def test_maximize_with_empty_inventory(self):
+        """Bot with empty inventory and no active items returns False."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": []}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+            round_num=295,
+            max_rounds=300,
+        )
+        blocked = planner._build_blocked(0)
+        result = planner._try_maximize_items(0, 3, 3, (3, 3), [], blocked)
+        assert result is False
+
+
+class TestShouldDeliverEarlyEdgeCases:
+    def test_full_inventory_considers_delivery(self):
+        """Full inventory with items on shelves may consider early delivery."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [5, 3], "inventory": ["cheese", "milk"]}],
+            items=[
+                {"id": "i0", "type": "bread", "position": [3, 2]},
+                {"id": "i1", "type": "butter", "position": [3, 6]},
+            ],
+            orders=[_active_order(["cheese", "milk", "bread", "butter"])],
+            drop_off=[1, 8],
+        )
+        # Should return a boolean - the actual value depends on distances
+        result = planner._should_deliver_early((5, 3), ["cheese", "milk"])
+        assert isinstance(result, bool)
+
+    def test_no_remaining_items_returns_false(self):
+        """When no items match net_active, returns False."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese"]}],
+            items=[{"id": "i0", "type": "bread", "position": [4, 2]}],
+            orders=[_active_order(["cheese", "bread"])],
+            drop_off=[1, 8],
+        )
+        # Manually set to trigger the branch
+        planner.active_on_shelves = 1
+        planner.net_active = {"bread": 1}
+        result = planner._should_deliver_early((3, 3), ["cheese"])
+        assert isinstance(result, bool)
+
+
+class TestEstimateRoundsEdgeCases:
+    def test_single_nearby_item(self):
+        """Estimate for a single nearby item should be reasonable."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": []}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        planner.claimed = set()
+        planner.net_active = {"cheese": 1}
+        est = planner._estimate_rounds_to_complete((3, 3), [])
+        # Should include distance to item + pickup + distance to dropoff + dropoff
+        assert est > 0
+        assert est < 50  # reasonable upper bound

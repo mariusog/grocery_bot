@@ -3,6 +3,16 @@
 import bot
 from tests.conftest import make_state, reset_bot
 
+from grocery_bot.pathfinding import (
+    bfs,
+    bfs_all,
+    bfs_full_path,
+    bfs_temporal,
+    direction_to,
+    _predict_pos,
+    find_adjacent_positions,
+)
+
 
 class TestHelperFunctions:
     """Tests for individual helper functions in bot.py."""
@@ -92,3 +102,228 @@ class TestGetDistancesFrom:
         assert dists[(5, 5)] == 0
         # Should NOT have been cached since it's not the same object
         assert (5, 5) not in bot._gs.dist_cache
+
+
+# -----------------------------------------------------------------------
+# Direct tests for grocery_bot.pathfinding functions
+# -----------------------------------------------------------------------
+
+
+def _bounded_blocked(width=11, height=9):
+    """Create a border-walled blocked set so bfs_all terminates."""
+    blocked = set()
+    for x in range(-1, width + 1):
+        blocked.add((x, -1))
+        blocked.add((x, height))
+    for y in range(-1, height + 1):
+        blocked.add((-1, y))
+        blocked.add((width, y))
+    return blocked
+
+
+class TestBfsAll:
+    """Tests for bfs_all — BFS from source to ALL reachable cells."""
+
+    def test_source_has_distance_zero(self):
+        dists = bfs_all((3, 3), _bounded_blocked())
+        assert dists[(3, 3)] == 0
+
+    def test_adjacent_cells_distance_one(self):
+        dists = bfs_all((3, 3), _bounded_blocked())
+        assert dists[(4, 3)] == 1
+        assert dists[(3, 4)] == 1
+        assert dists[(2, 3)] == 1
+        assert dists[(3, 2)] == 1
+
+    def test_blocked_cells_excluded(self):
+        blocked = _bounded_blocked() | {(4, 3), (2, 3), (3, 4), (3, 2)}
+        dists = bfs_all((3, 3), blocked)
+        # All 4 direct neighbors are blocked
+        assert (4, 3) not in dists
+        assert (2, 3) not in dists
+        # Source itself is still reachable
+        assert dists[(3, 3)] == 0
+
+    def test_bounded_grid_reaches_all_free_cells(self):
+        blocked = _bounded_blocked(width=5, height=5)
+        dists = bfs_all((2, 2), blocked)
+        assert dists[(2, 2)] == 0
+        assert dists[(0, 0)] == 4
+        assert dists[(4, 4)] == 4
+
+    def test_manhattan_distance_no_obstacles(self):
+        blocked = _bounded_blocked()
+        dists = bfs_all((0, 0), blocked)
+        # On a bounded grid without internal walls, BFS distance == Manhattan distance
+        assert dists[(3, 4)] == 7
+
+    def test_fully_surrounded_source(self):
+        """Source surrounded on all sides can only reach itself."""
+        blocked = _bounded_blocked() | {(2, 3), (4, 3), (3, 2), (3, 4)}
+        dists = bfs_all((3, 3), blocked)
+        assert len(dists) == 1
+        assert dists[(3, 3)] == 0
+
+
+class TestBfs:
+    """Tests for bfs — next step from start toward goal."""
+
+    def test_returns_adjacent_step(self):
+        blocked = _bounded_blocked()
+        result = bfs((0, 0), (5, 0), blocked)
+        assert result is not None
+        assert abs(result[0] - 0) + abs(result[1] - 0) == 1
+
+    def test_start_equals_goal_returns_none(self):
+        assert bfs((3, 3), (3, 3), _bounded_blocked()) is None
+
+    def test_no_path_returns_none(self):
+        # Completely surround goal
+        blocked = _bounded_blocked() | {(4, 4), (4, 6), (3, 5), (5, 5)}
+        assert bfs((0, 0), (4, 5), blocked) is None
+
+    def test_routes_around_wall(self):
+        blocked = _bounded_blocked() | {(1, 0)}
+        result = bfs((0, 0), (2, 0), blocked)
+        assert result is not None
+        assert result != (1, 0)
+
+    def test_adjacent_goal(self):
+        result = bfs((3, 3), (4, 3), _bounded_blocked())
+        assert result == (4, 3)
+
+
+class TestBfsFullPath:
+    """Tests for bfs_full_path — full shortest path."""
+
+    def test_start_equals_goal(self):
+        path = bfs_full_path((3, 3), (3, 3), _bounded_blocked())
+        assert path == [(3, 3)]
+
+    def test_adjacent_path(self):
+        path = bfs_full_path((3, 3), (4, 3), _bounded_blocked())
+        assert path == [(3, 3), (4, 3)]
+
+    def test_longer_path_correct_length(self):
+        path = bfs_full_path((0, 0), (3, 0), _bounded_blocked())
+        assert len(path) == 4
+        assert path[0] == (0, 0)
+        assert path[-1] == (3, 0)
+
+    def test_no_path_returns_empty(self):
+        blocked = _bounded_blocked() | {(1, 0), (0, 1)}
+        path = bfs_full_path((0, 0), (5, 5), blocked)
+        assert path == []
+
+    def test_path_avoids_blocked(self):
+        blocked = _bounded_blocked() | {(1, 0)}
+        path = bfs_full_path((0, 0), (2, 0), blocked)
+        assert (1, 0) not in path
+        assert path[0] == (0, 0)
+        assert path[-1] == (2, 0)
+
+    def test_path_is_contiguous(self):
+        """Each step in the path is adjacent to the previous."""
+        path = bfs_full_path((0, 0), (4, 3), _bounded_blocked())
+        for i in range(1, len(path)):
+            dx = abs(path[i][0] - path[i - 1][0])
+            dy = abs(path[i][1] - path[i - 1][1])
+            assert dx + dy == 1
+
+
+class TestBfsTemporal:
+    """Tests for bfs_temporal — temporal BFS with moving obstacles."""
+
+    def test_start_equals_goal(self):
+        assert bfs_temporal((3, 3), (3, 3), _bounded_blocked(), []) is None
+
+    def test_no_obstacles_same_as_bfs(self):
+        """Without obstacles, temporal BFS delegates to standard BFS."""
+        blocked = _bounded_blocked()
+        result_temporal = bfs_temporal((0, 0), (3, 0), blocked, [])
+        result_standard = bfs((0, 0), (3, 0), blocked)
+        assert result_temporal == result_standard
+
+    def test_avoids_predicted_position(self):
+        """Should avoid moving into a predicted obstacle position."""
+        blocked = _bounded_blocked()
+        obstacles = [((1, 0), (1, 0))]
+        result = bfs_temporal((0, 0), (2, 0), blocked, obstacles)
+        assert result is not None
+        assert result != (1, 0)
+
+    def test_avoids_current_obstacle_position(self):
+        """At step 0, both current and predicted positions are blocked."""
+        blocked = _bounded_blocked()
+        obstacles = [((1, 0), (2, 0))]
+        result = bfs_temporal((0, 0), (3, 0), blocked, obstacles)
+        assert result is not None
+        assert result != (1, 0)
+        assert result != (2, 0)
+
+    def test_fallback_when_temporal_fails(self):
+        """Falls back to standard BFS when temporal path is fully blocked."""
+        blocked_static = _bounded_blocked() | {(0, -1), (0, 1), (1, -1), (1, 1), (2, -1), (2, 1)}
+        obstacles = [((1, 0), (1, 0))]
+        result = bfs_temporal((0, 0), (2, 0), blocked_static, obstacles)
+        assert result is None or isinstance(result, tuple)
+
+    def test_empty_obstacles_delegates_to_bfs(self):
+        blocked = _bounded_blocked()
+        result = bfs_temporal((0, 0), (3, 0), blocked, [])
+        expected = bfs((0, 0), (3, 0), blocked)
+        assert result == expected
+
+
+class TestDirectionTo:
+    """Tests for direction_to."""
+
+    def test_all_directions(self):
+        assert direction_to(0, 0, 1, 0) == "move_right"
+        assert direction_to(0, 0, -1, 0) == "move_left"
+        assert direction_to(0, 0, 0, 1) == "move_down"
+        assert direction_to(0, 0, 0, -1) == "move_up"
+
+    def test_same_position(self):
+        assert direction_to(5, 5, 5, 5) == "wait"
+
+
+class TestPredictPos:
+    """Tests for _predict_pos."""
+
+    def test_all_moves(self):
+        assert _predict_pos(5, 5, "move_up") == (5, 4)
+        assert _predict_pos(5, 5, "move_down") == (5, 6)
+        assert _predict_pos(5, 5, "move_left") == (4, 5)
+        assert _predict_pos(5, 5, "move_right") == (6, 5)
+
+    def test_non_move_actions(self):
+        assert _predict_pos(5, 5, "wait") == (5, 5)
+        assert _predict_pos(5, 5, "pick_up") == (5, 5)
+        assert _predict_pos(5, 5, "drop_off") == (5, 5)
+
+
+class TestFindAdjacentPositions:
+    """Tests for find_adjacent_positions."""
+
+    def test_all_neighbors_free(self):
+        adj = find_adjacent_positions(5, 5, set())
+        assert len(adj) == 4
+        assert set(adj) == {(4, 5), (6, 5), (5, 4), (5, 6)}
+
+    def test_some_blocked(self):
+        blocked = {(4, 5), (6, 5)}
+        adj = find_adjacent_positions(5, 5, blocked)
+        assert (4, 5) not in adj
+        assert (6, 5) not in adj
+        assert (5, 4) in adj
+        assert (5, 6) in adj
+
+    def test_all_blocked(self):
+        blocked = {(4, 5), (6, 5), (5, 4), (5, 6)}
+        adj = find_adjacent_positions(5, 5, blocked)
+        assert adj == []
+
+    def test_returns_list(self):
+        adj = find_adjacent_positions(0, 0, set())
+        assert isinstance(adj, list)

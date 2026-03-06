@@ -364,3 +364,70 @@ class TestEmit:
         planner.predicted = {}
         planner._emit(0, 3, 3, {"bot": 0, "action": "move_right"})
         assert planner.predicted[0] == (4, 3)
+
+    def test_wait_records_same_position(self):
+        """_emit with wait should predict staying in place."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": []}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.actions = []
+        planner.predicted = {}
+        planner._emit(0, 3, 3, {"bot": 0, "action": "wait"})
+        assert planner.predicted[0] == (3, 3)
+
+    def test_yield_redirect(self):
+        """_emit should redirect if moving into a yield-to position."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [3, 3], "inventory": []},
+                {"id": 1, "position": [4, 3], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [6, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.actions = []
+        planner.predicted = {}
+        planner._yield_to = {(4, 3)}  # Don't move into (4, 3)
+        planner._emit(0, 3, 3, {"bot": 0, "action": "move_right"})
+        # Should have been redirected since (4, 3) is in yield_to
+        assert planner.predicted[0] != (4, 3) or planner.actions[0]["action"] == "wait"
+
+
+class TestEmitMoveOrWaitOscillation:
+    def test_oscillation_avoidance(self):
+        """Bot should avoid oscillating between two positions."""
+        from collections import deque
+        planner = make_planner(
+            bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese"]}],
+            items=[{"id": "i0", "type": "bread", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        # Set up history that would cause oscillation
+        planner.gs.bot_history[0] = deque([(3, 2), (3, 3)], maxlen=3)
+        planner.actions = []
+        blocked = planner._build_blocked(0)
+        planner._emit_move_or_wait(0, 3, 3, (3, 3), (1, 8), blocked)
+        assert len(planner.actions) == 1
+        # The action should be valid
+        assert planner.actions[0]["action"] in (
+            "wait", "move_up", "move_down", "move_left", "move_right"
+        )
+
+
+class TestBuildBlockedRadius:
+    def test_small_team_no_radius_limit(self):
+        """With < 5 bots, all other bots are blocked regardless of distance."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [1, 1], "inventory": []},
+                {"id": 1, "position": [9, 7], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        blocked = planner._build_blocked(0)
+        pred_1 = planner.predicted.get(1, (9, 7))
+        assert pred_1 in blocked
