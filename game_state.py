@@ -7,6 +7,8 @@ from pathfinding import bfs_all, find_adjacent_positions
 from constants import (
     CORRIDOR_HEIGHT_THRESHOLD,
     HUNGARIAN_MAX_PAIRS,
+    LAST_ITEM_BOOST_THRESHOLD,
+    LAST_ITEM_COST_MULTIPLIER,
     MAX_INVENTORY,
     ZONE_CROSS_PENALTY,
 )
@@ -27,6 +29,28 @@ class GameState:
         self.grid_width: int = 0
         self.grid_height: int = 0
 
+        # Precomputed route tables (populated in init_static)
+        self.best_pickup: dict[
+            str, tuple[tuple[int, int], tuple[int, int], float]
+        ] = {}
+        self.best_pair_route: dict[
+            tuple[str, str], list[tuple[str, tuple[int, int]]]
+        ] = {}
+        self.best_triple_route: dict[
+            tuple[str, str, str], list[tuple[str, tuple[int, int]]]
+        ] = {}
+
+        # Current active items remaining on shelves (set by RoundPlanner)
+        self.active_on_shelves: int = 0
+
+        # --- Persistent coordination state (T15) ---
+        # Delivery queue: ordered list of bot IDs waiting to deliver
+        self.delivery_queue: list[int] = []
+        # Persistent task assignments: bot_id -> task dict
+        self.bot_tasks: dict[int, dict[str, Any]] = {}
+        # Track the active order ID to detect order transitions
+        self.last_active_order_id: Optional[str] = None
+
     def reset(self) -> None:
         self.blocked_static = None
         self.dist_cache = {}
@@ -38,6 +62,13 @@ class GameState:
         self.idle_spots = []
         self.grid_width = 0
         self.grid_height = 0
+        self.best_pickup = {}
+        self.best_pair_route = {}
+        self.best_triple_route = {}
+        self.active_on_shelves = 0
+        self.delivery_queue = []
+        self.bot_tasks = {}
+        self.last_active_order_id = None
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
@@ -68,6 +99,167 @@ class GameState:
             )
 
         self._compute_idle_spots(width, height, item_positions)
+
+        # Precompute route tables if drop_off is available
+        if "drop_off" in state:
+            drop_off = tuple(state["drop_off"])
+            self._precompute_route_tables(state["items"], drop_off)
+
+    def _precompute_route_tables(
+        self,
+        items: list[dict[str, Any]],
+        drop_off: tuple[int, int],
+    ) -> None:
+        """Precompute optimal pickup cells and multi-item routes per type."""
+        # Group items by type
+        items_by_type: dict[str, list[dict[str, Any]]] = {}
+        for it in items:
+            items_by_type.setdefault(it["type"], []).append(it)
+
+        # (a) Best pickup cell per item type: minimize dist(adj_cell, dropoff)
+        self.best_pickup = {}
+        for item_type, type_items in items_by_type.items():
+            best_cell: Optional[tuple[int, int]] = None
+            best_ipos: Optional[tuple[int, int]] = None
+            best_d: float = float("inf")
+            for it in type_items:
+                ipos = tuple(it["position"])
+                for ac in self.adj_cache.get(ipos, []):
+                    d = self.dist_static(ac, drop_off)
+                    if d < best_d:
+                        best_d = d
+                        best_cell = ac
+                        best_ipos = ipos
+            if best_cell is not None and best_ipos is not None:
+                self.best_pickup[item_type] = (best_cell, best_ipos, best_d)
+
+        # (b) Best 2-type pickup routes
+        all_types = sorted(self.best_pickup.keys())
+        self.best_pair_route = {}
+        for t1, t2 in combinations(all_types, 2):
+            cell1 = self.best_pickup[t1][0]
+            cell2 = self.best_pickup[t2][0]
+            # Order 1: dropoff -> t1 -> t2 -> dropoff
+            cost_12 = (
+                self.dist_static(drop_off, cell1)
+                + self.dist_static(cell1, cell2)
+                + self.dist_static(cell2, drop_off)
+            )
+            # Order 2: dropoff -> t2 -> t1 -> dropoff
+            cost_21 = (
+                self.dist_static(drop_off, cell2)
+                + self.dist_static(cell2, cell1)
+                + self.dist_static(cell1, drop_off)
+            )
+            if cost_12 <= cost_21:
+                self.best_pair_route[(t1, t2)] = [
+                    (t1, cell1), (t2, cell2)
+                ]
+            else:
+                self.best_pair_route[(t1, t2)] = [
+                    (t2, cell2), (t1, cell1)
+                ]
+
+        # (c) Best 3-type pickup routes
+        self.best_triple_route = {}
+        for types in combinations(all_types, 3):
+            cells = [self.best_pickup[t][0] for t in types]
+            best_perm: Optional[tuple[int, ...]] = None
+            best_cost: float = float("inf")
+            for perm in permutations(range(3)):
+                cost: float = self.dist_static(drop_off, cells[perm[0]])
+                prev = cells[perm[0]]
+                for i in range(1, 3):
+                    cost += self.dist_static(prev, cells[perm[i]])
+                    if cost >= best_cost:
+                        break
+                    prev = cells[perm[i]]
+                else:
+                    cost += self.dist_static(prev, drop_off)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_perm = perm
+            if best_perm is not None:
+                key = tuple(sorted(types))
+                self.best_triple_route[key] = [
+                    (types[i], cells[i]) for i in best_perm
+                ]
+
+    def get_optimal_route(
+        self,
+        item_types: list[str],
+        bot_pos: tuple[int, int],
+        drop_off: tuple[int, int],
+    ) -> Optional[list[tuple[str, tuple[int, int]]]]:
+        """Return precomputed optimal route for given item types.
+
+        Adjusts for bot position — the precomputed route assumes starting
+        from dropoff, but if the bot is closer to a different first stop,
+        we may reverse or re-order.
+
+        Returns None if no precomputed route is available.
+        """
+        n = len(item_types)
+        if n == 0:
+            return None
+
+        if n == 1:
+            t = item_types[0]
+            if t in self.best_pickup:
+                cell, _ipos, _d = self.best_pickup[t]
+                return [(t, cell)]
+            return None
+
+        if n == 2:
+            key = tuple(sorted(item_types))
+            route = self.best_pair_route.get(key)
+            if route is None:
+                return None
+            # Check if bot position favors reverse order
+            cost_fwd = self.dist_static(bot_pos, route[0][1])
+            cost_rev = self.dist_static(bot_pos, route[-1][1])
+            if cost_rev < cost_fwd:
+                # Recompute: bot -> last -> first -> dropoff vs bot -> first -> last -> dropoff
+                rev = list(reversed(route))
+                cost_fwd_total = (
+                    cost_fwd
+                    + self.dist_static(route[0][1], route[1][1])
+                    + self.dist_static(route[1][1], drop_off)
+                )
+                cost_rev_total = (
+                    cost_rev
+                    + self.dist_static(rev[0][1], rev[1][1])
+                    + self.dist_static(rev[1][1], drop_off)
+                )
+                if cost_rev_total < cost_fwd_total:
+                    return rev
+            return list(route)
+
+        if n == 3:
+            key = tuple(sorted(item_types))
+            route = self.best_triple_route.get(key)
+            if route is None:
+                return None
+            # Try all 6 permutations starting from bot_pos
+            cells = [(t, c) for t, c in route]
+            best_order: Optional[list[tuple[str, tuple[int, int]]]] = None
+            best_cost: float = float("inf")
+            for perm in permutations(range(3)):
+                cost = self.dist_static(bot_pos, cells[perm[0]][1])
+                prev = cells[perm[0]][1]
+                for i in range(1, 3):
+                    cost += self.dist_static(prev, cells[perm[i]][1])
+                    if cost >= best_cost:
+                        break
+                    prev = cells[perm[i]][1]
+                else:
+                    cost += self.dist_static(prev, drop_off)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_order = [cells[j] for j in perm]
+            return best_order
+
+        return None
 
     def _compute_idle_spots(
         self, width: int, height: int, item_positions: set[tuple[int, int]]
@@ -307,6 +499,14 @@ class GameState:
         if not assignable_bots or not candidate_items:
             return {}
 
+        # Last-item priority boost: when 1-2 active items remain, reduce
+        # their cost by 3x so the closest bot is strongly assigned to them.
+        # Uses candidate count as proxy for active items on shelves.
+        priority_multiplier: float = 1.0
+        n_candidates = len(candidate_items)
+        if 0 < n_candidates <= LAST_ITEM_BOOST_THRESHOLD and len(assignable_bots) > 1:
+            priority_multiplier = LAST_ITEM_COST_MULTIPLIER
+
         # Build cost matrix: rows=bots, cols=items
         cost_matrix: list[list[float]] = []
         for bi, (_, bot_pos, _) in enumerate(assignable_bots):
@@ -317,6 +517,7 @@ class GameState:
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
+                d *= priority_multiplier
                 row.append(d)
             cost_matrix.append(row)
 

@@ -89,3 +89,16 @@ HUNGARIAN_MAX_PAIRS = 100             # n_bots * n_items <= this uses Hungarian;
 # Minimum inventory for non-active delivery
 # ---------------------------------------------------------------------------
 MIN_INV_FOR_NONACTIVE_DELIVERY = 2    # bots need >= this many items to deliver non-active
+
+# ---------------------------------------------------------------------------
+# Last-item priority boost (T16)
+# ---------------------------------------------------------------------------
+LAST_ITEM_BOOST_THRESHOLD = 2         # active_on_shelves <= this triggers boost
+LAST_ITEM_COST_MULTIPLIER = 0.33      # cost multiplier (3x priority = 1/3 cost)
+
+# ---------------------------------------------------------------------------
+# Delivery queue / coordination (T15)
+# ---------------------------------------------------------------------------
+DELIVERY_QUEUE_TEAM_MIN = 4           # len(bots) >= this to use delivery queue
+MAX_CONCURRENT_DELIVERERS = 1         # max bots navigating to dropoff at once (large teams)
+TASK_COMMITMENT_ROUNDS = 5            # min rounds a bot stays committed to a task

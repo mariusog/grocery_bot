@@ -1,5 +1,6 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
+import math
 from collections import deque, namedtuple
 from typing import Any, Optional
 
@@ -14,8 +15,10 @@ from idle import IdleMixin
 from constants import (
     BOT_HISTORY_MAXLEN,
     DELIVER_WHEN_CLOSE_DIST,
+    DELIVERY_QUEUE_TEAM_MIN,
     ENDGAME_ROUNDS_LEFT,
     LARGE_TEAM_MIN,
+    MAX_CONCURRENT_DELIVERERS,
     MAX_INVENTORY,
     MAX_NONACTIVE_DELIVERERS,
     MEDIUM_TEAM_MIN,
@@ -23,10 +26,16 @@ from constants import (
     ORDER_NEARLY_COMPLETE_MAX,
     PICKUP_FAIL_BLACKLIST_THRESHOLD,
     SMALL_TEAM_MAX,
+    TASK_COMMITMENT_ROUNDS,
 )
 
 # Bundles per-bot context passed through the step chain.
-BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active")
+BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active role")
+
+
+def role_to_task_type(role: str) -> str:
+    """Map a role name to its corresponding task type."""
+    return {"pick": "pick", "deliver": "deliver", "preview": "preview"}.get(role, "idle")
 
 
 class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, IdleMixin):
@@ -105,8 +114,20 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
         if not self.active:
             return [{"bot": b["id"], "action": "wait"} for b in self.bots]
 
+        # Detect order transitions and clear persistent state
+        self._check_order_transition()
+
         self._compute_needs()
         self._compute_bot_assignments()
+
+        # Coordination for large teams: delivery queue + roles
+        self.bot_roles: dict[int, str] = {}
+        self._use_coordination = len(self.bots) >= DELIVERY_QUEUE_TEAM_MIN
+        if self._use_coordination:
+            self._update_delivery_queue()
+            self._assign_roles()
+            self._update_persistent_tasks()
+
         self._pre_predict()
 
         urgency: dict[int, int] = {b["id"]: self._bot_urgency(b) for b in self.bots}
@@ -205,6 +226,258 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             self._assign_preview_bot()
 
     # ------------------------------------------------------------------
+    # Order transition detection (T15)
+    # ------------------------------------------------------------------
+
+    def _check_order_transition(self) -> None:
+        """Detect when the active order changes and clear persistent state."""
+        current_id = self.active["id"] if self.active else None
+        if self.gs.last_active_order_id is not None and current_id != self.gs.last_active_order_id:
+            # Order changed — clear all persistent coordination state
+            self.gs.delivery_queue.clear()
+            self.gs.bot_tasks.clear()
+        self.gs.last_active_order_id = current_id
+
+    # ------------------------------------------------------------------
+    # Delivery queue management (T15)
+    # ------------------------------------------------------------------
+
+    def _update_delivery_queue(self) -> None:
+        """Maintain the delivery queue for dropoff congestion control.
+
+        A bot enters the queue when it has active items and either:
+        - Its inventory is full, or
+        - All its assigned items are picked (nothing left to pick)
+        A bot leaves the queue when it no longer has active items (delivered).
+        """
+        gs = self.gs
+
+        # Remove bots that no longer have active items or don't exist
+        alive_ids = {b["id"] for b in self.bots}
+        gs.delivery_queue = [
+            bid for bid in gs.delivery_queue
+            if bid in alive_ids and self.bot_has_active.get(bid, False)
+        ]
+
+        # Find bots that should be in the queue
+        queue_set = set(gs.delivery_queue)
+        new_candidates: list[tuple[float, int, int]] = []
+
+        for bot in self.bots:
+            bid = bot["id"]
+            if bid in queue_set:
+                continue
+            if not self.bot_has_active.get(bid, False):
+                continue
+
+            inv = bot["inventory"]
+            pos = tuple(bot["position"])
+
+            # Should this bot join the queue?
+            should_queue = False
+
+            # Full inventory — must deliver
+            if len(inv) >= MAX_INVENTORY:
+                should_queue = True
+
+            # All active items picked (nothing left on shelves for this bot)
+            elif self.active_on_shelves == 0:
+                should_queue = True
+
+            # Bot has active items and no assigned items left to pick
+            elif bid in self.bot_assignments and not self.bot_assignments[bid]:
+                should_queue = True
+
+            # Bot has active items and is not assigned anything
+            elif bid not in self.bot_assignments and self.active_on_shelves == 0:
+                should_queue = True
+
+            if should_queue:
+                d_to_drop = self.gs.dist_static(pos, self.drop_off)
+                n_active = sum(
+                    1 for item_type in inv
+                    if self.active_needed.get(item_type, 0) > 0
+                )
+                # Sort: closer to dropoff first, then more active items first
+                new_candidates.append((d_to_drop, -n_active, bid))
+
+        new_candidates.sort()
+        for _, _, bid in new_candidates:
+            gs.delivery_queue.append(bid)
+
+    # ------------------------------------------------------------------
+    # Role assignment (T15)
+    # ------------------------------------------------------------------
+
+    def _assign_roles(self) -> None:
+        """Assign roles to bots based on game state.
+
+        Roles: 'pick', 'deliver', 'preview', 'idle'
+        """
+        gs = self.gs
+        num_bots = len(self.bots)
+
+        # Determine how many active pickers we need
+        active_picker_count = math.ceil(self.active_on_shelves / MAX_INVENTORY)
+        active_picker_count = min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
+
+        max_deliverers = MAX_CONCURRENT_DELIVERERS
+
+        # Deliverer: first bots in the delivery queue
+        delivering_count = 0
+        for bid in gs.delivery_queue:
+            if delivering_count >= max_deliverers:
+                break
+            self.bot_roles[bid] = "deliver"
+            delivering_count += 1
+
+        # Active pickers: bots with assigned items or closest to active items
+        picker_candidates: list[tuple[float, int]] = []
+        for bot in self.bots:
+            bid = bot["id"]
+            if bid in self.bot_roles:
+                continue
+            if self.bot_has_active.get(bid, False):
+                # Bot already has active items but isn't in delivery queue
+                # Likely still picking — keep as picker
+                self.bot_roles[bid] = "pick"
+                continue
+            if bid in self.bot_assignments and self.bot_assignments[bid]:
+                # Has assignments — is a picker
+                pos = tuple(bot["position"])
+                first_item = self.bot_assignments[bid][0]
+                _, d = self.gs.find_best_item_target(pos, first_item)
+                picker_candidates.append((d, bid))
+            else:
+                picker_candidates.append((float("inf"), bid))
+
+        picker_candidates.sort()
+        assigned_pickers = 0
+        for _, bid in picker_candidates:
+            if bid in self.bot_roles:
+                continue
+            if assigned_pickers < active_picker_count and self.active_on_shelves > 0:
+                self.bot_roles[bid] = "pick"
+                assigned_pickers += 1
+            else:
+                break
+
+        # Preview pickers: use the existing preview_bot_ids from _assign_preview_bot
+        # which are carefully chosen (furthest from active items)
+        if self.preview and self.net_preview:
+            for bid in self.preview_bot_ids:
+                if bid not in self.bot_roles:
+                    self.bot_roles[bid] = "preview"
+            # For large teams with remaining unassigned bots, add more preview
+            if num_bots >= 8:
+                extra_preview = 0
+                max_extra = max(0, min(2, num_bots) - len(self.preview_bot_ids))
+                for bot in self.bots:
+                    bid = bot["id"]
+                    if bid in self.bot_roles:
+                        continue
+                    if extra_preview >= max_extra:
+                        break
+                    self.bot_roles[bid] = "preview"
+                    self.preview_bot_ids.add(bid)
+                    extra_preview += 1
+
+        # Remaining bots: idle
+        for bot in self.bots:
+            bid = bot["id"]
+            if bid not in self.bot_roles:
+                self.bot_roles[bid] = "idle"
+
+    # ------------------------------------------------------------------
+    # Persistent task management (T15)
+    # ------------------------------------------------------------------
+
+    def _update_persistent_tasks(self) -> None:
+        """Update persistent task assignments, respecting commitment periods."""
+        gs = self.gs
+
+        # Clean up completed/invalid tasks
+        alive_ids = {b["id"] for b in self.bots}
+        for bid in list(gs.bot_tasks.keys()):
+            if bid not in alive_ids:
+                del gs.bot_tasks[bid]
+                continue
+
+            task = gs.bot_tasks[bid]
+            bot = self.bots_by_id.get(bid)
+            if not bot:
+                del gs.bot_tasks[bid]
+                continue
+
+            # Check if task is still valid
+            if task["type"] == "pick":
+                # Item still needed and available?
+                target_type = task.get("item_type")
+                if target_type and self.net_active.get(target_type, 0) <= 0:
+                    del gs.bot_tasks[bid]
+                    continue
+                # Item blacklisted?
+                item_id = task.get("item_id")
+                if item_id and item_id in gs.blacklisted_items:
+                    del gs.bot_tasks[bid]
+                    continue
+
+            elif task["type"] == "deliver":
+                # Still has active items?
+                if not self.bot_has_active.get(bid, False):
+                    del gs.bot_tasks[bid]
+                    continue
+
+        # Assign new tasks for bots without valid ones
+        for bot in self.bots:
+            bid = bot["id"]
+            role = self.bot_roles.get(bid, "idle")
+
+            if bid in gs.bot_tasks:
+                # Check commitment: don't reassign if still committed
+                task = gs.bot_tasks[bid]
+                if (task.get("committed_until", 0) > self.current_round
+                        and task["type"] == role_to_task_type(role)):
+                    continue
+
+            # Assign based on role
+            if role == "deliver":
+                gs.bot_tasks[bid] = {
+                    "type": "deliver",
+                    "target": self.drop_off,
+                    "committed_until": self.current_round + TASK_COMMITMENT_ROUNDS,
+                }
+            elif role == "pick":
+                # Use bot_assignments if available
+                if bid in self.bot_assignments and self.bot_assignments[bid]:
+                    first_item = self.bot_assignments[bid][0]
+                    gs.bot_tasks[bid] = {
+                        "type": "pick",
+                        "target": tuple(first_item["position"]),
+                        "item_id": first_item["id"],
+                        "item_type": first_item["type"],
+                        "committed_until": self.current_round + TASK_COMMITMENT_ROUNDS,
+                    }
+                else:
+                    gs.bot_tasks[bid] = {
+                        "type": "pick",
+                        "target": None,
+                        "committed_until": self.current_round,
+                    }
+            elif role == "preview":
+                gs.bot_tasks[bid] = {
+                    "type": "preview",
+                    "target": None,
+                    "committed_until": self.current_round + TASK_COMMITMENT_ROUNDS,
+                }
+            else:
+                gs.bot_tasks[bid] = {
+                    "type": "idle",
+                    "target": None,
+                    "committed_until": self.current_round,
+                }
+
+    # ------------------------------------------------------------------
     # Per-bot decision (steps 1-8)
     # ------------------------------------------------------------------
 
@@ -230,6 +503,7 @@ class RoundPlanner(MovementMixin, AssignmentMixin, PickupMixin, DeliveryMixin, I
             inv=bot["inventory"],
             blocked=self._build_blocked(bid),
             has_active=self.bot_has_active[bid],
+            role=self.bot_roles.get(bid, "pick"),
         )
 
     # ------------------------------------------------------------------

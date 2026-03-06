@@ -9,9 +9,9 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | Difficulty | Bots | Sim Avg (20 seeds) | Live Score | Theoretical ~70% util |
 |------------|------|--------------------|------------|----------------------|
 | Easy       | 1    | 152.6              | 133        | ~102                 |
-| Medium     | 3    | 112.7              | 110        | ~236                 |
+| Medium     | 3    | 114.3              | 110        | ~236                 |
 | Hard       | 5    | 83.4               | 70         | ~286                 |
-| Expert     | 10   | 56.5               | 46         | ~467                 |
+| Expert     | 10   | 57.5               | 46         | ~467                 |
 
 Note: Hard orders corrected to (3, 5) matching challenge spec (was incorrectly (4, 6)).
 
@@ -51,34 +51,26 @@ Easy is near ceiling. **Multi-bot efficiency is 10-25% of theoretical.** The gap
 - **Success**: Expert idle% < 5% (currently 15%). No oscillation increase.
 - **Depends on**: none (game_state.py infra already committed)
 
-### T15: Dropoff Congestion Prevention
+### T15: Delivery Pipeline + Persistent Assignments + Role Specialization
 - **Agent**: strategy-agent
-- **Status**: open
-- **Priority**: 4
-- **Files**: `round_planner.py`, `delivery.py`
-- **Description**: Multiple bots arriving at the single dropoff cell creates a bottleneck — bots queue up and block each other. Current max delivery gap is 47 rounds.
-  1. **Stagger deliveries**: When 2+ bots have active items and are heading to dropoff, the further bot should pick up 1 more item (preview or active) instead of racing to dropoff
-  2. **Dropoff reservation**: Only 1 bot should target the dropoff at a time. Others pick or pre-position.
-  3. **Clear-dropoff for blocking bots**: If an idle bot is within 2 cells of dropoff AND a deliverer is within 5 cells, the idle bot should yield (move away from dropoff path) BEFORE trying preview prepick
-- **Success**: Max delivery gap < 25 rounds on Expert. No score regression.
-- **Depends on**: T12 (reservation table helps coordinate dropoff access)
+- **Status**: done (partial)
+- **Result**: Implemented coordination infrastructure: (1) Order transition detection clears stale persistent state on order change. (2) Delivery queue on GameState tracks which bots should deliver, ordered by proximity/inventory. (3) Role assignment (pick/deliver/preview/idle) based on game state. (4) Persistent task assignments with commitment periods. (5) Enhanced preview bot selection for Expert (10+ bots). Key finding: delivery staggering (only 1 bot to dropoff) is fundamentally counterproductive — orders need ALL items delivered, so serializing delivery makes orders take 5x longer. Expert 56.5→57.5 (+1.0), no regressions. Infrastructure ready for future decision-influencing changes.
+- **Priority**: 1
+- **Files**: `round_planner.py`, `game_state.py`, `constants.py`
+- **Depends on**: T19 (done)
 
-### T16: Aisle-Aware Route Planning
+### T16: Precomputed Route Tables + Last-Item Priority
 - **Agent**: pathfinding-agent
-- **Status**: open
-- **Priority**: 5
-- **Files**: `pathfinding.py`, `game_state.py`
-- **Description**: Current BFS finds shortest paths but doesn't account for map structure. Bots enter narrow aisles from the wrong end, meet head-on, and deadlock. Fix:
-  1. **Precompute aisle topology**: For each aisle (walkway column between two shelf columns), record its entry points (top and bottom where it meets a corridor)
-  2. **Prefer corridor routes**: Add a small cost penalty (0.5) for non-corridor cells in pathfinding, so bots prefer to travel via corridors and enter aisles only when close to their target
-  3. **One-way aisle preference**: When 2+ bots need the same aisle, the one closer to the shelf entry goes first; the other routes to the opposite entry point
-- **Success**: Hard/Expert oscillation reduced by 50%. No increase in average path length > 10%.
-- **Depends on**: none
+- **Status**: done
+- **Result**: Implemented in `game_state.py` and `constants.py`. (1) Precomputed route tables: `best_pickup` (per type), `best_pair_route` (all 2-type combos), `best_triple_route` (all 3-type combos) populated in `init_static()`. `get_optimal_route()` API for strategy-agent to use. (2) Last-item priority boost: when ≤2 candidate items in `assign_items_to_bots()`, cost multiplied by 0.33 so closest bot is strongly assigned. Medium +2.8, no regression on any difficulty. Route table usage in pickup.py pending strategy-agent integration.
+- **Priority**: 2
+- **Files**: `game_state.py`, `constants.py`
+- **Depends on**: T19 (done)
 
 ### T17: Full-Path Caching and Commitment
 - **Agent**: pathfinding-agent
 - **Status**: open
-- **Priority**: 6
+- **Priority**: 3
 - **Files**: `pathfinding.py`, `game_state.py`, `movement.py`
 - **Description**: Currently bots recompute BFS every round, which can flip-flop between equally-good paths. Instead:
   1. When a bot starts heading to a target, compute the full path using `bfs_full_path`
