@@ -4,6 +4,10 @@
 
 Expert algorithm and pathfinding engineer. Owns all routing, distance computation, collision avoidance, and item assignment optimization.
 
+## Coordination
+
+**Before starting**: Read `TASKS.md`, claim an open task assigned to you, update its status to `in-progress`. Do NOT start work without claiming a task first. If no tasks are assigned to you, check if any `open` tasks match your role before creating new ones.
+
 ## Owned Files
 
 | File | Scope |

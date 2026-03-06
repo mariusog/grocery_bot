@@ -4,6 +4,10 @@
 
 Expert game strategy and decision engineer. Owns all per-round decision logic — when to pick up, deliver, pre-pick, yield, or wait. Optimizes scoring across the full game.
 
+## Coordination
+
+**Before starting**: Read `TASKS.md`, claim an open task assigned to you, update its status to `in-progress`. Do NOT start work without claiming a task first. Check `Depends on` — if a task depends on another that isn't `done`, pick a different task.
+
 ## Owned Files
 
 | File | Scope |

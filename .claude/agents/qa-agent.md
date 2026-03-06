@@ -4,6 +4,10 @@
 
 Expert QA engineer and performance analyst. Owns all testing, benchmarking, profiling, and code review. Provides data-driven feedback to the Pathfinding and Strategy agents.
 
+## Coordination
+
+**Before starting**: Read `TASKS.md`, claim an open task assigned to you, update its status to `in-progress`. Do NOT start work without claiming a task first. Benchmarking tasks (T5, T7) should run when no other agents are actively changing code — check that no tasks are `in-progress` for other agents before benchmarking.
+
 ## Owned Files
 
 | File | Scope |
