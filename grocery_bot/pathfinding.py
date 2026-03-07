@@ -9,12 +9,15 @@ DIRECTIONS: list[tuple[int, int]] = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 def bfs_all(
     source: tuple[int, int],
     blocked: set[tuple[int, int]],
+    max_cells: int = 2000,
 ) -> dict[tuple[int, int], int]:
     """BFS from source to ALL reachable cells. Returns {pos: distance}.
 
     Args:
         source: (x, y) starting position.
         blocked: set of (x, y) positions that cannot be entered.
+        max_cells: safety limit on explored cells to prevent unbounded
+            exploration if source is outside grid boundaries.
 
     Returns:
         dict mapping (x, y) -> int distance from source.
@@ -22,6 +25,8 @@ def bfs_all(
     distances: dict[tuple[int, int], int] = {source: 0}
     queue = deque([source])
     while queue:
+        if len(distances) >= max_cells:
+            break
         pos = queue.popleft()
         d = distances[pos]
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
@@ -36,6 +41,7 @@ def bfs(
     start: tuple[int, int],
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
+    max_cells: int = 2000,
 ) -> Optional[tuple[int, int]]:
     """BFS pathfinding from start to goal. Returns next position to move to.
 
@@ -46,6 +52,7 @@ def bfs(
         start: (x, y) current position.
         goal: (x, y) target position.
         blocked: set of (x, y) impassable positions.
+        max_cells: safety limit on explored cells.
 
     Returns:
         (x, y) next position to step to, or None if start == goal or no path.
@@ -54,10 +61,10 @@ def bfs(
         return None
     visited = {goal}
     queue = deque([goal])
-    # parent tracks which cell expanded to which, so we can
-    # trace back to the cell adjacent to start.
     parent: dict[tuple[int, int], tuple[int, int]] = {}
     while queue:
+        if len(visited) >= max_cells:
+            break
         pos = queue.popleft()
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
             npos = (pos[0] + dx, pos[1] + dy)
@@ -68,7 +75,6 @@ def bfs(
             visited.add(npos)
             parent[npos] = pos
             if npos == start:
-                # pos is adjacent to start on the shortest path
                 return pos
             queue.append(npos)
     return None
@@ -78,6 +84,7 @@ def bfs_full_path(
     start: tuple[int, int],
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
+    max_cells: int = 2000,
 ) -> list[tuple[int, int]]:
     """BFS returning the full shortest path from start to goal (inclusive).
 
@@ -95,13 +102,14 @@ def bfs_full_path(
     parent: dict[tuple[int, int], Optional[tuple[int, int]]] = {start: None}
     queue = deque([start])
     while queue:
+        if len(parent) >= max_cells:
+            break
         pos = queue.popleft()
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
             npos = (pos[0] + dx, pos[1] + dy)
             if npos not in parent and npos not in blocked:
                 parent[npos] = pos
                 if npos == goal:
-                    # Reconstruct path
                     path: list[tuple[int, int]] = []
                     cur: Optional[tuple[int, int]] = goal
                     while cur is not None:
@@ -170,6 +178,8 @@ def bfs_temporal(
     )
 
     while queue:
+        if len(visited) >= 4000:
+            break
         pos, t, first_move = queue.popleft()
         next_t = min(t + 1, 1)  # Cap at 1 since rules are same for t >= 1
         blocked_now = step0_blocked if t == 0 else future_blocked
