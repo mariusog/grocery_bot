@@ -80,12 +80,16 @@ class TestAntiCollision:
         assert a1["action"] != "wait", f"Bot 1 should be moving, got {a1}"
 
     def test_higher_bot_plans_around_lower_bot_move(self):
-        """Bot 0 moves first. Bot 1 should predict bot 0's new position
-        and plan accordingly, rather than treating bot 0 as stationary."""
+        """Bot 1 must not move into bot 0's currently occupied cell.
+
+        The live server and local simulator both resolve movement against
+        round-start occupancy, so bot 1 has to wait here instead of stepping
+        into a cell bot 0 is vacating this round.
+        """
         reset_bot()
         # Single-width corridor along y=5. Bot 0 at (3,5) moving left, Bot 1 at (4,5).
-        # Bot 0 will move to (2,5). So (3,5) will be free for bot 1.
-        # Bot 1 should be able to move left into (3,5).
+        # Bot 0 will move to (2,5), but bot 1 still may not move left into (3,5)
+        # during the same round because (3,5) starts occupied.
         state = make_state(
             walls=[[3, 4], [4, 4], [5, 4], [3, 6], [4, 6], [5, 6]],
             bots=[
@@ -122,9 +126,8 @@ class TestAntiCollision:
         a1 = get_action(actions, 1)
         # Bot 0 should move left (toward cheese at (2,4)).
         assert a0["action"] == "move_left", f"Bot 0 should move left, got {a0}"
-        # Bot 1 should make progress (not wait). With temporal BFS it avoids
-        # bot 0's current AND predicted positions, so it may route around.
-        assert a1["action"] != "wait", f"Bot 1 should make progress, got {a1}"
+        # Bot 1 should not attempt the illegal same-round follow move.
+        assert a1["action"] == "wait", f"Bot 1 should wait here, got {a1}"
 
     def test_bot_waits_if_only_path_blocked(self):
         """If a bot's only path forward is blocked by another bot, it should

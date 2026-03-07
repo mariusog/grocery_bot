@@ -290,6 +290,38 @@ class TestExpectedPositionTracking:
             assert gs.last_expected_pos.get(0) == (4, 3)
 
 
+# ── Test: Collision validation matches live server ──────────────────────
+
+
+class TestCollisionValidation:
+    """Validator should reject moves the live server will silently block."""
+
+    def test_move_into_occupied_cell_becomes_wait_even_if_other_bot_moves(self):
+        """A bot may not step into another bot's current cell that round."""
+        state = make_state(
+            bots=[
+                {"id": 0, "position": [5, 5], "inventory": []},
+                {"id": 1, "position": [4, 5], "inventory": []},
+            ],
+            items=[],
+            orders=[],
+        )
+        bot.init_static(state)
+
+        validated = bot._validate_actions(
+            [
+                {"bot": 0, "action": "move_left"},
+                {"bot": 1, "action": "move_up"},
+            ],
+            state,
+        )
+
+        assert validated == [
+            {"bot": 0, "action": "wait"},
+            {"bot": 1, "action": "move_up"},
+        ]
+
+
 # ── Test: Round number in WebSocket response ────────────────────────────
 
 
