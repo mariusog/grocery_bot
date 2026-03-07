@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260307_163042",
+  "recorded_at": "20260307_192600",
   "source": "live",
   "grid": {
     "width": 16,
@@ -322,6 +322,7 @@
   ],
   "num_bots": 3,
   "max_rounds": 300,
+  "total_orders": 50,
   "items": [
     {
       "id": "item_0",
@@ -633,6 +634,68 @@
       ]
     },
     {
+      "id": "order_10",
+      "items_required": [
+        "cream",
+        "yogurt",
+        "pasta",
+        "cream",
+        "cream"
+      ]
+    },
+    {
+      "id": "order_11",
+      "items_required": [
+        "milk",
+        "cheese",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_12",
+      "items_required": [
+        "butter",
+        "bread",
+        "butter",
+        "cheese"
+      ]
+    },
+    {
+      "id": "order_13",
+      "items_required": [
+        "milk",
+        "milk",
+        "cream",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_14",
+      "items_required": [
+        "cream",
+        "yogurt",
+        "bread",
+        "eggs",
+        "cream"
+      ]
+    },
+    {
+      "id": "order_15",
+      "items_required": [
+        "eggs",
+        "cheese",
+        "butter"
+      ]
+    },
+    {
+      "id": "order_16",
+      "items_required": [
+        "bread",
+        "cheese",
+        "milk"
+      ]
+    },
+    {
       "id": "order_2",
       "items_required": [
         "cream",
@@ -708,52 +771,6 @@
         "pasta",
         "bread",
         "bread"
-      ]
-    },
-    {
-      "id": "order_10",
-      "items_required": [
-        "cream",
-        "yogurt",
-        "pasta",
-        "cream",
-        "cream"
-      ]
-    },
-    {
-      "id": "order_11",
-      "items_required": [
-        "milk",
-        "cheese",
-        "eggs"
-      ]
-    },
-    {
-      "id": "order_12",
-      "items_required": [
-        "butter",
-        "bread",
-        "butter",
-        "cheese"
-      ]
-    },
-    {
-      "id": "order_13",
-      "items_required": [
-        "milk",
-        "milk",
-        "cream",
-        "eggs"
-      ]
-    },
-    {
-      "id": "order_14",
-      "items_required": [
-        "cream",
-        "yogurt",
-        "bread",
-        "eggs",
-        "cream"
       ]
     }
   ]
