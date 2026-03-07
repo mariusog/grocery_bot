@@ -38,8 +38,9 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlen
 
 ### T25: Fix Inventory Clog (Expert #1 Bottleneck)
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: done
 - **Priority**: 1
+- **Result**: Investigated thoroughly. The 645 full-inventory waits are ALL bots with non-active items (0 active). Root cause: after order transitions, bots hold items from the previous preview order that no longer match. However, preventing preview pickups REDUCES score (preview items match next order 69% of the time). Dumping non-active inventory causes dropoff congestion (single dropoff cell). Every planner-level change (15+ variants tested) either regresses or is neutral. The real bottleneck is single-dropoff-cell congestion with 10 bots. Improvement requires pathfinding/collision changes (outside T25 scope). Expert remains at ~60 avg.
 - **Files**: `grocery_bot/planner/pickup.py`, `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/delivery.py`
 - **Description**: **ROOT CAUSE**: Expert has 645/3000 bot-rounds (21.5%) where bots wait with FULL inventory. 32% of pickups are non-active items that clog slots. Pickup-to-delivery ratio is 3.5x (vs 2.0x on Medium).
   Fix by:
