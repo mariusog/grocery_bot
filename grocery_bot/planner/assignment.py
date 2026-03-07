@@ -110,12 +110,12 @@ class AssignmentMixin:
             return
 
         map_width: int = self.full_state["grid"]["width"]
-        # T22: Disable zone penalties for 8+ bots — with many bots and
-        # few items, Hungarian needs pure distance-optimal assignments.
-        # Zone penalties cause sub-optimal pairings when items are
-        # clustered in one area but bots are spread across the map.
+        # Zone penalties spread bots across aisles. Scale zones with team size:
+        # 8+ bots: enough zones to avoid convergence (at least 2)
+        # 5-7 bots: moderate zones
+        # <5 bots: no zones needed
         if len(self.bots) >= 8:
-            num_zones = 1
+            num_zones = max(2, len(assignable) // 3)
         else:
             num_zones = (
                 max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
@@ -142,6 +142,8 @@ class AssignmentMixin:
         zone_width: Optional[float],
     ) -> None:
         """Greedy distance-sorted assignment supporting multi-slot bots."""
+        n_bots = len(assignable)
+        n_items = len(candidates)
         pairs: list[tuple[float, int, int]] = []
         for bi, (_, bot_pos, _) in enumerate(assignable):
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
@@ -150,6 +152,10 @@ class AssignmentMixin:
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
+                # Tiny tie-breaker: encourage bot i to prefer item i's region
+                # so symmetric spawn positions don't all pick the same target.
+                if n_bots > 1 and n_items > 1:
+                    d += 0.01 * abs(bi / n_bots - ii / n_items)
                 pairs.append((d, bi, ii))
         pairs.sort()
 

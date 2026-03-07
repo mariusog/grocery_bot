@@ -9,7 +9,11 @@ class DeliveryMixin:
     def _estimate_rounds_to_complete(
         self, pos: tuple[int, int], inv: list[str]
     ) -> float:
-        """Estimate rounds needed to pick up all remaining active items and deliver."""
+        """Estimate rounds needed to pick up all remaining active items and deliver.
+
+        Divides the sequential estimate by the number of bots that can
+        pick in parallel so endgame decisions are not overly pessimistic.
+        """
         remaining: list[tuple[dict, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)
@@ -33,6 +37,19 @@ class DeliveryMixin:
                 picked = 0
         if picked > 0 or inv:
             total_dist += self.gs.dist_static(current, self.drop_off) + 1
+
+        # On multi-bot teams, items are picked in parallel.  Divide the
+        # sequential cost by the number of available pickers (bots without
+        # active items and with free inventory), capped by the number of
+        # remaining items to avoid over-optimism.
+        num_pickers = max(1, sum(
+            1 for b in self.bots
+            if not self.bot_has_active.get(b["id"], False)
+            and len(b["inventory"]) < MAX_INVENTORY
+        ))
+        num_pickers = min(num_pickers, max(1, len(remaining)))
+        if num_pickers > 1:
+            total_dist = total_dist / num_pickers
         return total_dist
 
     def _should_deliver_early(self, pos: tuple[int, int], inv: list[str]) -> bool:

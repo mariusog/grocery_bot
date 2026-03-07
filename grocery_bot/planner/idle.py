@@ -4,9 +4,11 @@ from typing import Optional
 
 from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.constants import (
+    BOT_HISTORY_MAXLEN,
     DROPOFF_CLEAR_RADIUS,
     IDLE_BOT_PROXIMITY_FACTOR,
     IDLE_BOT_PROXIMITY_RADIUS,
+    IDLE_CORRIDOR_PENALTY,
     IDLE_DROPOFF_PENALTY_FACTOR,
     IDLE_DROPOFF_PENALTY_RADIUS,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
@@ -112,16 +114,35 @@ class IdleMixin:
         idle_set = set(idle_spots) if idle_spots else set()
         at_idle_spot = pos in idle_set
 
+        # Detect stale idle: bot has been at the same position for too long
+        is_large_team = len(self.bots) >= PREDICTION_TEAM_MIN
+        is_stale = False
+        if is_large_team:
+            history = self.gs.bot_history.get(bid)
+            if history and len(history) >= BOT_HISTORY_MAXLEN:
+                if all(h == pos for h in history):
+                    is_stale = True
+
+        # Corridor rows to penalize for large teams
+        corridor_ys = set(getattr(self.gs, "corridor_y", []))
+
         # Target: use idle_spots for unique spread targeting on Expert
-        # (10 bots), fall back to shelf-column targeting for smaller teams
+        # (10 bots), fall back to shelf-column targeting for smaller teams.
+        # For large teams, prefer off-corridor spots (not in corridor_y)
+        # to avoid blocking active bots traversing the main corridor.
         item_target: Optional[tuple[int, int]] = None
-        if idle_spots and len(self.bots) >= PREDICTION_TEAM_MIN:
-            # Large teams: assign each bot a unique idle spot for spread
+        if idle_spots and is_large_team:
+            # Large teams: assign each bot a unique idle spot for spread,
+            # preferring off-corridor spots to keep corridors clear.
+            off_corridor = [s for s in idle_spots if s[1] not in corridor_ys]
+            on_corridor = [s for s in idle_spots if s[1] in corridor_ys]
+            # Prefer off-corridor; fall back to on-corridor if not enough
+            preferred = off_corridor + on_corridor
             n_bots = len(self.bots)
             bot_ids = sorted(b["id"] for b in self.bots)
             rank = bot_ids.index(bid)
-            spot_idx = (rank * len(idle_spots)) // n_bots
-            item_target = idle_spots[spot_idx]
+            spot_idx = (rank * len(preferred)) // n_bots
+            item_target = preferred[spot_idx]
 
         if item_target is None and len(self.bots) >= SMALL_TEAM_MAX and self.items:
             # Smaller teams or fallback: original shelf-column targeting
@@ -152,6 +173,9 @@ class IdleMixin:
                     s += (
                         IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist
                     ) * IDLE_BOT_PROXIMITY_FACTOR
+            # Penalize corridor rows on large teams (keep corridors clear)
+            if is_large_team and corridor_ys and p[1] in corridor_ys:
+                s += IDLE_CORRIDOR_PENALTY
             # Reward being near target
             if item_target:
                 item_dist = abs(p[0] - item_target[0]) + abs(p[1] - item_target[1])
@@ -166,6 +190,10 @@ class IdleMixin:
             npos = (bx + dx, by + dy)
             if npos in blocked:
                 continue
+            # Skip moves that would create A-B-A oscillation —
+            # idle bots should stay put rather than bounce.
+            if self._would_oscillate(bid, npos):
+                continue
             s = _score(npos)
             if s < best_score:
                 best_score = s
@@ -176,8 +204,11 @@ class IdleMixin:
             # only move if improvement is significant (>= 0.5 threshold).
             # This reduces oscillation from marginal score differences
             # when the bot is already well-positioned.
+            # However, if the bot is stale (same position for IDLE_STALE_ROUNDS),
+            # always move to prevent long-term corridor blocking.
             if (
                 at_idle_spot
+                and not is_stale
                 and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD
             ):
                 return False

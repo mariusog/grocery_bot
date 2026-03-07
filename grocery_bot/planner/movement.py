@@ -49,14 +49,20 @@ class MovementMixin:
             for b in self.bots
             if b["id"] != bid
         }
+        # Prefer non-oscillating alternatives, but fall back to any unblocked
+        fallback: Optional[dict[str, Any]] = None
         for dx, dy in DIRECTIONS:
             alt = (bx + dx, by + dy)
             if alt == blocked_target or alt in self.gs.blocked_static:
                 continue
             if alt in occupied:
                 continue
-            return {"bot": bid, "action": direction_to(bx, by, alt[0], alt[1])}
-        return {"bot": bid, "action": "wait"}
+            action = {"bot": bid, "action": direction_to(bx, by, alt[0], alt[1])}
+            if not self._would_oscillate(bid, alt):
+                return action
+            if fallback is None:
+                fallback = action
+        return fallback if fallback is not None else {"bot": bid, "action": "wait"}
 
     def _pre_predict(self) -> None:
         """Estimate where each bot will move BEFORE detailed planning.
@@ -128,6 +134,10 @@ class MovementMixin:
         T17: First tries the cached deterministic path to avoid flip-flopping.
         Falls back to temporal / standard BFS when the cached step is blocked,
         and stores the resulting path for future rounds.
+
+        Includes oscillation detection: if the proposed next step would
+        return the bot to its position from 2 rounds ago (A-B-A bounce),
+        invalidate the cached path and recompute via live BFS.
         """
         # T17: Try cached path first (avoids oscillation from BFS ties).
         use_cache = True
@@ -139,7 +149,11 @@ class MovementMixin:
                 bid, pos, target, dynamic_blocked, current_round
             )
             if cached is not None and cached not in blocked:
-                return cached
+                if not self._would_oscillate(bid, cached):
+                    return cached
+                # Cache leads to oscillation — invalidate and recompute
+                self.gs.bot_planned_paths.pop(bid, None)
+                had_cache = False
 
         # Cached path unavailable or blocked — fall back to live BFS
         result: Optional[tuple[int, int]] = None
@@ -152,6 +166,19 @@ class MovementMixin:
             result = bfs(pos, target, blocked)
             if result and result in blocked:
                 result = None
+
+        # If live BFS also oscillates, try static-only BFS (ignoring other
+        # bots) to get a stable, non-oscillating path.  If that also
+        # oscillates, keep the original result — oscillating is better
+        # than waiting indefinitely.
+        if result is not None and self._would_oscillate(bid, result):
+            static_result = bfs(pos, target, self.gs.blocked_static)
+            if (
+                static_result
+                and static_result not in self.gs.blocked_static
+                and not self._would_oscillate(bid, static_result)
+            ):
+                result = static_result
 
         # T17: Store the full path when no cache exists yet, or when the
         # cache was invalidated (target changed, position mismatch, or
@@ -187,7 +214,11 @@ class MovementMixin:
         return False
 
     def _would_oscillate(self, bid: int, next_pos: tuple[int, int]) -> bool:
-        """Check if moving to next_pos would create an oscillation pattern."""
+        """Check if moving to next_pos would create an A-B-A oscillation.
+
+        Returns True when next_pos matches the position from 2 rounds ago,
+        meaning the bot would bounce back to where it just came from.
+        """
         history = self.gs.bot_history.get(bid)
         if not history or len(history) < 2:
             return False
@@ -202,29 +233,26 @@ class MovementMixin:
         target: tuple[int, int],
         blocked: set[tuple[int, int]],
     ) -> None:
-        """Move toward target with unstick fallback and oscillation detection."""
+        """Move toward target with unstick fallback.
+
+        Oscillation detection is handled inside _bfs_smart, so this
+        method just needs the unstick fallback for fully blocked cases.
+        """
         next_pos = self._bfs_smart(bid, pos, target, blocked)
 
-        if next_pos and self._would_oscillate(bid, next_pos):
-            alt_pos: Optional[tuple[int, int]] = None
-            for dx, dy in DIRECTIONS:
-                npos = (bx + dx, by + dy)
-                if (
-                    npos not in blocked
-                    and npos != next_pos
-                    and not self._would_oscillate(bid, npos)
-                ):
-                    alt_pos = npos
-                    break
-            if alt_pos:
-                next_pos = alt_pos
-
         if not next_pos:
+            # Prefer non-oscillating neighbors, fall back to any unblocked
+            fallback_pos: Optional[tuple[int, int]] = None
             for dx, dy in DIRECTIONS:
                 npos = (bx + dx, by + dy)
                 if npos not in blocked:
-                    next_pos = npos
-                    break
+                    if not self._would_oscillate(bid, npos):
+                        next_pos = npos
+                        break
+                    if fallback_pos is None:
+                        fallback_pos = npos
+            if not next_pos:
+                next_pos = fallback_pos
         if next_pos:
             self._emit(
                 bid,
