@@ -93,6 +93,11 @@ async def play():
     log_rows = []
     game_meta = {}
 
+    # Map recording state
+    map_snapshot = {}
+    recorded_orders = []
+    seen_order_ids = set()
+
     import websockets
 
     print(f"Connecting to {ws_url[:60]}...")
@@ -103,13 +108,25 @@ async def play():
 
             if data["type"] == "game_over":
                 _log_game_over(data, game_meta, log_rows, log_path, meta_path)
+                _save_recorded_map(map_snapshot, recorded_orders, timestamp)
                 break
 
             if data["type"] == "game_state":
                 round_num = data["round"]
 
+                # Accumulate orders as they become visible
+                for order in data.get("orders", []):
+                    oid = order["id"]
+                    if oid not in seen_order_ids:
+                        seen_order_ids.add(oid)
+                        recorded_orders.append({
+                            "id": oid,
+                            "items_required": list(order["items_required"]),
+                        })
+
                 if round_num == 0:
                     game_meta.update(_build_game_meta(data, timestamp))
+                    map_snapshot = _build_map_snapshot(data, timestamp)
                     grid = data["grid"]
                     print(
                         f"Map: {grid['width']}x{grid['height']} | "
@@ -131,6 +148,40 @@ async def play():
                 actions = decide_actions(data)
                 _log_round(data, actions, log_rows)
                 await ws.send(json.dumps({"actions": actions}))
+
+
+def _build_map_snapshot(data, timestamp):
+    """Capture the round-0 game state for map recording."""
+    return {
+        "version": 1,
+        "recorded_at": timestamp,
+        "source": "live",
+        "grid": data["grid"],
+        "drop_off": data["drop_off"],
+        "spawn": data["bots"][0]["position"],
+        "num_bots": len(data["bots"]),
+        "max_rounds": data["max_rounds"],
+        "items": [
+            {"id": it["id"], "type": it["type"], "position": it["position"]}
+            for it in data["items"]
+        ],
+    }
+
+
+def _save_recorded_map(map_snapshot, recorded_orders, timestamp):
+    """Write recorded map + orders to maps/ directory."""
+    if not map_snapshot:
+        return
+    map_snapshot["orders"] = recorded_orders
+    os.makedirs("maps", exist_ok=True)
+    grid = map_snapshot.get("grid", {})
+    w, h = grid.get("width", "?"), grid.get("height", "?")
+    n_bots = map_snapshot.get("num_bots", "?")
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    map_path = f"maps/{date_str}_{w}x{h}_{n_bots}bot.json"
+    with open(map_path, "w") as f:
+        json.dump(map_snapshot, f, indent=2)
+    print(f"  Map recorded: {map_path} ({len(recorded_orders)} orders captured)")
 
 
 def _build_game_meta(data, timestamp):

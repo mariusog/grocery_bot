@@ -53,6 +53,7 @@ IDLE_BOT_PROXIMITY_RADIUS = 2  # penalize idle bots within this dist of each oth
 IDLE_BOT_PROXIMITY_FACTOR = 2  # weight: (radius+1 - dist) * factor
 IDLE_TARGET_DISTANCE_WEIGHT = 0.5  # reward proximity to target position
 IDLE_STAY_IMPROVEMENT_THRESHOLD = 0.5  # only move from idle spot if improvement >= this
+IDLE_CORRIDOR_PENALTY = 4  # penalty for idle bots sitting in main corridor rows (large teams)
 
 # ---------------------------------------------------------------------------
 # Zone-based assignment penalties
@@ -100,5 +101,5 @@ LAST_ITEM_COST_MULTIPLIER = 0.33  # cost multiplier (3x priority = 1/3 cost)
 # Delivery queue / coordination (T15)
 # ---------------------------------------------------------------------------
 DELIVERY_QUEUE_TEAM_MIN = 4  # len(bots) >= this to use delivery queue
-MAX_CONCURRENT_DELIVERERS = 1  # max bots navigating to dropoff at once (large teams)
+MAX_CONCURRENT_DELIVERERS = 2  # max bots navigating to dropoff at once (large teams)
 TASK_COMMITMENT_ROUNDS = 5  # min rounds a bot stays committed to a task
