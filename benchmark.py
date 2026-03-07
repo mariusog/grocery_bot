@@ -51,7 +51,7 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False, diagnose=False):
         dict of {difficulty: list of result dicts}
     """
     if difficulties is None:
-        difficulties = ["Easy", "Medium", "Hard", "Expert"]
+        difficulties = ["Easy", "Medium", "Hard", "Expert", "Nightmare"]
     if seeds is None:
         seeds = DEFAULT_SEEDS
 
@@ -128,7 +128,7 @@ def print_summary_table(all_results):
         f"{'StdDev':>6} {'Orders':>6} {'Items':>5} {'Wall':>6}"
     )
     print("-" * 60)
-    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+    for diff in ["Easy", "Medium", "Hard", "Expert", "Nightmare"]:
         if diff not in all_results:
             continue
         results = all_results[diff]
@@ -160,7 +160,7 @@ def print_diagnostics_table(all_results):
     )
     print("-" * 90)
 
-    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+    for diff in ["Easy", "Medium", "Hard", "Expert", "Nightmare"]:
         if diff not in all_results:
             continue
         results = all_results[diff]
@@ -245,7 +245,7 @@ def generate_markdown_report(all_results):
     lines.append(
         "|------------|------|-----------|-----|-----|--------|------------|-----------|"
     )
-    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+    for diff in ["Easy", "Medium", "Hard", "Expert", "Nightmare"]:
         if diff not in all_results:
             continue
         results = all_results[diff]
@@ -261,7 +261,7 @@ def generate_markdown_report(all_results):
     lines.append("")
 
     # Per-difficulty detail
-    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+    for diff in ["Easy", "Medium", "Hard", "Expert", "Nightmare"]:
         if diff not in all_results:
             continue
         results = all_results[diff]
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         "--difficulty",
         "-d",
         nargs="+",
-        choices=["Easy", "Medium", "Hard", "Expert"],
+        choices=["Easy", "Medium", "Hard", "Expert", "Nightmare"],
         help="Run specific difficulties only",
     )
     parser.add_argument(
