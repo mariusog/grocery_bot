@@ -120,4 +120,11 @@ class DeliveryMixin:
             self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
             return True
 
+        # Bots with preview-only inventory: deliver for +1/item during endgame
+        if not has_active and len(inv) > 0:
+            d_to_drop = self.gs.dist_static(pos, self.drop_off)
+            if d_to_drop + 1 < self.rounds_left:
+                self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+                return True
+
         return False

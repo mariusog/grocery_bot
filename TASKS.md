@@ -82,9 +82,9 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Expected gain**: +8-15 Expert.
 - **Depends on**: T30-pf for full effect, but deliverer scaling alone should help.
 
-### T33: Wire T30 Dropoff Queuing into Planner
+### T33: Wire T30 Dropoff Queuing into Planner + Make Roles Control Behavior
 - **Agent**: strategy-agent
-- **Status**: blocked (waiting on T30-pf)
+- **Status**: in-progress
 - **Priority**: 2
 - **Metric**: Expert Waits=908, Stuck%=0.1% (low but waits are high)
 - **Target**: Expert Waits < 500
@@ -122,13 +122,61 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Status**: deferred
 - **Note**: Rounds/order will improve as a side effect of T31-T34. Reassess after those complete.
 
-### T28: Endgame Delivery Optimization
+### T28: Endgame Delivery Optimization (SUPERSEDED by T38+T40)
+- **Status**: superseded
+- **Note**: Split into T38 (scale threshold) and T40 (endgame preview delivery).
+
+### T35: Wire `_should_deliver_early()` into Step Chain (delivery.py)
 - **Agent**: strategy-agent
 - **Status**: open
+- **Priority**: 2
+- **Metric**: Rounds/order on Medium=23.5, Hard=29.8 — delivery timing is suboptimal
+- **Target**: Rounds/order Medium < 21, Hard < 27
+- **Files**: `grocery_bot/planner/delivery.py`, `grocery_bot/planner/round_planner.py` (step chain only)
+- **Root cause**: `_should_deliver_early()` (delivery.py:38) is DEAD CODE — never called from any step. `_step_deliver_active` (round_planner.py:692) uses a fixed `DELIVER_WHEN_CLOSE_DIST=3` threshold instead of the smarter cost comparison. Bots with 1 active item walk to a far item when delivering immediately and starting fresh would be cheaper.
+- **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add: `if self._should_deliver_early(ctx.pos, ctx.inv): [deliver]`.
+- **Risk**: Low. Method exists with tests. Just needs wiring.
+- **Expected gain**: +2-4 Medium/Hard.
+
+### T36: Use `_flexible_tsp` for Multi-Bot Routes (pickup.py)
+- **Agent**: strategy-agent
+- **Status**: done (no code changes — regresses)
+- **Priority**: 3
+- **Result**: Tested `_flexible_tsp` in both `_build_greedy_route` and `_build_assigned_route` with 20-seed benchmarks. Both regress Medium by 2-6 points and Expert by 2-4 points. Root cause: `_flexible_tsp` picks locally optimal adjacent cells per-bot that conflict with other bots' paths in multi-bot mode. The `tsp_route` uses globally precomputed `best_pickup` cells which coordinate better across bots. `_flexible_tsp` remains correct for single-bot mode only.
+
+### T37: Apply Last-Item Priority Boost in Greedy Route (pickup.py)
+- **Agent**: strategy-agent
+- **Status**: done (no code changes — regresses Expert)
+- **Priority**: 3
+- **Result**: Tested with 20-seed benchmark. Expert regresses -9 points (52.7 vs 61.8 baseline). Root cause: `_build_greedy_route` is only used in multi-bot mode, and the 0.33 cost multiplier causes ALL bots to rush the same 1-2 remaining active items, creating pile-ups. The Hungarian assignment in game_state already applies this multiplier at the assignment level where items are distributed across bots. Applying it again at per-bot greedy routing causes duplicate prioritization without coordination.
+
+### T38: Scale Endgame Threshold by Bot Count (constants.py)
+- **Agent**: lead-agent
+- **Status**: open
 - **Priority**: 4
-- **Files**: `grocery_bot/planner/delivery.py`, `grocery_bot/planner/round_planner.py`
-- **Description**: Tune endgame threshold based on bot count and distance to dropoff. Currently triggers at 40 rounds remaining.
-- **Depends on**: T31, T32
+- **Metric**: Expert idle=30% in endgame, bots stop picking too early with ENDGAME_ROUNDS_LEFT=40
+- **Files**: `grocery_bot/constants.py`, `grocery_bot/planner/round_planner.py` (line 69)
+- **Root cause**: 10 bots on Expert can pick+deliver remaining items in ~15 rounds, but endgame triggers at 40, causing premature delivery rushes.
+- **How to fix**: `endgame_threshold = max(15, ENDGAME_ROUNDS_LEFT - len(self.bots) * 2)` gives Easy=38, Medium=34, Hard=30, Expert=20.
+- **Risk**: Medium — needs benchmarking.
+- **Expected gain**: +2-5 Expert.
+
+### T39: Lower `MIN_INV_FOR_NONACTIVE_DELIVERY` for Large Teams (constants.py)
+- **Agent**: lead-agent
+- **Status**: open
+- **Priority**: 4
+- **Metric**: Expert bots idle with 1 preview item, never delivering (+1 point each lost)
+- **Files**: `grocery_bot/constants.py`, `grocery_bot/planner/round_planner.py`
+- **Root cause**: `MIN_INV_FOR_NONACTIVE_DELIVERY=2` blocks single-item deliveries. On Expert, idle bots hold 1 item worth +1 but never deliver it.
+- **How to fix**: Override to 1 for teams >= 8 in `_step_idle_nonactive_deliver`.
+- **Risk**: Low — only affects idle bots.
+- **Expected gain**: +3-5 Expert.
+
+### T40: Endgame Maximize-Items Should Include Preview Inventory (delivery.py)
+- **Agent**: strategy-agent
+- **Status**: done
+- **Priority**: 5
+- **Result**: Added preview-inventory endgame delivery path to `_try_maximize_items` in delivery.py. Code is correct and neutral (20-seed benchmark confirms no regression). Currently unreachable because `_step_endgame` in round_planner.py gates `_try_maximize_items` calls on `ctx.has_active and self.active_on_shelves > 0`. Requires round_planner.py update to also call `_try_maximize_items` for bots with preview-only inventory during endgame.
 
 ---
 
