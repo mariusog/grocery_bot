@@ -111,7 +111,7 @@ class TestIdleNonactiveDeliver:
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_idle_nonactive_deliver(ctx) is True
 
-    def test_at_dropoff_drops_immediately(self):
+    def test_at_dropoff_does_not_spam_dropoff(self):
         p = _planner(
             [{"id": 0, "position": [1, 8], "inventory": ["bread", "butter"]},
              {"id": 1, "position": [7, 4], "inventory": []}],
@@ -119,8 +119,7 @@ class TestIdleNonactiveDeliver:
             [_order(["cheese"])], drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
-        assert p._step_idle_nonactive_deliver(ctx) is True
-        assert p.actions[-1]["action"] == "drop_off"
+        assert p._step_idle_nonactive_deliver(ctx) is False
 
     def test_skips_with_active_items(self):
         p = _planner(

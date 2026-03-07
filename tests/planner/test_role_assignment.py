@@ -79,3 +79,25 @@ class TestDeliveryQueue:
         p._check_order_transition()
         assert p.gs.delivery_queue == []
         assert p.gs.bot_tasks == {}
+
+    def test_duplicate_only_carrier_drops_out_of_active_queue(self):
+        bots = [
+            {"id": 0, "position": [8, 4], "inventory": ["bread", "yogurt", "flour"]},
+            {"id": 1, "position": [2, 7], "inventory": ["yogurt", "flour"]},
+            {"id": 2, "position": [2, 8], "inventory": ["flour", "flour"]},
+            {"id": 3, "position": [9, 4], "inventory": []},
+        ]
+        p = make_planner(
+            bots=bots,
+            items=[],
+            orders=[_order(["bread", "yogurt", "yogurt", "flour"])],
+        )
+
+        assert p.active_on_shelves == 0
+        assert p.bot_carried_active[0] == {
+            "bread": 1, "yogurt": 1, "flour": 1,
+        }
+        assert p.bot_carried_active[1] == {"yogurt": 1}
+        assert p.bot_carried_active[2] == {}
+        assert p.bot_has_active[2] is False
+        assert set(p.gs.delivery_queue) == {0, 1}

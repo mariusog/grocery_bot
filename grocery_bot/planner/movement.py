@@ -140,11 +140,9 @@ class MovementMixin:
 
             target: Optional[tuple[int, int]] = None
 
-            # Delivering bots with full inventory or no items left to pick
-            if has_active and (
-                len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0
-            ):
-                target = self.drop_off
+            # Delivering bots predict toward the congestion-aware dropoff target.
+            if has_active and self._should_head_to_dropoff(b):
+                target, _ = self._get_delivery_target(bid, pos)
 
             # Bots at dropoff with active items will drop off (stay put)
             elif pos == self.drop_off and has_active:
@@ -181,9 +179,6 @@ class MovementMixin:
                 continue
             if bid in self.bot_assignments and self.bot_assignments[bid]:
                 continue
-            if self.gs.dist_static(pos, self.drop_off) <= DROPOFF_CLEAR_RADIUS:
-                continue
-
             occupied: set[tuple[int, int]] = {
                 tuple(other["position"])
                 for other in self.bots
@@ -194,6 +189,18 @@ class MovementMixin:
                 for other in self.bots
                 if other["id"] != bid
             }
+
+            if self.gs.dist_static(pos, self.drop_off) <= DROPOFF_CLEAR_RADIUS:
+                bot_positions = [tuple(other["position"]) for other in self.bots]
+                if self.gs.is_dropoff_congested(self.drop_off, bot_positions):
+                    avoidance = self.gs.get_avoidance_target(pos, self.drop_off)
+                    if (
+                        avoidance
+                        and avoidance != pos
+                        and avoidance not in occupied
+                    ):
+                        self.predicted[bid] = avoidance
+                continue
 
             for path in active_paths:
                 if pos not in path[1:]:

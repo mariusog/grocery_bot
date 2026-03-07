@@ -1,10 +1,83 @@
 """Delivery decision logic and end-game helpers for RoundPlanner."""
 
-from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.constants import DELIVER_WHEN_CLOSE_DIST, MAX_INVENTORY
 
 
 class DeliveryMixin:
     """Mixin providing delivery timing, end-game estimation, and item maximization."""
+
+    def _should_head_to_dropoff(self, bot: dict[str, object]) -> bool:
+        """Return True when a bot is likely to prioritize delivery this round."""
+        bid = int(bot["id"])
+        if not self.bot_has_active.get(bid, False):
+            return False
+
+        pos = tuple(bot["position"])
+        inv = bot["inventory"]
+        if pos == self.drop_off:
+            return True
+        if self.active_on_shelves == 0 or len(inv) >= MAX_INVENTORY:
+            return True
+        if self.bot_roles.get(bid) == "deliver":
+            return True
+        if self._bot_delivery_completes_order(bot):
+            return True
+
+        d_to_drop = self.gs.dist_static(pos, self.drop_off)
+        return len(inv) >= 2 and d_to_drop <= DELIVER_WHEN_CLOSE_DIST
+
+    def _get_delivery_target(
+        self,
+        bid: int,
+        pos: tuple[int, int],
+    ) -> tuple[tuple[int, int], bool]:
+        """Pick a congestion-aware dropoff target for a delivering bot."""
+        delivering_bots: list[tuple[int, tuple[int, int]]] = []
+        for bot in self.bots:
+            if not self._should_head_to_dropoff(bot):
+                continue
+            obid = bot["id"]
+            if obid == bid:
+                ob_pos = pos
+            else:
+                ob_pos = self.predicted.get(obid, tuple(bot["position"]))
+            delivering_bots.append((obid, ob_pos))
+
+        if not delivering_bots:
+            return self.drop_off, False
+
+        target, should_wait = self.gs.get_dropoff_approach_target(
+            bid, pos, self.drop_off, delivering_bots
+        )
+        if not should_wait:
+            return target, False
+
+        wait_radius = 0
+        if self.gs.dropoff_wait_cells:
+            wait_radius = max(
+                self.gs.dist_static(cell, self.drop_off)
+                for cell in self.gs.dropoff_wait_cells
+            )
+        if self.gs.dist_static(pos, self.drop_off) > wait_radius + 1:
+            return self.drop_off, False
+
+        return target, True
+
+    def _emit_delivery_move_or_wait(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> None:
+        """Move toward a congestion-aware delivery target."""
+        target, _ = self._get_delivery_target(bid, pos)
+        self.gs.notify_bot_target(bid, target)
+        if target == pos:
+            self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
+            return
+        self._emit_move_or_wait(bid, bx, by, pos, target, blocked)
 
     def _estimate_rounds_to_complete(
         self, pos: tuple[int, int], inv: list[str]
@@ -134,7 +207,7 @@ class DeliveryMixin:
                 if total_with_pickup < self.rounds_left and len(inv) < MAX_INVENTORY:
                     return False
 
-            self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+            self._emit_delivery_move_or_wait(bid, bx, by, pos, blocked)
             return True
 
         # Bots with preview-only inventory: deliver for +1/item during endgame

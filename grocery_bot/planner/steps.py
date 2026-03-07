@@ -55,8 +55,8 @@ class StepsMixin:
             and len(ctx.inv) < MAX_INVENTORY
             and self._bot_delivery_completes_order(ctx.bot)
         ):
-            self._emit_move_or_wait(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+            self._emit_delivery_move_or_wait(
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
             )
             return True
         return False
@@ -92,8 +92,8 @@ class StepsMixin:
                 self._claim(item, self.net_preview)
                 if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
                     return True
-        self._emit_move_or_wait(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+        self._emit_delivery_move_or_wait(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
         )
         return True
 
@@ -118,8 +118,8 @@ class StepsMixin:
         """Inventory full -> deliver."""
         if not (ctx.has_active and len(ctx.inv) >= MAX_INVENTORY):
             return False
-        self._emit_move_or_wait(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+        self._emit_delivery_move_or_wait(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
         )
         return True
 
@@ -137,8 +137,8 @@ class StepsMixin:
             dist_via_dropoff = 1 + self.gs.dist_static(self.drop_off, next_item_pos)
             dist_direct = self.gs.dist_static(ctx.pos, next_item_pos)
             if dist_via_dropoff <= dist_direct + 1:
-                self._emit_move_or_wait(
-                    ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+                self._emit_delivery_move_or_wait(
+                    ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
                 )
                 return True
         return False
@@ -149,9 +149,14 @@ class StepsMixin:
             return False
         d = self.gs.dist_static(ctx.pos, self.drop_off)
         if d + 1 >= self.rounds_left:
-            self._emit_move_or_wait(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
-            )
+            if ctx.has_active:
+                self._emit_delivery_move_or_wait(
+                    ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
+                )
+            else:
+                self._emit_move_or_wait(
+                    ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+                )
             return True
         if ctx.has_active and self.active_on_shelves > 0:
             rounds_to_complete = self._estimate_rounds_to_complete(ctx.pos, ctx.inv)
@@ -179,8 +184,8 @@ class StepsMixin:
             and len(ctx.inv) >= 2
             and d_to_drop <= DELIVER_WHEN_CLOSE_DIST
         ):
-            self._emit_move_or_wait(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+            self._emit_delivery_move_or_wait(
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
             )
             return True
 
@@ -191,8 +196,8 @@ class StepsMixin:
                 self._claim(item, self.net_preview)
                 if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
                     return True
-        self._emit_move_or_wait(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+        self._emit_delivery_move_or_wait(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
         )
         return True
 
@@ -213,9 +218,10 @@ class StepsMixin:
             if len(ctx.inv) < MAX_INVENTORY:
                 return False
 
+        # Purely non-active inventory cannot be delivered; sitting on the
+        # dropoff and spamming drop_off only blocks real deliverers.
         if ctx.pos == self.drop_off:
-            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
-            return True
+            return False
         if (
             num_bots >= MEDIUM_TEAM_MIN
             and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS
@@ -263,9 +269,10 @@ class StepsMixin:
             and len(ctx.inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY
         ):
             return False
+        # Non-active items are not deliverable. If this bot reaches the
+        # dropoff, let clear-dropoff/idle logic move it away instead.
         if ctx.pos == self.drop_off:
-            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
-            return True
+            return False
         if (
             len(self.bots) >= MEDIUM_TEAM_MIN
             and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS

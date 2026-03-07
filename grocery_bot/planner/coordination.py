@@ -68,9 +68,7 @@ class CoordinationMixin:
 
             if should_queue:
                 d_to_drop = self.gs.dist_static(pos, self.drop_off)
-                n_active = sum(
-                    1 for item_type in inv if self.active_needed.get(item_type, 0) > 0
-                )
+                n_active = sum(self.bot_carried_active.get(bid, {}).values())
                 new_candidates.append((d_to_drop, -n_active, bid))
 
         new_candidates.sort()

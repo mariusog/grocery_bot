@@ -93,6 +93,10 @@ class RoundPlanner(
         self._check_order_transition()
         self._compute_needs()
         self._compute_bot_assignments()
+        self.gs.update_round_positions(
+            {b["id"]: tuple(b["position"]) for b in self.bots},
+            self.drop_off,
+        )
 
         self.bot_roles: dict[int, str] = {}
         self._use_coordination = len(self.bots) >= DELIVERY_QUEUE_TEAM_MIN
@@ -186,40 +190,105 @@ class RoundPlanner(
             del gs.blacklist_round[item_id]
             gs.pickup_fail_count.pop(item_id, None)
 
+    def _count_usable_inventory(
+        self,
+        bot: dict[str, Any],
+        remaining: dict[str, int],
+        reserved: Optional[dict[str, int]] = None,
+    ) -> tuple[int, int]:
+        """Count inventory copies that can still satisfy the remaining need."""
+        skip = dict(reserved or {})
+        useful_total = 0
+        useful_types: set[str] = set()
+
+        for item in bot["inventory"]:
+            if skip.get(item, 0) > 0:
+                skip[item] -= 1
+                continue
+            if remaining.get(item, 0) <= 0:
+                continue
+            useful_total += 1
+            useful_types.add(item)
+
+        return useful_total, len(useful_types)
+
+    def _allocate_carried_need(
+        self,
+        needed: dict[str, int],
+        reserved_by_bot: Optional[dict[int, dict[str, int]]] = None,
+    ) -> tuple[dict[str, int], dict[int, dict[str, int]], dict[str, int]]:
+        """Allocate carried inventory copies to the still-undelivered order need.
+
+        A carried item only counts as active if it is actually useful toward the
+        remaining order. Distinct coverage is prioritized first so mixed
+        inventories stay active while pure duplicate carriers fall back to
+        non-active behavior once the order is already covered.
+        """
+        remaining: dict[str, int] = {
+            item_type: count for item_type, count in needed.items() if count > 0
+        }
+        reserved_by_bot = reserved_by_bot or {}
+
+        allocated_total: dict[str, int] = {}
+        allocated_by_bot: dict[int, dict[str, int]] = {
+            b["id"]: {} for b in self.bots
+        }
+        pending = list(self.bots)
+
+        while pending and remaining:
+            ranked: list[tuple[int, float, int, int, dict[str, Any]]] = []
+            for bot in pending:
+                useful_total, useful_types = self._count_usable_inventory(
+                    bot, remaining, reserved_by_bot.get(bot["id"])
+                )
+                if useful_total <= 0:
+                    continue
+                d_to_drop = self.gs.dist_static(tuple(bot["position"]), self.drop_off)
+                ranked.append(
+                    (-useful_types, d_to_drop, -useful_total, bot["id"], bot)
+                )
+
+            if not ranked:
+                break
+
+            _, _, _, _, bot = min(ranked)
+            pending = [cand for cand in pending if cand["id"] != bot["id"]]
+
+            skip = dict(reserved_by_bot.get(bot["id"], {}))
+            bot_allocated: dict[str, int] = {}
+            for item in bot["inventory"]:
+                if skip.get(item, 0) > 0:
+                    skip[item] -= 1
+                    continue
+                if remaining.get(item, 0) <= 0:
+                    continue
+                bot_allocated[item] = bot_allocated.get(item, 0) + 1
+                allocated_total[item] = allocated_total.get(item, 0) + 1
+                remaining[item] -= 1
+                if remaining[item] <= 0:
+                    del remaining[item]
+
+            allocated_by_bot[bot["id"]] = bot_allocated
+
+        return allocated_total, allocated_by_bot, remaining
+
     def _compute_needs(self) -> None:
         self.active_needed: dict[str, int] = get_needed_items(self.active)
         preview_needed = get_needed_items(self.preview) if self.preview else {}
         self.items_by_type: dict[str, list[dict[str, Any]]] = {}
         for it in self.items:
             self.items_by_type.setdefault(it["type"], []).append(it)
-        carried_active: dict[str, int] = {}
-        carried_preview: dict[str, int] = {}
-        self.bot_has_active: dict[int, bool] = {}
-        self.bot_carried_active: dict[int, dict[str, int]] = {}
-        for bot in self.bots:
-            has = False
-            bot_active: dict[str, int] = {}
-            for inv_item in bot["inventory"]:
-                if self.active_needed.get(inv_item, 0) > 0:
-                    carried_active[inv_item] = carried_active.get(inv_item, 0) + 1
-                    bot_active[inv_item] = bot_active.get(inv_item, 0) + 1
-                    has = True
-                elif inv_item in preview_needed:
-                    carried_preview[inv_item] = carried_preview.get(inv_item, 0) + 1
-            self.bot_has_active[bot["id"]] = has
-            self.bot_carried_active[bot["id"]] = bot_active
-
-        self.net_active: dict[str, int] = {
-            t: c - carried_active.get(t, 0)
-            for t, c in self.active_needed.items()
-            if c - carried_active.get(t, 0) > 0
+        _, self.bot_carried_active, self.net_active = self._allocate_carried_need(
+            self.active_needed
+        )
+        self.bot_has_active = {
+            bid: bool(bot_active)
+            for bid, bot_active in self.bot_carried_active.items()
         }
         self.active_on_shelves: int = sum(self.net_active.values())
-        self.net_preview: dict[str, int] = {
-            t: c - carried_preview.get(t, 0)
-            for t, c in preview_needed.items()
-            if c - carried_preview.get(t, 0) > 0
-        }
+        _, _, self.net_preview = self._allocate_carried_need(
+            preview_needed, reserved_by_bot=self.bot_carried_active
+        )
         self.active_types: set[str] = set(self.active_needed.keys())
         self.order_nearly_complete: bool = (
             0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
