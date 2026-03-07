@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260307_163410",
+  "recorded_at": "20260307_182002",
   "source": "live",
   "grid": {
     "width": 28,
@@ -1701,6 +1701,25 @@
         "apples",
         "oats",
         "butter"
+      ]
+    },
+    {
+      "id": "order_8",
+      "items_required": [
+        "rice",
+        "bananas",
+        "apples",
+        "flour"
+      ]
+    },
+    {
+      "id": "order_9",
+      "items_required": [
+        "yogurt",
+        "eggs",
+        "flour",
+        "onions",
+        "bread"
       ]
     }
   ]
