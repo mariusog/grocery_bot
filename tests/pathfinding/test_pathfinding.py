@@ -8,6 +8,7 @@ from grocery_bot.pathfinding import (
     bfs_all,
     bfs_full_path,
     bfs_temporal,
+    bfs_toward,
     direction_to,
     _predict_pos,
     find_adjacent_positions,
@@ -345,3 +346,70 @@ class TestFindAdjacentPositions:
     def test_returns_list(self):
         adj = find_adjacent_positions(0, 0, set())
         assert isinstance(adj, list)
+
+
+class TestBfsToward:
+    """Tests for bfs_toward — BFS that gets as close as possible to goal."""
+
+    def test_start_equals_goal_returns_none(self):
+        assert bfs_toward((3, 3), (3, 3), _bounded_blocked()) is None
+
+    def test_reachable_goal_returns_first_step(self):
+        blocked = _bounded_blocked()
+        result = bfs_toward((0, 0), (3, 0), blocked)
+        assert result is not None
+        # First step should be adjacent to start
+        assert abs(result[0] - 0) + abs(result[1] - 0) == 1
+
+    def test_reachable_goal_same_as_bfs(self):
+        """When goal is reachable, bfs_toward should match bfs."""
+        blocked = _bounded_blocked()
+        result_toward = bfs_toward((0, 0), (5, 0), blocked)
+        result_bfs = bfs((0, 0), (5, 0), blocked)
+        assert result_toward == result_bfs
+
+    def test_blocked_goal_gets_closer(self):
+        """When goal is blocked, should move toward closest reachable cell."""
+        # Block the goal completely
+        blocked = _bounded_blocked() | {(5, 5)}
+        result = bfs_toward((0, 0), (5, 5), blocked)
+        assert result is not None
+        # Should move toward (5,5) even though it's blocked
+        start_dist = abs(5 - 0) + abs(5 - 0)
+        step_dist = abs(5 - result[0]) + abs(5 - result[1])
+        assert step_dist < start_dist
+
+    def test_surrounded_goal_approaches(self):
+        """Goal surrounded by walls — should get as close as possible."""
+        # Surround (5,5) on all 4 sides
+        blocked = _bounded_blocked() | {(4, 5), (6, 5), (5, 4), (5, 6), (5, 5)}
+        result = bfs_toward((0, 0), (5, 5), blocked)
+        # Should return a step toward the vicinity of (5,5)
+        assert result is not None
+
+    def test_fully_stuck_returns_none(self):
+        """Start surrounded by walls — no moves possible."""
+        blocked = _bounded_blocked() | {(1, 0), (0, 1)}
+        result = bfs_toward((0, 0), (5, 5), blocked)
+        assert result is None
+
+    def test_max_steps_limits_search(self):
+        """With max_steps=1, only immediate neighbors are checked."""
+        blocked = _bounded_blocked()
+        result = bfs_toward((0, 0), (10, 8), blocked, max_steps=1)
+        # Should still return a valid step or None
+        if result is not None:
+            assert abs(result[0] - 0) + abs(result[1] - 0) == 1
+
+    def test_adjacent_goal_returns_goal(self):
+        blocked = _bounded_blocked()
+        result = bfs_toward((3, 3), (4, 3), blocked)
+        assert result == (4, 3)
+
+    def test_blocked_adjacent_goal_returns_none(self):
+        """Goal is adjacent but blocked — no neighbor is closer, returns None."""
+        blocked = _bounded_blocked() | {(4, 3)}
+        result = bfs_toward((3, 3), (4, 3), blocked)
+        # Start is manhattan distance 1 from goal, all neighbors are distance 2
+        # so bfs_toward correctly returns None (already as close as possible)
+        assert result is None
