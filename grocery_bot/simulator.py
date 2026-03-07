@@ -412,6 +412,23 @@ class GameSimulator:
             # Track per-bot position history: bot_id -> [pos_round_n-2, pos_round_n-1]
             diag_prev_positions = {b["id"]: [] for b in self.bots}
             prev_score = 0
+            prev_items_delivered = 0
+            prev_orders_completed = 0
+            # Action counts
+            diag_moves = 0
+            diag_waits = 0
+            diag_pickups = 0
+            diag_delivers = 0
+            # Useful vs wasted pickups
+            diag_useful_pickups = 0
+            diag_wasted_pickups = 0
+            # Inventory-full waits (bot waits with 3/3 inventory)
+            diag_inv_full_waits = 0
+            # Per-bot idle tracking
+            diag_per_bot_idle = defaultdict(int)
+            # Rounds per completed order tracking
+            diag_order_start_round = self.round
+            diag_rounds_per_order = []
 
         while not self.is_over():
             state = self.get_state()
@@ -427,9 +444,24 @@ class GameSimulator:
             if profile:
                 timings["decide_actions"].append(time.perf_counter() - t0)
 
-            # Snapshot positions before applying actions (for stuck detection)
+            # Snapshot positions and state before applying actions
             if diagnose:
                 pre_positions = {b["id"]: tuple(b["position"]) for b in self.bots}
+                pre_inv_sizes = {b["id"]: len(b["inventory"]) for b in self.bots}
+                # Capture active order needed items BEFORE actions
+                diag_active_needed = set()
+                if self.active_order_idx < len(self.orders):
+                    _order = self.orders[self.active_order_idx]
+                    _needed = {}
+                    for _it in _order["items_required"]:
+                        _needed[_it] = _needed.get(_it, 0) + 1
+                    for _it in _order["items_delivered"]:
+                        _needed[_it] = _needed.get(_it, 0) - 1
+                    diag_active_needed = {k for k, v in _needed.items() if v > 0}
+                # Snapshot items on map for pickup type lookup after apply
+                diag_items_snapshot = {
+                    it["id"]: it["type"] for it in self.items_on_map
+                }
 
             self.apply_actions(actions)
 
@@ -437,19 +469,42 @@ class GameSimulator:
             if diagnose:
                 actions_by_bot = {a["bot"]: a for a in actions}
                 round_idle = 0
+
                 for b in self.bots:
                     bid = b["id"]
                     action = actions_by_bot.get(bid, {"action": "wait"})
+                    act = action["action"]
                     cur_pos = tuple(b["position"])
                     prev_pos = pre_positions[bid]
 
+                    # Action counting
+                    if act.startswith("move_"):
+                        diag_moves += 1
+                    elif act == "wait":
+                        diag_waits += 1
+                    elif act == "pick_up":
+                        diag_pickups += 1
+                        # Check if pickup is for active order (using pre-action snapshot)
+                        item_id = action.get("item_id")
+                        picked_type = diag_items_snapshot.get(item_id)
+                        if picked_type and picked_type in diag_active_needed:
+                            diag_useful_pickups += 1
+                        else:
+                            diag_wasted_pickups += 1
+                    elif act == "drop_off":
+                        diag_delivers += 1
+
                     # Idle detection: explicit wait action
-                    if action["action"] == "wait":
+                    if act == "wait":
                         diag_idle_rounds += 1
+                        diag_per_bot_idle[bid] += 1
                         round_idle += 1
+                        # Inventory-full wait (check pre-action inventory)
+                        if pre_inv_sizes[bid] >= 3:
+                            diag_inv_full_waits += 1
 
                     # Stuck detection: position unchanged after a move attempt
-                    if cur_pos == prev_pos and action["action"].startswith("move_"):
+                    if cur_pos == prev_pos and act.startswith("move_"):
                         diag_stuck_rounds += 1
 
                     # Oscillation detection: returned to position from 2 rounds ago
@@ -464,6 +519,16 @@ class GameSimulator:
 
                 diag_idle_per_round.append(round_idle)
 
+                # Track order completion rounds
+                if self.orders_completed > prev_orders_completed:
+                    new_completions = self.orders_completed - prev_orders_completed
+                    for _ in range(new_completions):
+                        diag_rounds_per_order.append(
+                            self.round - diag_order_start_round
+                        )
+                        diag_order_start_round = self.round
+                    prev_orders_completed = self.orders_completed
+
                 # Delivery gap tracking
                 if self.score > prev_score:
                     gap = self.round - diag_last_delivery_round
@@ -471,6 +536,7 @@ class GameSimulator:
                         diag_max_delivery_gap = gap
                     diag_last_delivery_round = self.round
                 prev_score = self.score
+                prev_items_delivered = self.items_delivered
 
             if verbose and self.round % 50 == 0:
                 print(
@@ -505,7 +571,19 @@ class GameSimulator:
             final_gap = self.round - diag_last_delivery_round
             if final_gap > diag_max_delivery_gap:
                 diag_max_delivery_gap = final_gap
+            total_pickups = diag_useful_pickups + diag_wasted_pickups
+            avg_rounds_per_order = (
+                statistics.mean(diag_rounds_per_order)
+                if diag_rounds_per_order
+                else 0.0
+            )
+            pickup_delivery_ratio = (
+                total_pickups / self.items_delivered
+                if self.items_delivered > 0
+                else 0.0
+            )
             result["diagnostics"] = {
+                # Existing metrics
                 "idle_rounds": diag_idle_rounds,
                 "stuck_rounds": diag_stuck_rounds,
                 "max_delivery_gap": diag_max_delivery_gap,
@@ -514,6 +592,26 @@ class GameSimulator:
                     statistics.mean(diag_idle_per_round) if diag_idle_per_round else 0.0
                 ),
                 "total_bot_rounds": total_bot_rounds,
+                # Action counts
+                "moves": diag_moves,
+                "waits": diag_waits,
+                "pickups": diag_pickups,
+                "delivers": diag_delivers,
+                # Pickup quality
+                "useful_pickups": diag_useful_pickups,
+                "wasted_pickups": diag_wasted_pickups,
+                "pickup_waste_pct": (
+                    diag_wasted_pickups / total_pickups * 100
+                    if total_pickups > 0
+                    else 0.0
+                ),
+                # Inventory-full waits
+                "inv_full_waits": diag_inv_full_waits,
+                # Order efficiency
+                "avg_rounds_per_order": avg_rounds_per_order,
+                "pickup_delivery_ratio": pickup_delivery_ratio,
+                # Per-bot idle
+                "per_bot_idle": dict(diag_per_bot_idle),
             }
         if verbose:
             print(f"  Final: {result}")

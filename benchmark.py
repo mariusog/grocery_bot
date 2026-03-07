@@ -19,7 +19,7 @@ DEFAULT_SEEDS = list(range(1, 21))
 QUICK_SEEDS = [42]
 
 
-def run_game(difficulty, seed):
+def run_game(difficulty, seed, diagnose=False):
     """Run a single game and return result dict."""
     import bot
 
@@ -28,7 +28,7 @@ def run_game(difficulty, seed):
 
     sim = GameSimulator(seed=seed, **cfg)
     t0 = time.perf_counter()
-    result = sim.run(profile=True)
+    result = sim.run(profile=True, diagnose=diagnose)
     wall = time.perf_counter() - t0
 
     result["difficulty"] = difficulty
@@ -38,13 +38,14 @@ def run_game(difficulty, seed):
     return result
 
 
-def run_benchmark(difficulties=None, seeds=None, verbose=False):
+def run_benchmark(difficulties=None, seeds=None, verbose=False, diagnose=False):
     """Run benchmark across difficulties and seeds.
 
     Args:
         difficulties: list of difficulty names. Defaults to all four.
         seeds: list of seeds. Defaults to 1-20.
         verbose: print per-seed results.
+        diagnose: run with diagnostics enabled and print summary.
 
     Returns:
         dict of {difficulty: list of result dicts}
@@ -71,7 +72,7 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False):
 
         results = []
         for seed in seeds:
-            r = run_game(diff, seed)
+            r = run_game(diff, seed, diagnose=diagnose)
             results.append(r)
             if verbose:
                 print(
@@ -142,6 +143,91 @@ def print_summary_table(all_results):
             f"{statistics.mean(orders):>6.1f} {statistics.mean(items):>5.1f} "
             f"{statistics.mean(walls):>5.3f}s"
         )
+
+
+def print_diagnostics_table(all_results):
+    """Print a diagnostic summary table showing action breakdown and efficiency metrics."""
+    print("\n" + "=" * 90)
+    print("DIAGNOSTICS SUMMARY")
+    print("=" * 90)
+
+    # Header
+    print(
+        f"\n{'Diff':<8} {'Bots':>4} {'Score':>5} "
+        f"{'Moves':>6} {'Waits':>6} {'Picks':>5} {'Deliv':>5} "
+        f"{'Waste%':>6} {'InvFW':>5} {'Rds/Ord':>7} {'P/D':>5} "
+        f"{'Idle%':>5} {'Stuck%':>6}"
+    )
+    print("-" * 90)
+
+    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+        if diff not in all_results:
+            continue
+        results = all_results[diff]
+        # Only include results that have diagnostics
+        diag_results = [r for r in results if "diagnostics" in r]
+        if not diag_results:
+            continue
+
+        n = len(diag_results)
+        avg_score = statistics.mean([r["score"] for r in diag_results])
+        num_bots = diag_results[0]["num_bots"]
+
+        # Aggregate diagnostics
+        def avg_diag(key):
+            return statistics.mean([r["diagnostics"][key] for r in diag_results])
+
+        moves = avg_diag("moves")
+        waits = avg_diag("waits")
+        pickups = avg_diag("pickups")
+        delivers = avg_diag("delivers")
+        waste_pct = avg_diag("pickup_waste_pct")
+        inv_full = avg_diag("inv_full_waits")
+        rds_per_order = avg_diag("avg_rounds_per_order")
+        pd_ratio = avg_diag("pickup_delivery_ratio")
+        total_br = avg_diag("total_bot_rounds")
+        idle_pct = avg_diag("idle_rounds") / total_br * 100 if total_br > 0 else 0
+        stuck_pct = avg_diag("stuck_rounds") / total_br * 100 if total_br > 0 else 0
+
+        print(
+            f"{diff:<8} {num_bots:>4} {avg_score:>5.0f} "
+            f"{moves:>6.0f} {waits:>6.0f} {pickups:>5.0f} {delivers:>5.0f} "
+            f"{waste_pct:>5.1f}% {inv_full:>5.0f} {rds_per_order:>7.1f} {pd_ratio:>5.2f} "
+            f"{idle_pct:>4.1f}% {stuck_pct:>5.1f}%"
+        )
+
+    # Per-bot idle breakdown for multi-bot difficulties
+    print("\n--- Per-Bot Idle Rounds (avg across seeds) ---")
+    for diff in ["Medium", "Hard", "Expert"]:
+        if diff not in all_results:
+            continue
+        diag_results = [r for r in all_results[diff] if "diagnostics" in r]
+        if not diag_results:
+            continue
+
+        num_bots = diag_results[0]["num_bots"]
+        total_rounds = statistics.mean([r["rounds_used"] for r in diag_results])
+
+        # Aggregate per-bot idle across seeds
+        bot_idles = {}
+        for r in diag_results:
+            for bid_str, idle in r["diagnostics"]["per_bot_idle"].items():
+                bid = int(bid_str) if isinstance(bid_str, str) else bid_str
+                bot_idles.setdefault(bid, []).append(idle)
+
+        bot_avgs = {bid: statistics.mean(vals) for bid, vals in bot_idles.items()}
+        parts = []
+        for bid in sorted(bot_avgs):
+            idle_avg = bot_avgs[bid]
+            pct = idle_avg / total_rounds * 100 if total_rounds > 0 else 0
+            parts.append(f"B{bid}:{pct:.0f}%")
+        print(f"  {diff:<8} {' '.join(parts)}")
+
+    print()
+    # Legend
+    print("Legend: Waste%=non-active pickups, InvFW=inventory-full waits,")
+    print("        Rds/Ord=avg rounds per order, P/D=pickup-to-delivery ratio")
+    print("=" * 90)
 
 
 def generate_markdown_report(all_results):
@@ -217,14 +303,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Print per-seed results"
     )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Run with diagnostics and print action breakdown per difficulty",
+    )
     args = parser.parse_args()
 
     seeds = QUICK_SEEDS if args.quick else list(range(1, args.seeds + 1))
     difficulties = args.difficulty
 
     results = run_benchmark(
-        difficulties=difficulties, seeds=seeds, verbose=args.verbose
+        difficulties=difficulties,
+        seeds=seeds,
+        verbose=args.verbose,
+        diagnose=args.diagnostics,
     )
+
+    if args.diagnostics:
+        print_diagnostics_table(results)
 
     os.makedirs("docs", exist_ok=True)
     report = generate_markdown_report(results)
