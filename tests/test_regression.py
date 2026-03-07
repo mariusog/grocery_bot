@@ -13,11 +13,11 @@ from tests.conftest import reset_bot
 class TestScoreRegression:
     """Regression tests to prevent score degradation.
 
-    Thresholds are set conservatively below current benchmarks (March 2026):
-      Easy:   avg~153, min~140  (1 bot)
-      Medium: avg~113, min~84   (3 bots)
-      Hard:   avg~83,  min~63   (5 bots, orders 3-5)
-      Expert: avg~57,  min~36   (10 bots)
+    Thresholds are set conservatively at ~80-85% of current benchmarks (March 2026):
+      Easy:   avg~148, min~133  -> thresholds: avg>=125, per-seed>=120
+      Medium: avg~109, min~52   -> thresholds: avg>=90,  per-seed>=30
+      Hard:   avg~82,  min~61   -> thresholds: avg>=67,  per-seed>=20
+      Expert: avg~60,  min~44   -> thresholds: avg>=48,  per-seed>=20
     """
 
     # --- helpers ---
@@ -35,53 +35,53 @@ class TestScoreRegression:
 
     # 1. Easy per-seed baselines
     def test_easy_single_seed_baselines(self):
-        """Each Easy seed 1-10 should score >= 130 (current min is 140)."""
+        """Each Easy seed 1-10 should score >= 120 (current min is 133)."""
         for seed in range(1, 11):
             reset_bot()
             sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Easy"])
             result = sim.run()
-            assert result["score"] >= 130, (
-                f"Easy seed {seed} scored {result['score']} (expected >= 130). "
+            assert result["score"] >= 120, (
+                f"Easy seed {seed} scored {result['score']} (expected >= 120). "
                 f"Regression in single-bot Easy performance."
             )
 
     # 2. Easy average
     def test_easy_average_above_threshold(self):
-        """Easy average across seeds 1-10 should be >= 135 (current avg ~153)."""
+        """Easy average across seeds 1-10 should be >= 125 (current avg ~148)."""
         scores = self._run_seeds(range(1, 11), **DIFFICULTY_PRESETS["Easy"])
         avg = sum(scores) / len(scores)
-        assert avg >= 135, (
-            f"Easy average {avg:.1f} fell below 135 (scores: {scores}). "
+        assert avg >= 125, (
+            f"Easy average {avg:.1f} fell below 125 (scores: {scores}). "
             f"Regression in single-bot Easy performance."
         )
 
     # 3. Medium average
     def test_medium_average_above_threshold(self):
-        """Medium average across seeds 1-20 should be >= 85 (current avg ~105)."""
+        """Medium average across seeds 1-20 should be >= 90 (current avg ~109)."""
         scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Medium"])
         avg = sum(scores) / len(scores)
-        assert avg >= 85, (
-            f"Medium average {avg:.1f} fell below 85 (scores: {scores}). "
+        assert avg >= 90, (
+            f"Medium average {avg:.1f} fell below 90 (scores: {scores}). "
             f"Regression in 3-bot Medium performance."
         )
 
     # 4. Hard average
     def test_hard_average_above_threshold(self):
-        """Hard average across seeds 1-20 should be >= 55 (current avg ~72)."""
+        """Hard average across seeds 1-20 should be >= 67 (current avg ~82)."""
         scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Hard"])
         avg = sum(scores) / len(scores)
-        assert avg >= 55, (
-            f"Hard average {avg:.1f} fell below 55 (scores: {scores}). "
+        assert avg >= 67, (
+            f"Hard average {avg:.1f} fell below 67 (scores: {scores}). "
             f"Regression in 5-bot Hard performance."
         )
 
     # 5. Expert average
     def test_expert_average_above_threshold(self):
-        """Expert (10 bots) average across seeds 1-20 should be >= 38 (current avg ~50)."""
+        """Expert (10 bots) average across seeds 1-20 should be >= 48 (current avg ~60)."""
         scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Expert"])
         avg = sum(scores) / len(scores)
-        assert avg >= 38, (
-            f"Expert average {avg:.1f} fell below 38 (scores: {scores}). "
+        assert avg >= 48, (
+            f"Expert average {avg:.1f} fell below 48 (scores: {scores}). "
             f"Regression in 10-bot Expert performance."
         )
 
