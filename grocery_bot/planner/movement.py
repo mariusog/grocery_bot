@@ -11,6 +11,7 @@ from grocery_bot.pathfinding import (
 )
 from grocery_bot.constants import (
     BLOCKING_RADIUS_LARGE_TEAM,
+    DROPOFF_CLEAR_RADIUS,
     MAX_INVENTORY,
     MEDIUM_TEAM_MIN,
 )
@@ -19,12 +20,60 @@ from grocery_bot.constants import (
 class MovementMixin:
     """Mixin providing movement, BFS, and action emission methods."""
 
+    def _trace_static_bfs_path(
+        self,
+        start: tuple[int, int],
+        goal: tuple[int, int],
+    ) -> list[tuple[int, int]]:
+        """Return the deterministic static BFS path used by repeated next-step BFS."""
+        if start == goal:
+            return [start]
+
+        max_steps = self.gs.dist_static(start, goal)
+        if max_steps == float("inf"):
+            return []
+
+        path = [start]
+        seen = {start}
+        pos = start
+
+        for _ in range(int(max_steps)):
+            nxt = bfs(pos, goal, self.gs.blocked_static)
+            if nxt is None or nxt in seen:
+                return []
+            path.append(nxt)
+            if nxt == goal:
+                return path
+            seen.add(nxt)
+            pos = nxt
+
+        return []
+
     def _emit(self, bid: int, bx: int, by: int, action_dict: dict[str, Any]) -> None:
-        """Record action with yield-redirect for higher-urgency bots."""
-        if self._yield_to and action_dict["action"].startswith("move_"):
+        """Record action with yield-redirect and swap-collision prevention."""
+        if action_dict["action"].startswith("move_"):
             predicted = _predict_pos(bx, by, action_dict["action"])
-            if predicted in self._yield_to:
+            # Yield to higher-urgency bots
+            if self._yield_to and predicted in self._yield_to:
                 action_dict = self._find_yield_alternative(bid, bx, by, predicted)
+                predicted = _predict_pos(bx, by, action_dict["action"])
+            # Prevent swap collisions: if we'd move into a cell occupied by
+            # another bot that is predicted to move into our cell, the live
+            # server blocks BOTH bots.  Detect and redirect.
+            if action_dict["action"].startswith("move_"):
+                my_pos = (bx, by)
+                for b in self.bots:
+                    if b["id"] == bid:
+                        continue
+                    other_pos = tuple(b["position"])
+                    if other_pos != predicted:
+                        continue
+                    other_pred = self.predicted.get(b["id"])
+                    if other_pred == my_pos:
+                        action_dict = self._find_yield_alternative(
+                            bid, bx, by, predicted
+                        )
+                        break
 
         self.actions.append(action_dict)
         expected = _predict_pos(bx, by, action_dict["action"])
@@ -72,9 +121,16 @@ class MovementMixin:
         Gives temporal BFS better information about undecided bots.
         Predictions are stored in self.predicted and get overwritten
         by actual decisions during _decide_bot.
+
+        Phase 2 detects idle bots sitting on active bots' optimal paths
+        and predicts they will yield (move perpendicular), so active bots'
+        BFS can path through without detours.
         """
         if len(self.bots) <= 1:
             return
+
+        # Phase 1: compute targets and initial predictions
+        active_paths: list[list[tuple[int, int]]] = []
 
         for b in self.bots:
             bid: int = b["id"]
@@ -103,13 +159,71 @@ class MovementMixin:
                     target = cell
 
             if target and target != pos:
-                nxt = bfs(pos, target, self.gs.blocked_static)
-                if nxt:
-                    self.predicted[bid] = nxt
+                path = self._trace_static_bfs_path(pos, target)
+                if len(path) >= 2:
+                    active_paths.append(path)
+                    self.predicted[bid] = path[1]
                     continue
 
             # Default: stay in place
             self.predicted[bid] = pos
+
+        # Phase 2: predict yields for idle bots blocking active bots' paths
+        if not active_paths:
+            return
+
+        for b in self.bots:
+            bid = b["id"]
+            pos = tuple(b["position"])
+
+            # Only idle bots yield (no active items, no assignment)
+            if self.bot_has_active.get(bid, False):
+                continue
+            if bid in self.bot_assignments and self.bot_assignments[bid]:
+                continue
+            if self.gs.dist_static(pos, self.drop_off) <= DROPOFF_CLEAR_RADIUS:
+                continue
+
+            occupied: set[tuple[int, int]] = {
+                tuple(other["position"])
+                for other in self.bots
+                if other["id"] != bid
+            }
+            occupied |= {
+                self.predicted.get(other["id"], tuple(other["position"]))
+                for other in self.bots
+                if other["id"] != bid
+            }
+
+            for path in active_paths:
+                if pos not in path[1:]:
+                    continue
+
+                idx = path.index(pos)
+                prev = path[idx - 1]
+                if idx + 1 < len(path):
+                    nxt = path[idx + 1]
+                    dx_t = nxt[0] - prev[0]
+                    dy_t = nxt[1] - prev[1]
+                else:
+                    dx_t = pos[0] - prev[0]
+                    dy_t = pos[1] - prev[1]
+
+                if abs(dx_t) >= abs(dy_t):
+                    perp = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+                else:
+                    perp = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+                path_cells = set(path)
+                for dx, dy in perp:
+                    yp = (pos[0] + dx, pos[1] + dy)
+                    if yp in self.gs.blocked_static or yp in occupied:
+                        continue
+                    if yp in path_cells:
+                        continue
+                    self.predicted[bid] = yp
+                    break
+                break
 
     def _build_moving_obstacles(
         self, bid: int
@@ -156,6 +270,18 @@ class MovementMixin:
                 # Cache leads to oscillation — invalidate and recompute
                 self.gs.bot_planned_paths.pop(bid, None)
                 had_cache = False
+
+        preferred = self.predicted.get(bid)
+        current_dist = self.gs.dist_static(pos, target)
+        if (
+            preferred is not None
+            and preferred != pos
+            and preferred not in blocked
+            and current_dist < float("inf")
+            and self.gs.dist_static(preferred, target) == current_dist - 1
+            and not self._would_oscillate(bid, preferred)
+        ):
+            return preferred
 
         # Cached path unavailable or blocked — fall back to live BFS
         result: Optional[tuple[int, int]] = None
