@@ -1,10 +1,8 @@
 """Delivery queue, role assignment, and persistent task management."""
 
 import math
-from typing import Any, Optional
 
 from grocery_bot.constants import (
-    DELIVERY_QUEUE_TEAM_MIN,
     MAX_CONCURRENT_DELIVERERS,
     MAX_INVENTORY,
     MEDIUM_TEAM_MIN,

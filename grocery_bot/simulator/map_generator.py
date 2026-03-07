@@ -1,6 +1,5 @@
 """Map layout and order generation for the grocery bot simulator."""
 
-import random
 
 ITEM_TYPE_NAMES = [
     "milk", "cheese", "bread", "yogurt", "butter", "eggs",

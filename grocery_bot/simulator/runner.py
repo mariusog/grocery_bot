@@ -2,7 +2,6 @@
 
 import statistics
 import time
-from collections import defaultdict
 
 from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 from grocery_bot.simulator.game_simulator import GameSimulator

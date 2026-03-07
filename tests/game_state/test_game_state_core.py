@@ -1,24 +1,6 @@
 """Unit tests for GameState methods (game_state.py)."""
 
-from grocery_bot.game_state import GameState
 from tests.conftest import make_gs_with_state
-from tests.game_state.conftest import _make_gs_with_dropoff
-
-
-def _make_gs_with_dropoff(items=None, walls=None, width=11, height=9, drop_off=None):
-    """Create a GameState with dropoff zones precomputed."""
-    state = {
-        "grid": {
-            "width": width,
-            "height": height,
-            "walls": walls or [],
-        },
-        "items": items or [],
-        "drop_off": drop_off or [1, 8],
-    }
-    gs = GameState()
-    gs.init_static(state)
-    return gs
 
 
 class TestDistStatic:

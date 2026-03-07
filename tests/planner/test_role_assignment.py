@@ -1,7 +1,6 @@
 """Test role assignment and delivery queue for multi-bot teams."""
 
 from tests.conftest import make_planner
-from grocery_bot.constants import DELIVERY_QUEUE_TEAM_MIN
 
 
 def _order(items, oid="o0"):

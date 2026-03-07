@@ -4,9 +4,8 @@ Covers _step_deliver_at_dropoff, _step_clear_dropoff,
 _step_idle_nonactive_deliver, and _step_inventory_full_deliver.
 """
 
-from tests.conftest import make_planner, make_state, get_action
+from tests.conftest import make_state
 from grocery_bot.planner.round_planner import RoundPlanner
-from grocery_bot.constants import MAX_NONACTIVE_DELIVERERS
 import bot
 
 

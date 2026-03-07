@@ -8,11 +8,6 @@ from grocery_bot.pathfinding import (
     bfs,
     bfs_all,
     bfs_full_path,
-    bfs_temporal,
-    bfs_toward,
-    direction_to,
-    _predict_pos,
-    find_adjacent_positions,
 )
 
 
@@ -117,21 +112,6 @@ class TestGetDistancesFrom:
         assert (5, 5) not in bot._gs.dist_cache
 
 
-# -----------------------------------------------------------------------
-# Direct tests for grocery_bot.pathfinding functions
-# -----------------------------------------------------------------------
-
-
-def _bounded_blocked(width=11, height=9):
-    """Create a border-walled blocked set so bfs_all terminates."""
-    blocked = set()
-    for x in range(-1, width + 1):
-        blocked.add((x, -1))
-        blocked.add((x, height))
-    for y in range(-1, height + 1):
-        blocked.add((-1, y))
-        blocked.add((width, y))
-    return blocked
 
 
 class TestBfsAll:

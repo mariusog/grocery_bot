@@ -6,7 +6,6 @@ on large teams. Tests verify the team-size thresholds are preserved.
 
 from tests.conftest import make_state
 from grocery_bot.planner.round_planner import RoundPlanner
-from grocery_bot.constants import PREDICTION_TEAM_MIN
 import bot
 
 

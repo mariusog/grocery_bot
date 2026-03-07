@@ -1,7 +1,6 @@
 """Tests for single-bot decision logic: pickup, delivery, endgame, edge cases."""
 
 import bot
-from grocery_bot.simulator import GameSimulator
 from tests.conftest import make_state, reset_bot, get_action
 
 

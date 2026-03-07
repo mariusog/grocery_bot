@@ -18,7 +18,6 @@ from benchmark_reporting import (
     print_summary_table,
     print_diagnostics_table,
     generate_markdown_report,
-    run_replay_game,
     run_replay_benchmark,
 )
 

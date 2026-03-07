@@ -1,7 +1,7 @@
 """Unit tests for RoundPlanner core helper methods."""
 
 from tests.conftest import make_planner
-from tests.planner.conftest import _active_order, _preview_order
+from tests.planner.conftest import _active_order
 
 
 

@@ -1,8 +1,7 @@
 """Unit tests for MovementMixin methods (movement.py)."""
 
 from collections import deque
-from tests.conftest import make_planner, make_state, get_action
-import bot
+from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
 
 
@@ -161,7 +160,6 @@ class TestEmit:
 class TestEmitMoveOrWaitOscillation:
     def test_oscillation_avoidance(self):
         """Bot should avoid oscillating between two positions."""
-        from collections import deque
 
         planner = make_planner(
             bots=[{"id": 0, "position": [3, 3], "inventory": ["cheese"]}],

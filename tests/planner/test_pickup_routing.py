@@ -1,7 +1,6 @@
 """Unit tests for PickupMixin methods (pickup.py)."""
 
-from tests.conftest import make_planner, make_state, get_action
-import bot
+from tests.conftest import make_planner
 from tests.planner.conftest import _active_order, _preview_order
 
 

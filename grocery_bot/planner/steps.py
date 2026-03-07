@@ -1,6 +1,5 @@
 """Decision step methods for the RoundPlanner step chain."""
 
-from typing import Any, Optional
 
 from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (

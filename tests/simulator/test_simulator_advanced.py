@@ -1,15 +1,10 @@
 """Tests for simulator edge cases, difficulty presets, and profiling."""
 
-import time
 
-import bot
 from grocery_bot.simulator import (
     GameSimulator,
-    run_benchmark,
-    DIFFICULTY_PRESETS,
     profile_congestion,
 )
-from tests.conftest import reset_bot
 
 
 class TestOrderCascadeDelivery:
