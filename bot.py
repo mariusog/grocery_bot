@@ -24,6 +24,7 @@ from grocery_bot.pathfinding import (  # noqa: F401
     _predict_pos,
 )
 from grocery_bot.orders import get_needed_items  # noqa: F401
+from grocery_bot.constants import MAX_INVENTORY  # noqa: F401
 from grocery_bot.game_state import GameState  # noqa: F401
 from grocery_bot.planner.round_planner import RoundPlanner  # noqa: F401
 
@@ -74,7 +75,104 @@ def decide_actions(state):
         _gs.init_static(state)
 
     planner = RoundPlanner(_gs, state, full_state=state)
-    return planner.plan()
+    actions = planner.plan()
+    return _validate_actions(actions, state)
+
+
+def _validate_actions(actions, state):
+    """Final safety net: replace illegal actions with wait.
+
+    Catches edge cases the planner missed — critical for the live server
+    where illegal moves may incur 10-second penalties.
+    """
+    blocked = _gs.blocked_static
+    if blocked is None:
+        return actions
+
+    drop_off = tuple(state["drop_off"])
+    bot_positions = {b["id"]: tuple(b["position"]) for b in state["bots"]}
+    occupied_cells = set(bot_positions.values())
+    bot_inv_len = {b["id"]: len(b["inventory"]) for b in state["bots"]}
+    items_by_id = {it["id"]: it for it in state["items"]}
+
+    move_deltas = {
+        "move_up": (0, -1), "move_down": (0, 1),
+        "move_left": (-1, 0), "move_right": (1, 0),
+    }
+
+    # Compute intended destinations for all bots
+    actions_by_bot = {a["bot"]: a for a in actions}
+    destinations = {}
+    for bid, a in actions_by_bot.items():
+        pos = bot_positions[bid]
+        act = a["action"]
+        if act in move_deltas:
+            dx, dy = move_deltas[act]
+            destinations[bid] = (pos[0] + dx, pos[1] + dy)
+        else:
+            destinations[bid] = pos
+
+    validated = []
+    claimed_cells = set()
+
+    for a in actions:
+        bid = a["bot"]
+        pos = bot_positions[bid]
+        act = a["action"]
+        dest = destinations[bid]
+        valid = True
+
+        if act in move_deltas:
+            # Static obstacles (walls, shelves, boundaries)
+            if dest in blocked:
+                valid = False
+
+            # Live/simulator movement resolves against current occupancy:
+            # entering a cell another bot currently occupies is illegal,
+            # even if that bot also intends to move away this round.
+            if valid and dest in occupied_cells:
+                valid = False
+
+            # Swap collision (A→B and B→A)
+            if valid:
+                for other_bid in bot_positions:
+                    if other_bid == bid:
+                        continue
+                    if (dest == bot_positions[other_bid]
+                            and destinations.get(other_bid) == pos):
+                        valid = False
+                        break
+
+            # Two of our own bots targeting the same cell
+            if valid and dest in claimed_cells:
+                valid = False
+
+        elif act == "pick_up":
+            item_id = a.get("item_id")
+            if not item_id or bot_inv_len.get(bid, 0) >= MAX_INVENTORY:
+                valid = False
+            else:
+                item = items_by_id.get(item_id)
+                if not item:
+                    valid = False
+                else:
+                    ix, iy = item["position"]
+                    if abs(pos[0] - ix) + abs(pos[1] - iy) != 1:
+                        valid = False
+
+        elif act == "drop_off":
+            if pos != drop_off or bot_inv_len.get(bid, 0) == 0:
+                valid = False
+
+        if valid:
+            validated.append(a)
+            claimed_cells.add(dest)
+        else:
+            validated.append({"bot": bid, "action": "wait"})
+            claimed_cells.add(pos)
+            destinations[bid] = pos  # update so subsequent checks see corrected dest
+
+    return validated
 
 
 # ---------------------------------------------------------------------------
@@ -235,24 +333,8 @@ async def play():
                                 dbg(f"R{round_num} ILLEGAL_MOVE bot{bid}: {action} target {target} is a SHELF!")
 
             actions = decide_actions(data)
-
-            # Validate actions BEFORE sending
-            for a in actions:
-                bid = a["bot"]
-                bot_data = next((b for b in data["bots"] if b["id"] == bid), None)
-                if bot_data and wall_set:
-                    bx, by = bot_data["position"]
-                    action = a["action"]
-                    if action == "move_up": tx, ty = bx, by - 1
-                    elif action == "move_down": tx, ty = bx, by + 1
-                    elif action == "move_left": tx, ty = bx - 1, by
-                    elif action == "move_right": tx, ty = bx + 1, by
-                    else: tx, ty = bx, by
-                    target = (tx, ty)
-                    if action.startswith("move_") and target in wall_set:
-                        dbg(f"R{round_num} SENDING_WALL_MOVE bot{bid}: {action} from ({bx},{by}) to {target}!")
-                    if action.startswith("move_") and target in shelf_set:
-                        dbg(f"R{round_num} SENDING_SHELF_MOVE bot{bid}: {action} from ({bx},{by}) to {target}!")
+            # Actions are already validated by _validate_actions() inside
+            # decide_actions() — illegal moves are replaced with "wait".
 
             # Build the exact JSON we'll send
             response_json = json.dumps({"actions": actions})
@@ -405,19 +487,28 @@ def _save_recorded_map(map_snapshot, recorded_orders, timestamp):
     n_bots = map_snapshot.get("num_bots", "?")
     date_str = datetime.now().strftime("%Y-%m-%d")
     map_path = f"maps/{date_str}_{w}x{h}_{n_bots}bot.json"
-    # Don't overwrite if existing file has more orders (richer data)
+    # Merge orders from previous runs to accumulate the full order list
     if os.path.exists(map_path):
         try:
             with open(map_path) as f:
                 existing = json.load(f)
-            if len(existing.get("orders", [])) >= len(recorded_orders):
-                print(f"  Map already exists with {len(existing['orders'])} orders (new has {len(recorded_orders)}), keeping existing")
-                return
+            existing_orders = existing.get("orders", [])
+            existing_ids = {o["id"] for o in existing_orders}
+            new_count = 0
+            for order in recorded_orders:
+                if order["id"] not in existing_ids:
+                    existing_orders.append(order)
+                    existing_ids.add(order["id"])
+                    new_count += 1
+            # Sort by order id to maintain consistent ordering
+            existing_orders.sort(key=lambda o: o["id"])
+            map_snapshot["orders"] = existing_orders
+            print(f"  Map merged: {new_count} new orders added (total: {len(existing_orders)})")
         except (json.JSONDecodeError, KeyError):
             pass
     with open(map_path, "w") as f:
         json.dump(map_snapshot, f, indent=2)
-    print(f"  Map recorded: {map_path} ({len(recorded_orders)} orders captured)")
+    print(f"  Map saved: {map_path} ({len(map_snapshot['orders'])} orders)")
 
 
 def _build_game_meta(data, timestamp):

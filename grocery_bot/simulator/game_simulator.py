@@ -1,11 +1,17 @@
 """GameSimulator — core simulation engine for testing bot performance."""
 
+import csv
+import glob
+import json
+import os
 import random
 import statistics
 import time
 from collections import defaultdict
+from datetime import datetime
 
 import bot
+from grocery_bot.orders import get_needed_items
 
 from grocery_bot.simulator.map_generator import generate_store_layout, generate_orders
 from grocery_bot.simulator.diagnostics import DiagnosticTracker
@@ -106,10 +112,46 @@ class GameSimulator:
         }
 
     def apply_actions(self, actions):
-        """Apply bot actions, resolving in bot ID order."""
+        """Apply bot actions with simultaneous swap-collision detection.
+
+        Moves are resolved in two passes:
+        1. Compute intended destinations for all move actions.
+        2. Block swaps (two bots trying to exchange positions) and
+           target-collisions (two bots moving to the same cell), then
+           apply remaining moves and non-move actions.
+        """
         actions_by_bot = {a["bot"]: a for a in actions}
+
+        # Pass 1: compute intended positions for movers
+        move_deltas = {
+            "move_up": (0, -1), "move_down": (0, 1),
+            "move_left": (-1, 0), "move_right": (1, 0),
+        }
+        intended: dict[int, tuple[int, int]] = {}  # bot_id -> (nx, ny)
+        for b in self.bots:
+            act = actions_by_bot.get(b["id"], {"action": "wait"})["action"]
+            if act in move_deltas:
+                dx, dy = move_deltas[act]
+                intended[b["id"]] = (b["position"][0] + dx, b["position"][1] + dy)
+
+        # Pass 2: detect swap collisions and block both participants
+        blocked_bots: set[int] = set()
+        bot_positions = {b["id"]: tuple(b["position"]) for b in self.bots}
+        for bid_a, dest_a in intended.items():
+            for bid_b, dest_b in intended.items():
+                if bid_a >= bid_b:
+                    continue
+                # Swap: A wants B's position and B wants A's position
+                if dest_a == bot_positions[bid_b] and dest_b == bot_positions[bid_a]:
+                    blocked_bots.add(bid_a)
+                    blocked_bots.add(bid_b)
+
+        # Apply actions, skipping blocked movers
         for b in sorted(self.bots, key=lambda b: b["id"]):
-            action = actions_by_bot.get(b["id"], {"action": "wait"})
+            bid = b["id"]
+            action = actions_by_bot.get(bid, {"action": "wait"})
+            if bid in blocked_bots and action["action"] in move_deltas:
+                continue  # swap-blocked
             self._apply_action(b, action)
         self.round += 1
 
@@ -216,11 +258,12 @@ class GameSimulator:
     def is_over(self):
         return self.round >= self.max_rounds
 
-    def run(self, verbose=False, profile=False, diagnose=False):
+    def run(self, verbose=False, profile=False, diagnose=False, log=False):
         """Run full game, return results dict."""
         bot.reset_state()
         timings = defaultdict(list) if profile else None
         tracker = DiagnosticTracker(self) if diagnose else None
+        log_rows = [] if log else None
 
         while not self.is_over():
             state = self.get_state()
@@ -235,6 +278,9 @@ class GameSimulator:
             actions = bot.decide_actions(state)
             if profile:
                 timings["decide_actions"].append(time.perf_counter() - t0)
+
+            if log_rows is not None:
+                _log_round(state, actions, log_rows)
 
             self.apply_actions(actions)
 
@@ -258,6 +304,8 @@ class GameSimulator:
             result["timings"] = _compute_timing_stats(timings)
         if tracker:
             result["diagnostics"] = tracker.get_results()
+        if log_rows is not None:
+            result["log_path"] = _save_local_log(self, log_rows)
         if verbose:
             print(f"  Final: {result}")
         return result
@@ -278,3 +326,102 @@ def _compute_timing_stats(timings):
             "total_ms": sum(ms),
         }
     return timing_stats
+
+
+_LOG_DIR = "logs"
+_MAX_LOCAL_LOGS = 10
+
+
+def _log_round(state, actions, log_rows):
+    """Record one round of actions in the same CSV format as live games."""
+    active_o = next(
+        (o for o in state["orders"] if o.get("status") == "active" and not o["complete"]),
+        None,
+    )
+    preview_o = next((o for o in state["orders"] if o.get("status") == "preview"), None)
+    for a in actions:
+        b = next(bt for bt in state["bots"] if bt["id"] == a["bot"])
+        log_rows.append({
+            "round": state["round"],
+            "score": state["score"],
+            "order_idx": state.get("active_order_index", ""),
+            "bot_id": a["bot"],
+            "bot_pos": f"{b['position'][0]},{b['position'][1]}",
+            "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
+            "action": a["action"],
+            "item_id": a.get("item_id", ""),
+            "active_needed": (
+                ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
+                if active_o else ""
+            ),
+            "active_delivered": (
+                ";".join(active_o["items_delivered"]) if active_o else ""
+            ),
+            "preview_needed": (
+                ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
+                if preview_o else ""
+            ),
+        })
+
+
+def _save_local_log(sim, log_rows):
+    """Save CSV + JSON for a local simulator run, pruning old logs."""
+    os.makedirs(_LOG_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = f"local_{timestamp}"
+    csv_path = f"{_LOG_DIR}/{prefix}.csv"
+    json_path = f"{_LOG_DIR}/{prefix}.json"
+
+    # Write CSV
+    fieldnames = [
+        "round", "score", "order_idx", "bot_id", "bot_pos",
+        "inventory", "action", "item_id", "active_needed",
+        "active_delivered", "preview_needed",
+    ]
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(log_rows)
+
+    # Write meta JSON (same format as live games)
+    item_types = sorted({it["type"] for it in sim.items_on_map})
+    meta = {
+        "timestamp": timestamp,
+        "source": "local_simulator",
+        "grid": {
+            "width": sim.width,
+            "height": sim.height,
+            "walls": len(sim.walls),
+            "wall_positions": [list(w) for w in sim.walls],
+        },
+        "bots": sim.num_bots,
+        "items_on_map": len(sim.items_on_map),
+        "item_types": item_types,
+        "item_positions": [
+            {"type": it["type"], "position": list(it["position"])}
+            for it in sim.items_on_map
+        ],
+        "drop_off": list(sim.drop_off),
+        "max_rounds": sim.max_rounds,
+        "total_orders": len(sim.orders),
+        "spawn": list(sim.spawn),
+        "result": {
+            "score": sim.score,
+            "rounds_used": sim.round,
+            "items_delivered": sim.items_delivered,
+            "orders_completed": sim.orders_completed,
+        },
+    }
+    with open(json_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    # Prune old local logs (keep only the latest _MAX_LOCAL_LOGS)
+    local_csvs = sorted(glob.glob(f"{_LOG_DIR}/local_*.csv"))
+    while len(local_csvs) > _MAX_LOCAL_LOGS:
+        old_csv = local_csvs.pop(0)
+        old_json = old_csv.replace(".csv", ".json")
+        os.remove(old_csv)
+        if os.path.exists(old_json):
+            os.remove(old_json)
+
+    return csv_path

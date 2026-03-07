@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grocery Bot Visualizer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Consolas', 'Monaco', monospace; background: #1a1a2e; color: #eee; display: flex; height: 100vh; }
+
+#sidebar {
+  width: 320px; min-width: 320px; background: #16213e; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
+}
+#sidebar h2 { font-size: 14px; color: #8899aa; text-transform: uppercase; letter-spacing: 1px; }
+#sidebar label { font-size: 12px; color: #aab; display: block; margin-bottom: 2px; }
+#sidebar select, #sidebar input[type=file] { width: 100%; padding: 4px; background: #0f3460; color: #eee; border: 1px solid #334; border-radius: 4px; font-size: 13px; }
+
+#controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#controls button { padding: 4px 10px; background: #0f3460; color: #eee; border: 1px solid #446; border-radius: 4px; cursor: pointer; font-size: 13px; }
+#controls button:hover { background: #1a5276; }
+#controls button.active { background: #e94560; border-color: #e94560; }
+
+#round-slider { width: 100%; }
+#round-display { font-size: 18px; font-weight: bold; color: #e94560; }
+#score-display { font-size: 16px; color: #0f9; }
+
+#bot-panel { flex: 1; overflow-y: auto; font-size: 12px; }
+.bot-row { padding: 3px 6px; border-bottom: 1px solid #223; display: flex; gap: 8px; align-items: center; }
+.bot-row .bot-id { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0; }
+.bot-row .bot-info { flex: 1; }
+.bot-row .bot-action { color: #8cf; font-size: 11px; }
+.bot-row .bot-inv { color: #fc8; font-size: 11px; }
+
+#main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+canvas { border: 2px solid #334; border-radius: 4px; }
+
+#order-panel { margin-top: 8px; font-size: 12px; max-width: 800px; width: 100%; }
+.order-box { display: inline-block; padding: 4px 8px; margin: 2px; border-radius: 4px; font-size: 11px; }
+.order-active { background: #1a5; color: #fff; }
+.order-preview { background: #058; color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Grocery Bot Visualizer</h2>
+
+  <div>
+    <label>Load Game Meta (.json)</label>
+    <input type="file" id="meta-file" accept=".json">
+  </div>
+  <div>
+    <label>Load Game Log (.csv)</label>
+    <input type="file" id="csv-file" accept=".csv">
+  </div>
+  <div>
+    <label>Or load from server logs:</label>
+    <select id="log-select"><option value="">-- select --</option></select>
+    <button id="load-btn" style="margin-top:4px;width:100%">Load Selected</button>
+  </div>
+
+  <hr style="border-color:#334">
+
+  <div id="round-display">Round: 0 / 0</div>
+  <div id="score-display">Score: 0</div>
+  <input type="range" id="round-slider" min="0" max="0" value="0">
+
+  <div id="controls">
+    <button id="btn-start">|&lt;</button>
+    <button id="btn-prev">&lt;</button>
+    <button id="btn-play">&#9654;</button>
+    <button id="btn-next">&gt;</button>
+    <button id="btn-end">&gt;|</button>
+    <label style="margin-left:8px">Speed:</label>
+    <select id="speed-select">
+      <option value="500">Slow</option>
+      <option value="150" selected>Normal</option>
+      <option value="50">Fast</option>
+      <option value="10">Turbo</option>
+    </select>
+  </div>
+
+  <hr style="border-color:#334">
+  <h2>Bots</h2>
+  <div id="bot-panel"></div>
+</div>
+
+<div id="main">
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <div id="order-panel"></div>
+</div>
+
+<script>
+const BOT_COLORS = [
+  '#e94560','#0abde3','#10ac84','#f39c12','#9b59b6',
+  '#1abc9c','#e67e22','#3498db','#e74c3c','#2ecc71',
+  '#f1c40f','#8e44ad','#16a085','#d35400','#2980b9',
+  '#c0392b','#27ae60','#f39c12','#7f8c8d','#2c3e50'
+];
+
+const ITEM_COLORS = {};
+const ITEM_COLOR_PAL = [
+  '#ff6b6b','#ffa502','#2ed573','#1e90ff','#a55eea',
+  '#ff4757','#eccc68','#7bed9f','#70a1ff','#5352ed',
+  '#ff6348','#ffa502','#2ed573','#1e90ff','#a55eea',
+  '#ff4757','#eccc68','#7bed9f','#70a1ff','#5352ed',
+];
+
+let meta = null;      // game meta JSON
+let rounds = [];      // parsed CSV: rounds[roundNum] = [{bot_id, bot_pos, inventory, action, item_id, ...}]
+let maxRound = 0;
+let currentRound = 0;
+let playing = false;
+let playTimer = null;
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ---- Data Loading ----
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',');
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = [];
+    let inQuote = false, cur = '';
+    for (const ch of lines[i]) {
+      if (ch === '"') { inQuote = !inQuote; continue; }
+      if (ch === ',' && !inQuote) { vals.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    vals.push(cur);
+    const obj = {};
+    headers.forEach((h, idx) => obj[h.trim()] = (vals[idx] || '').trim());
+    data.push(obj);
+  }
+  return data;
+}
+
+function loadData(metaObj, csvText) {
+  meta = metaObj;
+
+  // Assign item colors
+  const types = meta.item_types || [];
+  types.forEach((t, i) => { ITEM_COLORS[t] = ITEM_COLOR_PAL[i % ITEM_COLOR_PAL.length]; });
+
+  const rows = parseCSV(csvText);
+  rounds = [];
+  for (const row of rows) {
+    const r = parseInt(row.round);
+    if (!rounds[r]) rounds[r] = { actions: [], score: parseInt(row.score) || 0, order_idx: row.order_idx, active_needed: row.active_needed, preview_needed: row.preview_needed };
+    const [bx, by] = row.bot_pos.split(',').map(Number);
+    rounds[r].actions.push({
+      bot_id: parseInt(row.bot_id),
+      bx, by,
+      inventory: row.inventory ? row.inventory.split(';') : [],
+      action: row.action,
+      item_id: row.item_id || null,
+      active_needed: row.active_needed,
+      active_delivered: row.active_delivered,
+      preview_needed: row.preview_needed,
+    });
+  }
+  maxRound = rounds.length - 1;
+
+  const slider = document.getElementById('round-slider');
+  slider.max = maxRound;
+  slider.value = 0;
+  currentRound = 0;
+
+  resizeCanvas();
+  render();
+}
+
+// ---- File loading ----
+
+document.getElementById('meta-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  file.text().then(t => { window._loadedMeta = JSON.parse(t); tryAutoLoad(); });
+});
+document.getElementById('csv-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  file.text().then(t => { window._loadedCSV = t; tryAutoLoad(); });
+});
+function tryAutoLoad() {
+  if (window._loadedMeta && window._loadedCSV) {
+    loadData(window._loadedMeta, window._loadedCSV);
+  }
+}
+
+// ---- Canvas ----
+
+function resizeCanvas() {
+  if (!meta) return;
+  const gw = meta.grid.width, gh = meta.grid.height;
+  const maxW = window.innerWidth - 360, maxH = window.innerHeight - 100;
+  const cellSize = Math.min(Math.floor(maxW / gw), Math.floor(maxH / gh), 40);
+  canvas.width = gw * cellSize;
+  canvas.height = gh * cellSize;
+  canvas._cellSize = cellSize;
+}
+window.addEventListener('resize', () => { resizeCanvas(); render(); });
+
+function render() {
+  if (!meta || !rounds.length) return;
+  const cs = canvas._cellSize;
+  const gw = meta.grid.width, gh = meta.grid.height;
+  const roundData = rounds[currentRound];
+  if (!roundData) return;
+
+  // Clear
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid lines
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= gw; x++) { ctx.beginPath(); ctx.moveTo(x*cs, 0); ctx.lineTo(x*cs, gh*cs); ctx.stroke(); }
+  for (let y = 0; y <= gh; y++) { ctx.beginPath(); ctx.moveTo(0, y*cs); ctx.lineTo(gw*cs, y*cs); ctx.stroke(); }
+
+  // Walls
+  const wallSet = new Set((meta.grid.wall_positions || meta.grid.walls || []).map(w => w[0]+','+w[1]));
+  ctx.fillStyle = '#444';
+  for (const wk of wallSet) {
+    const [wx, wy] = wk.split(',').map(Number);
+    ctx.fillRect(wx*cs, wy*cs, cs, cs);
+  }
+
+  // Items (shelves)
+  const itemPositions = meta.item_positions || [];
+  for (const it of itemPositions) {
+    const [ix, iy] = it.position;
+    ctx.fillStyle = ITEM_COLORS[it.type] || '#666';
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(ix*cs+1, iy*cs+1, cs-2, cs-2);
+    ctx.globalAlpha = 1;
+    if (cs >= 20) {
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.max(8, cs/4)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(it.type.slice(0,3), ix*cs+cs/2, iy*cs+cs/2+3);
+    }
+  }
+
+  // Drop-off
+  const [dx, dy] = meta.drop_off;
+  ctx.fillStyle = '#0f9';
+  ctx.globalAlpha = 0.3;
+  ctx.fillRect(dx*cs, dy*cs, cs, cs);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#0f9';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(dx*cs, dy*cs, cs, cs);
+  if (cs >= 16) {
+    ctx.fillStyle = '#0f9';
+    ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('D', dx*cs+cs/2, dy*cs+cs/2+4);
+  }
+
+  // Bots
+  const botActions = roundData.actions;
+  for (const ba of botActions) {
+    const bx = ba.bx, by = ba.by;
+    const color = BOT_COLORS[ba.bot_id % BOT_COLORS.length];
+
+    // Draw direction arrow
+    if (ba.action.startsWith('move_')) {
+      let tx = bx, ty = by;
+      if (ba.action === 'move_up') ty--;
+      if (ba.action === 'move_down') ty++;
+      if (ba.action === 'move_left') tx--;
+      if (ba.action === 'move_right') tx++;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.4;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx*cs+cs/2, by*cs+cs/2);
+      ctx.lineTo(tx*cs+cs/2, ty*cs+cs/2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Bot circle
+    const radius = cs * 0.35;
+    ctx.beginPath();
+    ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius, 0, Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Bot ID
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ba.bot_id, bx*cs+cs/2, by*cs+cs/2);
+
+    // Inventory count
+    if (ba.inventory.length > 0) {
+      ctx.fillStyle = '#fc0';
+      ctx.font = `bold ${Math.max(7, cs/4)}px monospace`;
+      ctx.fillText(ba.inventory.length, bx*cs+cs*0.8, by*cs+cs*0.2);
+    }
+
+    // Pickup target
+    if (ba.action === 'pick_up' && ba.item_id) {
+      ctx.strokeStyle = '#ff0';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3,3]);
+      ctx.strokeRect(bx*cs-2, by*cs-2, cs+4, cs+4);
+      ctx.setLineDash([]);
+    }
+
+    // Drop-off action
+    if (ba.action === 'drop_off') {
+      ctx.strokeStyle = '#0f9';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([4,2]);
+      ctx.beginPath();
+      ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius+4, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Update UI
+  document.getElementById('round-display').textContent = `Round: ${currentRound} / ${maxRound}`;
+  document.getElementById('score-display').textContent = `Score: ${roundData.score}`;
+  document.getElementById('round-slider').value = currentRound;
+
+  // Bot panel
+  const botPanel = document.getElementById('bot-panel');
+  botPanel.innerHTML = '';
+  for (const ba of botActions) {
+    const color = BOT_COLORS[ba.bot_id % BOT_COLORS.length];
+    const inv = ba.inventory.length > 0 ? ba.inventory.join(', ') : '(empty)';
+    const div = document.createElement('div');
+    div.className = 'bot-row';
+    div.innerHTML = `
+      <div class="bot-id" style="background:${color}">${ba.bot_id}</div>
+      <div class="bot-info">
+        <div class="bot-action">${ba.action}${ba.item_id ? ' ('+ba.item_id+')' : ''}</div>
+        <div class="bot-inv">[${ba.bx},${ba.by}] ${inv}</div>
+      </div>`;
+    botPanel.appendChild(div);
+  }
+
+  // Order panel
+  const orderPanel = document.getElementById('order-panel');
+  const an = roundData.actions[0]?.active_needed || '';
+  const pn = roundData.actions[0]?.preview_needed || '';
+  const ad = roundData.actions[0]?.active_delivered || '';
+  let html = '';
+  if (an) {
+    html += `<b style="color:#1a5">Active:</b> `;
+    for (const part of an.split(';')) {
+      if (!part) continue;
+      const [type, cnt] = part.split(':');
+      html += `<span class="order-box order-active">${type}: ${cnt}</span>`;
+    }
+    if (ad) html += ` <span style="color:#888">delivered: ${ad}</span>`;
+  }
+  if (pn) {
+    html += `<br><b style="color:#058">Preview:</b> `;
+    for (const part of pn.split(';')) {
+      if (!part) continue;
+      const [type, cnt] = part.split(':');
+      html += `<span class="order-box order-preview">${type}: ${cnt}</span>`;
+    }
+  }
+  orderPanel.innerHTML = html;
+}
+
+// ---- Controls ----
+
+document.getElementById('round-slider').addEventListener('input', e => {
+  currentRound = parseInt(e.target.value);
+  render();
+});
+
+document.getElementById('btn-start').addEventListener('click', () => { currentRound = 0; render(); });
+document.getElementById('btn-end').addEventListener('click', () => { currentRound = maxRound; render(); });
+document.getElementById('btn-prev').addEventListener('click', () => { if (currentRound > 0) currentRound--; render(); });
+document.getElementById('btn-next').addEventListener('click', () => { if (currentRound < maxRound) currentRound++; render(); });
+
+document.getElementById('btn-play').addEventListener('click', function() {
+  playing = !playing;
+  this.classList.toggle('active', playing);
+  this.textContent = playing ? '⏸' : '▶';
+  if (playing) {
+    const speed = parseInt(document.getElementById('speed-select').value);
+    playTimer = setInterval(() => {
+      if (currentRound >= maxRound) { playing = false; document.getElementById('btn-play').classList.remove('active'); document.getElementById('btn-play').textContent = '▶'; clearInterval(playTimer); return; }
+      currentRound++;
+      render();
+    }, speed);
+  } else {
+    clearInterval(playTimer);
+  }
+});
+
+document.getElementById('speed-select').addEventListener('change', () => {
+  if (playing) {
+    clearInterval(playTimer);
+    const speed = parseInt(document.getElementById('speed-select').value);
+    playTimer = setInterval(() => {
+      if (currentRound >= maxRound) { playing = false; clearInterval(playTimer); return; }
+      currentRound++;
+      render();
+    }, speed);
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'l') { if (currentRound < maxRound) currentRound++; render(); }
+  if (e.key === 'ArrowLeft' || e.key === 'h') { if (currentRound > 0) currentRound--; render(); }
+  if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-play').click(); }
+  if (e.key === 'Home') { currentRound = 0; render(); }
+  if (e.key === 'End') { currentRound = maxRound; render(); }
+});
+
+// ---- Auto-discover logs (if served from project root) ----
+// Try to fetch log list from a simple endpoint
+async function tryLoadLogList() {
+  try {
+    const resp = await fetch('/api/logs');
+    if (resp.ok) {
+      const logs = await resp.json();
+      const sel = document.getElementById('log-select');
+      for (const log of logs) {
+        const opt = document.createElement('option');
+        opt.value = log;
+        opt.textContent = log;
+        sel.appendChild(opt);
+      }
+    }
+  } catch(e) { /* no server, use file inputs */ }
+}
+
+document.getElementById('load-btn').addEventListener('click', async () => {
+  const sel = document.getElementById('log-select');
+  const logName = sel.value;
+  if (!logName) return;
+  try {
+    const [metaResp, csvResp] = await Promise.all([
+      fetch(`/logs/${logName}.json`),
+      fetch(`/logs/${logName}.csv`)
+    ]);
+    if (metaResp.ok && csvResp.ok) {
+      const metaObj = await metaResp.json();
+      const csvText = await csvResp.text();
+      loadData(metaObj, csvText);
+    }
+  } catch(e) { alert('Failed to load: ' + e.message); }
+});
+
+tryLoadLogList();
+</script>
+</body>
+</html>
