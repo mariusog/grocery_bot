@@ -59,22 +59,8 @@ class ReplaySimulator(GameSimulator):
                 "complete": False,
             })
 
-        order_rng = random.Random(recorded.get("map_seed", 42))
-        if self.orders:
-            sizes = [len(o["items_required"]) for o in self.orders]
-            lo, hi = min(sizes), max(sizes)
-        else:
-            lo, hi = 3, 5
-        n_existing = len(self.orders)
-        for i in range(n_existing, 100):
-            num_items = order_rng.randint(lo, hi)
-            items = [order_rng.choice(self.item_type_names) for _ in range(num_items)]
-            self.orders.append({
-                "id": f"order_{i}",
-                "items_required": items,
-                "items_delivered": [],
-                "complete": False,
-            })
+        # Only use recorded orders — no random padding.
+        # The live server is deterministic per day; random orders won't match.
 
         # Game state
         self.round = 0
