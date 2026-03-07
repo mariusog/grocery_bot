@@ -469,6 +469,7 @@ def _build_map_snapshot(data, timestamp):
         "spawn": data["bots"][0]["position"],
         "num_bots": len(data["bots"]),
         "max_rounds": data["max_rounds"],
+        "total_orders": data.get("total_orders"),
         "items": [
             {"id": it["id"], "type": it["type"], "position": it["position"]}
             for it in data["items"]

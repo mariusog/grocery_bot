@@ -1,12 +1,14 @@
 """Benchmark script for grocery bot performance analysis.
 
-Runs the bot through simulator difficulty presets matching the challenge:
+By default this benchmarks the recorded replay maps in `maps/`, preserving the
+recorded order prefix and padding the unseen future tail with deterministic
+synthetic orders.
+
+The older synthetic preset benchmark is still available via `--synthetic`:
   Easy:   1 bot,  12x10, 4 types,  orders 3-4
   Medium: 3 bots, 16x12, 8 types,  orders 3-5
   Hard:   5 bots, 22x14, 12 types, orders 3-5
   Expert: 10 bots, 28x18, 16 types, orders 4-6
-
-Reports score, orders, items, timing across 20 seeds per difficulty.
 """
 
 import os
@@ -18,12 +20,21 @@ from benchmark_reporting import (
     print_summary_table,
     print_diagnostics_table,
     generate_markdown_report,
+    generate_replay_markdown_report,
     run_replay_benchmark,
 )
 
 # Number of seeds for averaging
 DEFAULT_SEEDS = list(range(1, 21))
 QUICK_SEEDS = [42]
+DEFAULT_MAP_DIR = "maps"
+DIFFICULTY_MAP_KEYS = {
+    "Easy": ("12x10", "1bot"),
+    "Medium": ("16x12", "3bot"),
+    "Hard": ("22x14", "5bot"),
+    "Expert": ("28x18", "10bot"),
+    "Nightmare": ("30x18", "20bot"),
+}
 
 
 def run_game(difficulty, seed, diagnose=False):
@@ -128,6 +139,35 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False, diagnose=False):
     return all_results
 
 
+def _default_replay_map_files(map_dir: str = DEFAULT_MAP_DIR) -> list[str]:
+    """Return the default replay map set, if present."""
+    if not os.path.isdir(map_dir):
+        return []
+    return sorted(
+        os.path.join(map_dir, name)
+        for name in os.listdir(map_dir)
+        if name.endswith(".json")
+    )
+
+
+def _replay_map_files_for_difficulties(
+    difficulties: list[str] | None,
+    map_dir: str = DEFAULT_MAP_DIR,
+) -> list[str]:
+    """Return recorded replay maps matching the requested difficulties."""
+    map_files = _default_replay_map_files(map_dir)
+    if not difficulties:
+        return map_files
+
+    wanted_keys = [DIFFICULTY_MAP_KEYS[diff] for diff in difficulties]
+    selected = []
+    for path in map_files:
+        base = os.path.basename(path)
+        if any(size in base and bots in base for size, bots in wanted_keys):
+            selected.append(path)
+    return selected
+
+
 if __name__ == "__main__":
     import argparse
     import glob as globmod
@@ -144,7 +184,7 @@ if __name__ == "__main__":
         "-d",
         nargs="+",
         choices=["Easy", "Medium", "Hard", "Expert", "Nightmare"],
-        help="Run specific difficulties only",
+        help="Run specific difficulties only (recorded maps by default)",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Print per-seed results"
@@ -163,34 +203,74 @@ if __name__ == "__main__":
         default=None,
         help="Directory of recorded map JSONs (benchmarks all of them)",
     )
+    parser.add_argument(
+        "--synthetic",
+        action="store_true",
+        help="Run the generated difficulty presets instead of recorded maps",
+    )
+    parser.add_argument(
+        "--strict-replay",
+        action="store_true",
+        help="Use only the recorded replay orders with no synthetic padding",
+    )
     args = parser.parse_args()
 
+    os.makedirs("docs", exist_ok=True)
+
     if args.map:
-        run_replay_benchmark([args.map], verbose=args.verbose, diagnose=args.diagnostics)
+        replay_results = run_replay_benchmark(
+            [args.map],
+            verbose=args.verbose,
+            diagnose=args.diagnostics,
+            pad_orders=not args.strict_replay,
+        )
+        with open("docs/benchmark_results.md", "w") as f:
+            f.write(generate_replay_markdown_report(replay_results))
+        print("\nReport written to docs/benchmark_results.md")
     elif args.map_dir:
         map_files = sorted(globmod.glob(os.path.join(args.map_dir, "*.json")))
         if not map_files:
             print(f"No .json files found in {args.map_dir}")
         else:
-            run_replay_benchmark(
-                map_files, verbose=args.verbose, diagnose=args.diagnostics
+            replay_results = run_replay_benchmark(
+                map_files,
+                verbose=args.verbose,
+                diagnose=args.diagnostics,
+                pad_orders=not args.strict_replay,
             )
+            with open("docs/benchmark_results.md", "w") as f:
+                f.write(generate_replay_markdown_report(replay_results))
+            print("\nReport written to docs/benchmark_results.md")
     else:
-        seeds = QUICK_SEEDS if args.quick else list(range(1, args.seeds + 1))
-        difficulties = args.difficulty
+        default_maps = _replay_map_files_for_difficulties(args.difficulty)
 
-        results = run_benchmark(
-            difficulties=difficulties,
-            seeds=seeds,
-            verbose=args.verbose,
-            diagnose=args.diagnostics,
-        )
+        if not args.synthetic and default_maps:
+            replay_results = run_replay_benchmark(
+                default_maps,
+                verbose=args.verbose,
+                diagnose=args.diagnostics,
+                pad_orders=not args.strict_replay,
+            )
+            with open("docs/benchmark_results.md", "w") as f:
+                f.write(generate_replay_markdown_report(replay_results))
+            print("\nReport written to docs/benchmark_results.md")
+        else:
+            if args.difficulty and not args.synthetic:
+                print("No matching recorded maps found; falling back to synthetic presets.")
+            seeds = QUICK_SEEDS if args.quick else list(range(1, args.seeds + 1))
+            difficulties = args.difficulty
 
-        if args.diagnostics:
-            print_diagnostics_table(results)
+            results = run_benchmark(
+                difficulties=difficulties,
+                seeds=seeds,
+                verbose=args.verbose,
+                diagnose=args.diagnostics,
+            )
 
-        os.makedirs("docs", exist_ok=True)
-        report = generate_markdown_report(results)
-        with open("docs/benchmark_results.md", "w") as f:
-            f.write(report)
-        print("\nReport written to docs/benchmark_results.md")
+            if args.diagnostics:
+                print_diagnostics_table(results)
+
+            report = generate_markdown_report(results)
+            with open("docs/benchmark_results.md", "w") as f:
+                f.write(report)
+            print("\nReport written to docs/benchmark_results.md")

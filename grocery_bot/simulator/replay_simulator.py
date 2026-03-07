@@ -1,9 +1,57 @@
 """ReplaySimulator — loads a recorded map instead of generating one."""
 
+import hashlib
 import json
 import random
 
 from grocery_bot.simulator.game_simulator import GameSimulator
+from grocery_bot.simulator.map_generator import generate_orders
+from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
+
+DEFAULT_REPLAY_TOTAL_ORDERS = 50
+
+
+def _matching_preset(recorded):
+    """Return the difficulty preset matching the recorded map, if any."""
+    for cfg in DIFFICULTY_PRESETS.values():
+        if (
+            cfg["width"] == recorded["grid"]["width"]
+            and cfg["height"] == recorded["grid"]["height"]
+            and cfg["num_bots"] == recorded["num_bots"]
+        ):
+            return cfg
+    return None
+
+
+def _infer_items_per_order(recorded):
+    """Infer the synthetic padding order size range for a recorded map."""
+    preset = _matching_preset(recorded)
+    if preset is not None:
+        return preset["items_per_order"]
+
+    sizes = [
+        len(order.get("items_required", []))
+        for order in recorded.get("orders", [])
+        if order.get("items_required")
+    ]
+    if sizes:
+        return (min(sizes), max(sizes))
+    return (3, 4)
+
+
+def _padding_seed(recorded):
+    """Build a stable seed from the static map layout, independent of seen orders."""
+    payload = {
+        "grid": recorded["grid"],
+        "drop_off": recorded["drop_off"],
+        "spawn": recorded["spawn"],
+        "num_bots": recorded["num_bots"],
+        "items": recorded["items"],
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).digest()
+    return int.from_bytes(digest[:8], "big")
 
 
 class ReplaySimulator(GameSimulator):
@@ -14,7 +62,7 @@ class ReplaySimulator(GameSimulator):
     from a JSON recording.
     """
 
-    def __init__(self, map_path):
+    def __init__(self, map_path, pad_orders=True, total_orders=None):
         # Skip GameSimulator.__init__ — we load everything from the recording
         with open(map_path) as f:
             recorded = json.load(f)
@@ -49,7 +97,7 @@ class ReplaySimulator(GameSimulator):
 
         self.item_type_names = sorted({it["type"] for it in recorded["items"]})
 
-        # Orders from recording, extended with generated orders
+        # Orders from recording, optionally extended with deterministic padding.
         self.orders = []
         for order in recorded.get("orders", []):
             self.orders.append({
@@ -59,8 +107,31 @@ class ReplaySimulator(GameSimulator):
                 "complete": False,
             })
 
-        # Only use recorded orders — no random padding.
-        # The live server is deterministic per day; random orders won't match.
+        self.recorded_order_count = len(self.orders)
+        requested_total = recorded.get("total_orders", total_orders)
+        if requested_total is None:
+            requested_total = DEFAULT_REPLAY_TOTAL_ORDERS
+        self.total_orders = max(self.recorded_order_count, requested_total)
+        self.synthetic_order_count = 0
+
+        if pad_orders and self.recorded_order_count < self.total_orders:
+            items_per_order = _infer_items_per_order(recorded)
+            synthetic_rng = random.Random(_padding_seed(recorded))
+            synthetic_orders = generate_orders(
+                synthetic_rng,
+                self.item_type_names,
+                items_per_order,
+                count=self.total_orders,
+            )
+            for idx in range(self.recorded_order_count, self.total_orders):
+                generated = synthetic_orders[idx]
+                self.orders.append({
+                    "id": f"order_{idx}",
+                    "items_required": list(generated["items_required"]),
+                    "items_delivered": [],
+                    "complete": False,
+                })
+            self.synthetic_order_count = self.total_orders - self.recorded_order_count
 
         # Game state
         self.round = 0
