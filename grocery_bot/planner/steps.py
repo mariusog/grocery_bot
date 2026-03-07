@@ -209,7 +209,9 @@ class StepsMixin:
             if len(ctx.inv) < MAX_INVENTORY:
                 return False
         else:
-            return False
+            # Large teams: only clear when inventory is completely full
+            if len(ctx.inv) < MAX_INVENTORY:
+                return False
 
         if ctx.pos == self.drop_off:
             self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
@@ -228,7 +230,18 @@ class StepsMixin:
     def _step_preview_prepick(self, ctx) -> bool:
         """Pre-pick preview items."""
         num_bots = len(self.bots)
-        if num_bots >= LARGE_TEAM_MIN:
+        if num_bots >= PREDICTION_TEAM_MIN:
+            # Medium-large teams: unassigned bots prepick freely.
+            # Very large teams (16+): only force when active items are done.
+            has_assignment = (
+                ctx.bid in self.bot_assignments
+                and bool(self.bot_assignments[ctx.bid])
+            )
+            if num_bots <= 15:
+                force = not has_assignment and not ctx.has_active
+            else:
+                force = self.active_on_shelves == 0
+        elif num_bots >= LARGE_TEAM_MIN:
             force = self.active_on_shelves == 0
         elif num_bots >= SMALL_TEAM_MAX:
             force = self.active_on_shelves <= 1
