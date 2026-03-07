@@ -17,6 +17,7 @@ class TestDetectPickupFailures:
         # Simulate: last round bot tried to pick "item_x" with inv len 0,
         # and now inv is still 0 -> failure
         planner.gs.last_pickup[0] = ("item_x", 0)
+        planner.gs.last_expected_pos[0] = (3, 3)  # matches current pos
         planner.gs.pickup_fail_count = {}
         planner._detect_pickup_failures()
         assert planner.gs.pickup_fail_count.get("item_x", 0) >= 1
@@ -42,6 +43,7 @@ class TestDetectPickupFailures:
             orders=[_active_order(["cheese"])],
         )
         planner.gs.last_pickup[0] = ("item_x", 0)
+        planner.gs.last_expected_pos[0] = (3, 3)  # matches current pos
         planner.gs.pickup_fail_count["item_x"] = 2  # Will become 3 (threshold)
         planner._detect_pickup_failures()
         assert "item_x" in planner.gs.blacklisted_items

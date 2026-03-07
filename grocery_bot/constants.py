@@ -24,6 +24,7 @@ ORDER_NEARLY_COMPLETE_MAX = 2  # active_on_shelves <= this = "nearly complete"
 # Pickup failure / blacklisting
 # ---------------------------------------------------------------------------
 PICKUP_FAIL_BLACKLIST_THRESHOLD = 3  # consecutive fails before blacklisting an item
+BLACKLIST_EXPIRY_ROUNDS = 15  # rounds before a blacklisted item is retried
 
 # ---------------------------------------------------------------------------
 # Bot team-size thresholds for strategy branching

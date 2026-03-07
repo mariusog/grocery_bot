@@ -27,7 +27,9 @@ class MovementMixin:
                 action_dict = self._find_yield_alternative(bid, bx, by, predicted)
 
         self.actions.append(action_dict)
-        self.predicted[bid] = _predict_pos(bx, by, action_dict["action"])
+        expected = _predict_pos(bx, by, action_dict["action"])
+        self.predicted[bid] = expected
+        self.gs.last_expected_pos[bid] = expected
         if hasattr(self, "_decided"):
             self._decided.add(bid)
 

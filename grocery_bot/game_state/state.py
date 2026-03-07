@@ -37,6 +37,11 @@ class GameState(
         self.last_pickup: dict[int, tuple[str, int]] = {}
         self.pickup_fail_count: dict[str, int] = {}
         self.blacklisted_items: set[str] = set()
+        self.blacklist_round: dict[str, int] = {}
+
+        # Desync detection
+        self.last_expected_pos: dict[int, tuple[int, int]] = {}
+        self.last_round_processed: int = -1
 
         # Precomputed route tables
         self.best_pickup: dict[
@@ -90,6 +95,9 @@ class GameState(
         self.last_pickup = {}
         self.pickup_fail_count = {}
         self.blacklisted_items = set()
+        self.blacklist_round = {}
+        self.last_expected_pos = {}
+        self.last_round_processed = -1
         self.best_pickup = {}
         self.best_pair_route = {}
         self.best_triple_route = {}

@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from grocery_bot.orders import get_needed_items
 from grocery_bot.constants import (
+    BLACKLIST_EXPIRY_ROUNDS,
     BOT_HISTORY_MAXLEN,
     DELIVERY_QUEUE_TEAM_MIN,
     ENDGAME_ROUNDS_LEFT,
@@ -69,8 +70,10 @@ class RoundPlanner(
 
     def plan(self) -> list[dict[str, Any]]:
         """Main entry: return list of action dicts for all bots."""
+        self.gs.last_round_processed = self.full_state.get("round", -1)
         self._init_bot_history()
         self._detect_pickup_failures()
+        self._expire_blacklists()
 
         if self.gs.blocked_static is None:
             self.gs.init_static({"grid": self._state_grid(), "items": self.items})
@@ -144,18 +147,44 @@ class RoundPlanner(
             if bid not in gs.last_pickup:
                 continue
             last_item_id, last_inv_len = gs.last_pickup[bid]
+            actual_pos = tuple(b["position"])
+
+            # Check if bot is at the expected position — if not, this is a
+            # desync (server didn't apply our action) and we should NOT count
+            # the pickup failure.
+            expected_pos = gs.last_expected_pos.get(bid)
+            position_matches = expected_pos is None or actual_pos == expected_pos
+
             if len(b["inventory"]) <= last_inv_len:
-                gs.pickup_fail_count[last_item_id] = (
-                    gs.pickup_fail_count.get(last_item_id, 0) + 1
-                )
-                if (
-                    gs.pickup_fail_count[last_item_id]
-                    >= PICKUP_FAIL_BLACKLIST_THRESHOLD
-                ):
-                    gs.blacklisted_items.add(last_item_id)
+                if position_matches:
+                    gs.pickup_fail_count[last_item_id] = (
+                        gs.pickup_fail_count.get(last_item_id, 0) + 1
+                    )
+                    if (
+                        gs.pickup_fail_count[last_item_id]
+                        >= PICKUP_FAIL_BLACKLIST_THRESHOLD
+                    ):
+                        gs.blacklisted_items.add(last_item_id)
+                        current_round = self.full_state.get("round", 0)
+                        gs.blacklist_round[last_item_id] = current_round
+                # else: desync detected, don't count failure
             else:
                 gs.pickup_fail_count.pop(last_item_id, None)
             del gs.last_pickup[bid]
+
+    def _expire_blacklists(self) -> None:
+        """Remove blacklisted items whose expiry window has passed."""
+        gs = self.gs
+        current_round = self.full_state.get("round", 0)
+        expired = [
+            item_id
+            for item_id, bl_round in gs.blacklist_round.items()
+            if current_round - bl_round >= BLACKLIST_EXPIRY_ROUNDS
+        ]
+        for item_id in expired:
+            gs.blacklisted_items.discard(item_id)
+            del gs.blacklist_round[item_id]
+            gs.pickup_fail_count.pop(item_id, None)
 
     def _compute_needs(self) -> None:
         self.active_needed: dict[str, int] = get_needed_items(self.active)
