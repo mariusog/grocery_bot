@@ -53,6 +53,8 @@ class GameState:
         self.bot_tasks: dict[int, dict[str, Any]] = {}
         # Track the active order ID to detect order transitions
         self.last_active_order_id: Optional[str] = None
+        # Sticky assignment persistence: bot_id -> [item_types]
+        self._prev_assignments: dict[int, list[str]] = {}
 
     def reset(self) -> None:
         self.blocked_static = None
@@ -73,6 +75,7 @@ class GameState:
         self.delivery_queue = []
         self.bot_tasks = {}
         self.last_active_order_id = None
+        self._prev_assignments = {}
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
@@ -305,7 +308,7 @@ class GameState:
 
     # Maximum number of BFS results to keep in dist_cache.
     # Expert maps have ~250 walkable cells; 256 covers full map with margin.
-    DIST_CACHE_MAX = 256
+    DIST_CACHE_MAX = 512
 
     def get_distances_from(self, source: tuple[int, int]) -> dict[tuple[int, int], int]:
         if source not in self.dist_cache:

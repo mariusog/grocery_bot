@@ -9,9 +9,9 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | Difficulty | Bots | Sim Avg (20 seeds) | Live Score |
 |------------|------|--------------------|------------|
 | Easy       | 1    | 147.9              | 133        |
-| Medium     | 3    | 108.7              | 110        |
-| Hard       | 5    | 82.1               | 70         |
-| Expert     | 10   | 59.6               | 46         |
+| Medium     | 3    | 107.0              | 110        |
+| Hard       | 5    | 85.6               | 70         |
+| Expert     | 10   | 58.8               | 46         |
 
 Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlenecks from T22 analysis:
 - **Dropoff congestion**: Single dropoff cell is the #1 Expert bottleneck
@@ -80,10 +80,10 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlen
 
 ### T28: Endgame Delivery Optimization
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: open (partially addressed by T29 endgame threshold change)
 - **Priority**: 4
 - **Files**: `grocery_bot/planner/delivery.py`, `grocery_bot/planner/round_planner.py`
-- **Description**: Tune endgame threshold based on bot count and distance to dropoff. Currently triggers at 30 rounds remaining — may not be aggressive enough for Expert.
+- **Description**: Tune endgame threshold based on bot count and distance to dropoff. Currently triggers at 40 rounds remaining (updated by T29 from 30).
 - **Success**: Improved scores in final rounds across all difficulties.
 - **Depends on**: T18
 
@@ -125,6 +125,11 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlen
 | T20: Package structure | `grocery_bot/` package with `planner/` subpackage. Matching test dirs. |
 | T23: Unit test coverage audit | Added 97 tests across all modules (230 -> 327). Every public method now has 2+ tests. |
 | T18: Benchmark Phase 2 Changes | Easy 148, Medium 109, Hard 82, Expert 60. Thresholds updated to 80-85% of avg. Timing <2ms/round. All 345 tests pass. |
+
+### Phase 3
+| Task | Result |
+|------|--------|
+| T29: Cross-cutting perf and yield fix | BFS memory optimization, endgame threshold 30->40, dist cache 256->512, yield-to logic fix. Hard +3.5, Expert InvFW -28%. Stuck% halved. |
 
 ---
 

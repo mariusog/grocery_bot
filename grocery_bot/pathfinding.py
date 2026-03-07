@@ -52,10 +52,13 @@ def bfs(
     """
     if start == goal:
         return None
-    queue = deque([(goal, [])])
     visited = {goal}
+    queue = deque([goal])
+    # parent tracks which cell expanded to which, so we can
+    # trace back to the cell adjacent to start.
+    parent: dict[tuple[int, int], tuple[int, int]] = {}
     while queue:
-        pos, path = queue.popleft()
+        pos = queue.popleft()
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
             npos = (pos[0] + dx, pos[1] + dy)
             if npos in visited:
@@ -63,9 +66,11 @@ def bfs(
             if npos != start and npos in blocked:
                 continue
             visited.add(npos)
+            parent[npos] = pos
             if npos == start:
+                # pos is adjacent to start on the shortest path
                 return pos
-            queue.append((npos, path + [pos]))
+            queue.append(npos)
     return None
 
 

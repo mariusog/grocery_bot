@@ -79,11 +79,12 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 
 | Agent | Owned Files | Role |
 |-------|-------------|------|
+| lead-agent | `bot.py`, `grocery_bot/constants.py`, `TASKS.md`, `CLAUDE.md`, `.claude/agents/` | Architecture, cross-cutting changes, task design |
 | pathfinding-agent | `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py` | Routing, distance, collision, assignment |
 | strategy-agent | `grocery_bot/planner/` (all files) | Per-round decisions, order management |
 | qa-agent | `tests/`, `grocery_bot/simulator.py`, `benchmark.py`, `docs/` | Testing, benchmarking, profiling |
 
-Shared (read-only for agents): `bot.py`, `grocery_bot/constants.py`, `docs/CHALLENGE.md`
+The lead-agent has cross-cutting authority — it may modify any file when a fix spans multiple agents' boundaries. Other agents treat `bot.py` and `grocery_bot/constants.py` as read-only.
 
 ## Running Tests
 

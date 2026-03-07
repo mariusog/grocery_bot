@@ -13,7 +13,7 @@ BOT_HISTORY_MAXLEN = 3  # rounds of position history per bot
 # ---------------------------------------------------------------------------
 # End-game thresholds
 # ---------------------------------------------------------------------------
-ENDGAME_ROUNDS_LEFT = 30  # rounds_left <= this triggers endgame mode
+ENDGAME_ROUNDS_LEFT = 40  # rounds_left <= this triggers endgame mode
 
 # ---------------------------------------------------------------------------
 # Order completion thresholds

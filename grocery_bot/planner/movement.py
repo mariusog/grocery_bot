@@ -28,6 +28,8 @@ class MovementMixin:
 
         self.actions.append(action_dict)
         self.predicted[bid] = _predict_pos(bx, by, action_dict["action"])
+        if hasattr(self, "_decided"):
+            self._decided.add(bid)
 
         if action_dict["action"] == "pick_up":
             self.gs.last_pickup[bid] = (
@@ -72,29 +74,31 @@ class MovementMixin:
             has_active: bool = self.bot_has_active.get(bid, False)
             inv: list[str] = b["inventory"]
 
+            target: Optional[tuple[int, int]] = None
+
             # Delivering bots with full inventory or no items left to pick
             if has_active and (
                 len(inv) >= MAX_INVENTORY or self.active_on_shelves == 0
             ):
-                nxt = bfs(pos, self.drop_off, self.gs.blocked_static)
-                if nxt:
-                    self.predicted[bid] = nxt
-                    continue
+                target = self.drop_off
 
             # Bots at dropoff with active items will drop off (stay put)
-            if pos == self.drop_off and has_active:
+            elif pos == self.drop_off and has_active:
                 self.predicted[bid] = pos
                 continue
 
             # Bots with assigned items move toward first assigned item
-            if bid in self.bot_assignments and self.bot_assignments[bid]:
+            elif bid in self.bot_assignments and self.bot_assignments[bid]:
                 first_item = self.bot_assignments[bid][0]
                 cell, _ = self.gs.find_best_item_target(pos, first_item)
                 if cell:
-                    nxt = bfs(pos, cell, self.gs.blocked_static)
-                    if nxt:
-                        self.predicted[bid] = nxt
-                        continue
+                    target = cell
+
+            if target and target != pos:
+                nxt = bfs(pos, target, self.gs.blocked_static)
+                if nxt:
+                    self.predicted[bid] = nxt
+                    continue
 
             # Default: stay in place
             self.predicted[bid] = pos

@@ -144,12 +144,13 @@ class RoundPlanner(
         self._pre_predict()
 
         urgency: dict[int, int] = {b["id"]: self._bot_urgency(b) for b in self.bots}
+        self._decided: set[int] = set()  # bots whose actions are finalized
 
         for bot in self.bots:
             bid = bot["id"]
             self._yield_to = set()
             for b in self.bots:
-                if b["id"] == bid or b["id"] in self.predicted:
+                if b["id"] == bid or b["id"] in self._decided:
                     continue
                 if urgency[b["id"]] < urgency[bid]:
                     self._yield_to.add(tuple(b["position"]))
