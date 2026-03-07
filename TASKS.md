@@ -68,7 +68,8 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ### T32: Scale MAX_CONCURRENT_DELIVERERS by Bot Count
 - **Agent**: strategy-agent
-- **Status**: in-progress
+- **Status**: done
+- **Result**: Scaled max_deliverers to max(2, num_bots//4) for 8+ bots. Scaled picker count to 1-per-item for large teams. Expert avg 59.2 (was 52.9), +6.3 points. No regression on Easy/Medium/Hard.
 - **Priority**: 2 (Expert bottleneck)
 - **Metric**: Expert InvFW=322, Waits=908, MAX_CONCURRENT_DELIVERERS=1 for 8+ bots
 - **Target**: InvFW < 100, Expert > 70

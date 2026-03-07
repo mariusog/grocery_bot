@@ -25,6 +25,7 @@ from grocery_bot.constants import (
     MIN_INV_FOR_NONACTIVE_DELIVERY,
     ORDER_NEARLY_COMPLETE_MAX,
     PICKUP_FAIL_BLACKLIST_THRESHOLD,
+    PREDICTION_TEAM_MIN,
     SMALL_TEAM_MAX,
     TASK_COMMITMENT_ROUNDS,
 )
@@ -239,6 +240,7 @@ class RoundPlanner(
             else MAX_INVENTORY
         )
 
+        self.num_item_types: int = len(self.items_by_type)
         self.preview_bot_id: Optional[int] = None
         self.preview_bot_ids: set[int] = set()
         if (
@@ -345,12 +347,22 @@ class RoundPlanner(
         num_bots = len(self.bots)
 
         # Determine how many active pickers we need
-        active_picker_count = math.ceil(self.active_on_shelves / MAX_INVENTORY)
-        active_picker_count = (
-            min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
-        )
+        if num_bots >= PREDICTION_TEAM_MIN:
+            # Large teams: assign one picker per active item for faster collection
+            active_picker_count = min(self.active_on_shelves, num_bots - 1)
+        else:
+            active_picker_count = math.ceil(self.active_on_shelves / MAX_INVENTORY)
+            active_picker_count = (
+                min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
+            )
 
-        max_deliverers = MAX_CONCURRENT_DELIVERERS
+        # Scale concurrent deliverers by team size
+        if num_bots >= PREDICTION_TEAM_MIN:
+            max_deliverers = max(2, num_bots // 4)
+        elif num_bots >= MEDIUM_TEAM_MIN:
+            max_deliverers = 2
+        else:
+            max_deliverers = MAX_CONCURRENT_DELIVERERS
 
         # Deliverer: first bots in the delivery queue
         delivering_count = 0
@@ -625,12 +637,12 @@ class RoundPlanner(
 
     def _step_inventory_full_deliver(self, ctx: BotContext) -> bool:
         """Step 3b: inventory full -> deliver."""
-        if ctx.has_active and len(ctx.inv) >= MAX_INVENTORY:
-            self._emit_move_or_wait(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
-            )
-            return True
-        return False
+        if not (ctx.has_active and len(ctx.inv) >= MAX_INVENTORY):
+            return False
+        self._emit_move_or_wait(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+        )
+        return True
 
     def _step_zero_cost_delivery(self, ctx: BotContext) -> bool:
         """Phase 4.4: zero-cost delivery -- deliver if adjacent to dropoff."""
@@ -706,16 +718,32 @@ class RoundPlanner(
 
     def _step_clear_nonactive_inventory(self, ctx: BotContext) -> bool:
         """Step 5b: bot has non-active items clogging inventory."""
-        if not (
-            not ctx.has_active
-            and len(ctx.inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY
-            and self.active_on_shelves > 0
-            and len(self.bots) <= SMALL_TEAM_MAX
-        ):
+        if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
             return False
+
+        num_bots = len(self.bots)
+        # Small teams (<=3): clear if holding 2+ non-active items
+        # Medium teams (4-7): clear only when inventory is completely full
+        # Large teams (8+): skip — dropoff congestion outweighs benefit
+        if num_bots <= SMALL_TEAM_MAX:
+            if len(ctx.inv) < MIN_INV_FOR_NONACTIVE_DELIVERY:
+                return False
+        elif num_bots < PREDICTION_TEAM_MIN:
+            if len(ctx.inv) < MAX_INVENTORY:
+                return False
+        else:
+            return False
+
         if ctx.pos == self.drop_off:
             self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
             return True
+        # Limit non-active deliverers on medium+ teams to avoid congestion
+        if (
+            num_bots >= MEDIUM_TEAM_MIN
+            and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS
+        ):
+            return False
+        self._nonactive_delivering += 1
         self._emit_move_or_wait(
             ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
         )
@@ -724,11 +752,15 @@ class RoundPlanner(
     def _step_preview_prepick(self, ctx: BotContext) -> bool:
         """Step 6: pre-pick preview items."""
         # For 6+ bots: only force all slots when active items are done (avoid clog).
-        # For smaller teams: always allow all slots (fewer bots = less clog risk).
-        if len(self.bots) >= LARGE_TEAM_MIN:
+        # For medium teams (3-5 bots): only force when active items nearly done,
+        # to avoid filling inventory with preview items that may not match next order.
+        num_bots = len(self.bots)
+        if num_bots >= LARGE_TEAM_MIN:
             force = self.active_on_shelves == 0
+        elif num_bots >= SMALL_TEAM_MAX:
+            force = self.active_on_shelves <= 1
         else:
-            force = len(self.bots) >= SMALL_TEAM_MAX
+            force = False
         return self._try_preview_prepick(
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=force
         )
