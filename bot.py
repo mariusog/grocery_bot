@@ -11,6 +11,7 @@ import csv
 import json
 import os
 import sys
+import time
 from datetime import datetime
 
 # Re-export everything tests and simulator access via `bot.xxx`
@@ -97,57 +98,282 @@ async def play():
     map_snapshot = {}
     recorded_orders = []
     seen_order_ids = set()
+    msg_count = 0
 
     import websockets
+
+    # Debug log — deferred writes (no flush per line to avoid blocking I/O)
+    debug_path = f"logs/debug_{timestamp}.log"
+    debug_lines = []
+
+    def dbg(line):
+        debug_lines.append(line)
+
+    # Desync detection: track expected positions and inventories
+    expected_positions = {}  # bot_id -> (x, y)
+    expected_inventories = {}  # bot_id -> list[str]
+    last_actions_sent = {}  # bot_id -> action_dict (what we ACTUALLY sent)
+    desync_count = 0
+    last_round_seen = -1
+    prev_action_json = ""  # exact JSON we sent last round
 
     print(f"Connecting to {ws_url[:60]}...")
     async with websockets.connect(ws_url) as ws:
         print("Connected!")
-        async for message in ws:
-            data = json.loads(message)
+        prev_send_time = None
+        wall_set = None  # server's wall set for validation
+        shelf_set = None  # item positions for validation
+        drained_count = 0  # total stale messages drained
+        while True:
+            pre_recv = time.perf_counter()
+            message = await ws.recv()
+            recv_time = time.perf_counter()
+            recv_wait_ms = (recv_time - pre_recv) * 1000
+            gap_ms = (recv_time - prev_send_time) * 1000 if prev_send_time else 0
+            msg_count += 1
 
-            if data["type"] == "game_over":
+            # Drain any buffered messages — always process the LATEST state.
+            # After a network stall, the server may have queued multiple states.
+            # Responding to stale states creates a permanent 1-round offset.
+            stale_this_round = 0
+            while True:
+                try:
+                    newer = await asyncio.wait_for(ws.recv(), timeout=0.002)
+                    stale_this_round += 1
+                    drained_count += 1
+                    msg_count += 1
+                    # If we drained a game_over, stop draining and use it
+                    peek = json.loads(newer)
+                    if peek.get("type") == "game_over":
+                        message = newer
+                        break
+                    message = newer
+                except (asyncio.TimeoutError, TimeoutError):
+                    break
+            if stale_this_round > 0:
+                recv_time = time.perf_counter()
+                dbg(f"DRAINED {stale_this_round} stale messages (total drained: {drained_count})")
+
+            msg_len = len(message)
+            data = json.loads(message)
+            msg_type = data.get("type", "unknown")
+
+            if msg_type == "game_over":
+                dbg(f"GAME_OVER msg#{msg_count} len={msg_len}")
                 _log_game_over(data, game_meta, log_rows, log_path, meta_path)
                 _save_recorded_map(map_snapshot, recorded_orders, timestamp)
                 break
 
-            if data["type"] == "game_state":
-                round_num = data["round"]
+            if msg_type != "game_state":
+                dbg(f"NON-STATE msg#{msg_count} type={msg_type} len={msg_len}: {json.dumps(data)[:300]}")
+                continue
 
-                # Accumulate orders as they become visible
-                for order in data.get("orders", []):
-                    oid = order["id"]
-                    if oid not in seen_order_ids:
-                        seen_order_ids.add(oid)
-                        recorded_orders.append({
-                            "id": oid,
-                            "items_required": list(order["items_required"]),
-                        })
+            round_num = data["round"]
 
-                if round_num == 0:
-                    game_meta.update(_build_game_meta(data, timestamp))
-                    map_snapshot = _build_map_snapshot(data, timestamp)
-                    grid = data["grid"]
-                    print(
-                        f"Map: {grid['width']}x{grid['height']} | "
-                        f"Bots: {len(data['bots'])} | "
-                        f"Items: {len(data['items'])} "
-                        f"({len(game_meta['item_types'])} types) | "
-                        f"Rounds: {data['max_rounds']}"
+            # On first round, capture wall set and item positions for validation
+            if round_num == 0:
+                wall_set = set(tuple(w) for w in data["grid"]["walls"])
+                shelf_set = set((it["position"][0], it["position"][1]) for it in data["items"])
+                dbg(f"R0 INIT walls={len(wall_set)} shelves={len(shelf_set)} "
+                    f"grid={data['grid']['width']}x{data['grid']['height']} "
+                    f"drop_off={data['drop_off']} spawn={data['bots'][0]['position']}")
+
+            # Detect skipped rounds
+            if last_round_seen >= 0 and round_num > last_round_seen + 1:
+                dbg(f"R{round_num} ROUND_SKIP: last_seen=R{last_round_seen}, jumped to R{round_num}")
+            if last_round_seen >= 0 and round_num <= last_round_seen:
+                dbg(f"R{round_num} ROUND_REPEAT: last_seen=R{last_round_seen}, got R{round_num} again!")
+            last_round_seen = round_num
+
+            # === DESYNC DETECTION ===
+            desync_this_round = False
+            desync_details = []
+            for bot in data["bots"]:
+                bid = bot["id"]
+                actual_pos = tuple(bot["position"])
+                actual_inv = list(bot["inventory"])
+                exp_pos = expected_positions.get(bid)
+                exp_inv = expected_inventories.get(bid)
+                last_act = last_actions_sent.get(bid, {})
+
+                # Position desync
+                if exp_pos and actual_pos != exp_pos:
+                    desync_this_round = True
+                    desync_count += 1
+                    # Figure out what move WOULD produce actual position
+                    if exp_pos:
+                        prev_bot_pos = None
+                        # Try to figure out which action produced this position
+                        act_name = last_act.get("action", "?")
+                        desync_details.append(
+                            f"bot{bid}: pos expected={exp_pos} actual={actual_pos} "
+                            f"(sent {act_name}, desync#{desync_count})"
+                        )
+
+                # Inventory desync (pick_up didn't apply)
+                if exp_inv is not None and actual_inv != exp_inv:
+                    act_name = last_act.get("action", "?")
+                    desync_details.append(
+                        f"bot{bid}: inv expected={exp_inv} actual={actual_inv} "
+                        f"(sent {act_name})"
                     )
 
-                if round_num % 25 == 0 or round_num == 0:
-                    print(
-                        f"Round {round_num}/{data['max_rounds']} | "
-                        f"Score: {data['score']} | "
-                        f"Order: {data.get('active_order_index', '?')}"
-                        f"/{data.get('total_orders', '?')} | "
-                        f"Bots: {len(data['bots'])}"
-                    )
+            for d in desync_details:
+                dbg(f"R{round_num} DESYNC {d}")
 
-                actions = decide_actions(data)
-                _log_round(data, actions, log_rows)
-                await ws.send(json.dumps({"actions": actions}))
+            # Validate: check if our INTENDED action was legal on the server's map
+            if wall_set and last_actions_sent:
+                for bid, act in last_actions_sent.items():
+                    action = act.get("action", "")
+                    if action.startswith("move_"):
+                        bot_data = next((b for b in data["bots"] if b["id"] == bid), None)
+                        if bot_data and exp_pos:
+                            target = expected_positions.get(bid)
+                            if target and target in wall_set:
+                                dbg(f"R{round_num} ILLEGAL_MOVE bot{bid}: {action} target {target} is a WALL!")
+                            if target and target in shelf_set:
+                                dbg(f"R{round_num} ILLEGAL_MOVE bot{bid}: {action} target {target} is a SHELF!")
+
+            actions = decide_actions(data)
+
+            # Validate actions BEFORE sending
+            for a in actions:
+                bid = a["bot"]
+                bot_data = next((b for b in data["bots"] if b["id"] == bid), None)
+                if bot_data and wall_set:
+                    bx, by = bot_data["position"]
+                    action = a["action"]
+                    if action == "move_up": tx, ty = bx, by - 1
+                    elif action == "move_down": tx, ty = bx, by + 1
+                    elif action == "move_left": tx, ty = bx - 1, by
+                    elif action == "move_right": tx, ty = bx + 1, by
+                    else: tx, ty = bx, by
+                    target = (tx, ty)
+                    if action.startswith("move_") and target in wall_set:
+                        dbg(f"R{round_num} SENDING_WALL_MOVE bot{bid}: {action} from ({bx},{by}) to {target}!")
+                    if action.startswith("move_") and target in shelf_set:
+                        dbg(f"R{round_num} SENDING_SHELF_MOVE bot{bid}: {action} from ({bx},{by}) to {target}!")
+
+            # Build the exact JSON we'll send
+            response_json = json.dumps({"actions": actions})
+
+            await ws.send(response_json)
+            send_time = time.perf_counter()
+
+            # Update expected positions AND inventories
+            _update_expected_positions(expected_positions, data, actions)
+            _update_expected_inventories(expected_inventories, data, actions)
+            last_actions_sent = {a["bot"]: a for a in actions}
+            prev_action_json = response_json
+
+            # --- Everything below is post-send bookkeeping ---
+            total_ms = (send_time - recv_time) * 1000
+            _log_round(data, actions, log_rows)
+
+            action_summary = " | ".join(
+                f"b{a['bot']}:{a['action']}" + (f"({a['item_id']})" if a.get('item_id') else "")
+                for a in actions
+            )
+            bots_info = [(b["id"], b["position"], b["inventory"]) for b in data["bots"]]
+            score = data.get("score", 0)
+            desync_tag = " DESYNC!" if desync_this_round else ""
+            dbg(f"R{round_num} msg#{msg_count} len={msg_len} wait={recv_wait_ms:.1f}ms gap={gap_ms:.1f}ms "
+                f"send={total_ms:.1f}ms "
+                f"bots={bots_info} score={score} -> [{action_summary}]{desync_tag}")
+            if desync_this_round:
+                dbg(f"R{round_num} SENT: {response_json[:300]}")
+                dbg(f"R{round_num} PREV_SENT: {prev_action_json[:300]}")
+            prev_send_time = send_time
+
+            # Accumulate orders as they become visible
+            for order in data.get("orders", []):
+                oid = order["id"]
+                if oid not in seen_order_ids:
+                    seen_order_ids.add(oid)
+                    recorded_orders.append({
+                        "id": oid,
+                        "items_required": list(order["items_required"]),
+                    })
+
+            if round_num == 0:
+                game_meta.update(_build_game_meta(data, timestamp))
+                map_snapshot = _build_map_snapshot(data, timestamp)
+                grid = data["grid"]
+                print(
+                    f"Map: {grid['width']}x{grid['height']} | "
+                    f"Bots: {len(data['bots'])} | "
+                    f"Items: {len(data['items'])} "
+                    f"({len(game_meta['item_types'])} types) | "
+                    f"Rounds: {data['max_rounds']}"
+                )
+
+            if round_num % 25 == 0 or round_num == 0:
+                print(
+                    f"Round {round_num}/{data['max_rounds']} | "
+                    f"Score: {data['score']} | "
+                    f"Order: {data.get('active_order_index', '?')}"
+                    f"/{data.get('total_orders', '?')} | "
+                    f"Bots: {len(data['bots'])} | "
+                    f"Latency: {total_ms:.1f}ms"
+                )
+
+    if desync_count > 0:
+        print(f"  Desyncs detected: {desync_count}")
+
+    # Write debug log in one shot at end (no per-round I/O overhead)
+    with open(debug_path, "w") as f:
+        f.write("\n".join(debug_lines) + "\n")
+    print(f"  Debug: {debug_path}")
+
+
+def _update_expected_positions(expected, data, actions):
+    """Predict where each bot will be next round based on actions sent."""
+    bots_by_id = {b["id"]: b for b in data["bots"]}
+    for a in actions:
+        bid = a["bot"]
+        bot = bots_by_id.get(bid)
+        if not bot:
+            continue
+        bx, by = bot["position"]
+        action = a["action"]
+        if action == "move_up":
+            expected[bid] = (bx, by - 1)
+        elif action == "move_down":
+            expected[bid] = (bx, by + 1)
+        elif action == "move_left":
+            expected[bid] = (bx - 1, by)
+        elif action == "move_right":
+            expected[bid] = (bx + 1, by)
+        else:
+            expected[bid] = (bx, by)
+
+
+def _update_expected_inventories(expected, data, actions):
+    """Predict inventory after actions (for desync detection).
+
+    Note: drop_off only drops items matching the active order, not all items.
+    Since we can't perfectly predict which items the server will accept,
+    we skip inventory prediction for drop_off.
+    """
+    bots_by_id = {b["id"]: b for b in data["bots"]}
+    items_by_id = {it["id"]: it for it in data.get("items", [])}
+    for a in actions:
+        bid = a["bot"]
+        bot = bots_by_id.get(bid)
+        if not bot:
+            continue
+        inv = list(bot["inventory"])
+        action = a["action"]
+        if action == "pick_up":
+            item_id = a.get("item_id")
+            item = items_by_id.get(item_id)
+            if item:
+                inv.append(item["type"])
+            expected[bid] = inv
+        elif action == "drop_off":
+            expected[bid] = None  # can't predict — server drops only needed items
+        else:
+            expected[bid] = inv
 
 
 def _build_map_snapshot(data, timestamp):
@@ -179,6 +405,16 @@ def _save_recorded_map(map_snapshot, recorded_orders, timestamp):
     n_bots = map_snapshot.get("num_bots", "?")
     date_str = datetime.now().strftime("%Y-%m-%d")
     map_path = f"maps/{date_str}_{w}x{h}_{n_bots}bot.json"
+    # Don't overwrite if existing file has more orders (richer data)
+    if os.path.exists(map_path):
+        try:
+            with open(map_path) as f:
+                existing = json.load(f)
+            if len(existing.get("orders", [])) >= len(recorded_orders):
+                print(f"  Map already exists with {len(existing['orders'])} orders (new has {len(recorded_orders)}), keeping existing")
+                return
+        except (json.JSONDecodeError, KeyError):
+            pass
     with open(map_path, "w") as f:
         json.dump(map_snapshot, f, indent=2)
     print(f"  Map recorded: {map_path} ({len(recorded_orders)} orders captured)")
