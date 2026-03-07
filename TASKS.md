@@ -49,22 +49,21 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ### T31: Reduce Waste% on Medium/Hard (43-48% -> <25%)
 - **Agent**: strategy-agent
-- **Status**: in-progress
-- **Priority**: 1 (highest impact — affects Medium AND Hard)
-- **Metric**: Waste% currently 43.4% Medium, 47.8% Hard
-- **Target**: Waste% < 25% on both. Medium > 125, Hard > 100.
-- **Files**: `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/pickup.py`
-- **Root cause**: Nearly half of all pickups are non-active items (preview prepicks) that clog inventory.
-  Three code paths cause waste:
-  1. `_step_opportunistic_preview` (line 614-629): picks adjacent preview items with NO guard on item-type count. On Medium (8 types) and Hard (12 types), preview match rate is ~50-60% — items often become junk after order transition.
-  2. `_step_preview_prepick` (line 747-762): walks to distant preview items. For Medium teams, `force_slots` triggers when `active_on_shelves <= 1`, causing aggressive preview filling.
-  3. `_step_rush_deliver` (line 590-612): when rushing to deliver, detours to pick preview items en route — adds items that may not match next order.
-- **How to fix**:
-  1. **Gate preview pickup by item-type count**: Skip `_step_opportunistic_preview` and `_step_preview_prepick` when `n_item_types >= 8` AND `active_on_shelves > 0`. The probability of a preview item matching the next active order drops as item types increase. Only allow preview when the active order is nearly done (0-1 items left).
-  2. **Remove preview detour from `_step_rush_deliver`**: Lines 594-608 detour to pick preview items when rushing to deliver. This delays delivery AND adds potentially useless items. Remove the entire preview-detour block from rush delivery — just go straight to dropoff.
-  3. **Lower `MIN_INV_FOR_NONACTIVE_DELIVERY` from 2 to 1**: Currently bots need 2+ non-active items before they'll dump. With 1, they clear junk faster.
-- **Risk**: Easy might lose 2-3 points if preview is over-restricted (Easy has only 4 types, 75% match rate). Guard changes with `len(item_types_in_game) >= 8` or `num_bots >= 3`.
-- **Expected gain**: +12-20 Medium, +10-15 Hard based on waste reduction freeing inventory for active items.
+- **Status**: done (no code changes — see findings)
+- **Priority**: 1
+- **Result**: Investigated exhaustively. All prescribed approaches regress scores. Waste% metric is misleading — preview pickup is optimal behavior. No code changes committed.
+- **Findings**:
+  1. **Waste% is a misleading metric.** On Hard seed=1, `active_pickup` is called 886 times but succeeds only 104 times (12%). 717 failures are because `net_active` is empty — all active items are already picked by other bots, waiting for delivery. Bots pick preview items because there are literally NO active items left on shelves ~80% of the time.
+  2. **Every approach to reduce preview pickup made scores worse**, because bots idle instead of earning 1 point per preview item delivered:
+     - Gate opportunistic_preview + preview_prepick for 8+ types: Medium -5.5, Hard -9.1
+     - Gate only preview_prepick for 8+ types: Hard -2.5
+     - Gate rush_deliver + deliver_active detours for 8+ types: Medium -4.4, Hard -11.5
+     - Tighter detour (max_detour=1): Mixed results (Medium -1.6, Hard +1.6)
+     - Force_slots tightening (20-seed): Hard -3.2
+     - DELIVER_WHEN_CLOSE_DIST 3->2: Zero effect
+  3. **The real bottleneck is delivery throughput**, not pickup waste. With 3-5 bots sharing one dropoff cell, bots finish picking quickly but queue to deliver. The "wasted" preview items are the best available action during this dead time.
+  4. **`ctx.role` is never referenced in any step chain method** — role assignments from `_assign_roles()` do not gate any decisions. Fixing this is a prerequisite for role-based waste reduction.
+- **Recommendation**: Close this task. Improve scores via T32 (delivery throughput, done), T33 (dropoff queuing), and T34 (idle reduction). If waste reduction is still desired, first wire `ctx.role` into step chain gates so roles actually affect behavior.
 
 ### T32: Scale MAX_CONCURRENT_DELIVERERS by Bot Count
 - **Agent**: strategy-agent
