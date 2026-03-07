@@ -4,88 +4,131 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-07)
+## Current Performance (2026-03-07, 10-seed benchmark)
 
-| Difficulty | Bots | Sim Avg (20 seeds) | Live Score |
-|------------|------|--------------------|------------|
-| Easy       | 1    | 147.9              | 133        |
-| Medium     | 3    | 107.0              | 110        |
-| Hard       | 5    | 85.6               | 70         |
-| Expert     | 10   | 58.8               | 46         |
+| Difficulty | Bots | Sim Avg | Live Score | Waste% | InvFW | Rds/Ord | Idle% |
+|------------|------|---------|------------|--------|-------|---------|-------|
+| Easy       | 1    | 146.3   | 133        | 10.6%  | 0     | 16.9    | 0.9%  |
+| Medium     | 3    | 113.2   | 110        | 43.4%  | 0     | 23.5    | 1.8%  |
+| Hard       | 5    | 89.2    | 70         | 47.8%  | 49    | 29.8    | 15.3% |
+| Expert     | 10   | 59.2    | 46         | 39.9%  | 322   | 50.9    | 30.3% |
 
-Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlenecks from T22 analysis:
-- **Dropoff congestion**: Single dropoff cell is the #1 Expert bottleneck
-- **Preview prepicking net-negative** at 16 types (~31% hit rate)
-- **Delivery staggering counterproductive** — orders need ALL items for +5 bonus
+**Per-bot idle (Expert):** B0:4% B1:8% B2:20% B3:21% B4:32% B5:36% B6:44% B7:45% B8:44% B9:50%
+
+### Key Bottlenecks (ranked by impact)
+1. **43-48% waste on Medium/Hard** — preview pickups clog inventory, no clearing mechanism for medium teams
+2. **MAX_CONCURRENT_DELIVERERS=1 on Expert** — 10 bots share 1 delivery slot, causes 322 inv-full waits and 908 total waits
+3. **30% idle on Expert** — bots 5-9 idle 36-50%, doing nothing useful
+4. **T30 dropoff queuing infra built but NOT wired** — `get_dropoff_approach_target()` exists in game_state.py but planner never calls it
+5. **Rounds/order 50.9 on Expert** — should be <20 with 10 bots, coordination overhead destroys throughput
 
 ---
 
-## Open Tasks (priority order)
+## Completed Recent Tasks
 
 ### T24: A/B Strategy Testing Framework
 - **Agent**: qa-agent
 - **Status**: done
 - **Result**: Added action-tracking diagnostics (moves/waits/pickups/delivers, waste%, inv-full waits, rounds/order, P/D ratio, per-bot idle) to simulator and `benchmark.py --diagnostics` mode.
-- **Priority**: 1
-- **Files**: `grocery_bot/simulator.py`, `benchmark.py`
-- **Description**: Add ability to compare two strategy variants side by side:
-  1. Add `benchmark.py --compare` mode that runs baseline vs patched on same seeds
-  2. Add per-seed delta reporting (seed, baseline_score, patched_score, delta)
-  3. Add action-tracking diagnostics to simulator: count moves/waits/pickups/delivers, useful vs wasted pickups, rounds-per-order, inventory-full-waits
-  4. Output diagnostic CSV for analysis
-- **Success**: Can run `python benchmark.py --compare --seeds 10` and see per-seed deltas.
-- **Depends on**: T18
 
 ### T25: Fix Inventory Clog (Expert #1 Bottleneck)
 - **Agent**: strategy-agent
 - **Status**: done
-- **Priority**: 1
-- **Result**: Investigated thoroughly. The 645 full-inventory waits are ALL bots with non-active items (0 active). Root cause: after order transitions, bots hold items from the previous preview order that no longer match. However, preventing preview pickups REDUCES score (preview items match next order 69% of the time). Dumping non-active inventory causes dropoff congestion (single dropoff cell). Every planner-level change (15+ variants tested) either regresses or is neutral. The real bottleneck is single-dropoff-cell congestion with 10 bots. Improvement requires pathfinding/collision changes (outside T25 scope). Expert remains at ~60 avg.
-- **Files**: `grocery_bot/planner/pickup.py`, `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/delivery.py`
-- **Description**: **ROOT CAUSE**: Expert has 645/3000 bot-rounds (21.5%) where bots wait with FULL inventory. 32% of pickups are non-active items that clog slots. Pickup-to-delivery ratio is 3.5x (vs 2.0x on Medium).
-  Fix by:
-  1. **Never pick non-active items when >5 bots** — preview prepicking is net-negative at 16 types (~31% hit rate)
-  2. **Immediate delivery when inventory has ANY active items** — don't wait for full inventory
-  3. **Emergency dump**: if inventory is full with non-active items, deliver immediately to free slots
-  4. **Scale pickup aggression by bot count** — with 10 bots and 5 items/order, each bot should target at most 1 item
-- **Success**: Expert inventory-full-waits < 200 (from 645). Expert avg > 75.
-- **Depends on**: T18
+- **Result**: Investigated thoroughly. Root cause is single-dropoff-cell congestion with 10 bots. Planner-level fixes either regress or are neutral. Requires pathfinding/collision changes.
 
-### T26: Reduce Expert Idle Time
+### T30-pf: Smart Dropoff Queuing Infrastructure
+- **Agent**: pathfinding-agent
+- **Status**: done
+- **Result**: Infrastructure complete in game_state.py and pathfinding.py. Added: precomputed dropoff zones (adjacents, approach cells within radius 3, wait cells at distance 4), `get_dropoff_approach_target()` for congestion-aware delivery routing, `is_dropoff_congested()` and `get_avoidance_target()` for non-delivering bots, `bfs_toward()` utility for routing toward unreachable goals, position tracking methods (`update_round_positions`, `notify_bot_target`, `count_bots_near_dropoff`, `count_bots_targeting_dropoff`). All infrastructure is safe (zero performance impact -- baseline unchanged: Easy 147, Medium 112, Hard 89, Expert 59). Strategy-agent must wire via T33.
+- **Files**: `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py`
+- **Note**: Tested multiple pathfinding-level approaches (relaxed temporal BFS, round-trip assignment, goal-occupant bypass) -- all regressed Expert by 8-17%. The bottleneck is firmly in planner logic (which bots deliver when), not pathfinding. T32 (concurrent deliverers) and T33 (wiring this infra) are the path forward.
+
+---
+
+## Open Tasks (priority order — lead-agent analysis 2026-03-07)
+
+### T31: Reduce Waste% on Medium/Hard (43-48% -> <25%)
+- **Agent**: strategy-agent
+- **Status**: in-progress
+- **Priority**: 1 (highest impact — affects Medium AND Hard)
+- **Metric**: Waste% currently 43.4% Medium, 47.8% Hard
+- **Target**: Waste% < 25% on both. Medium > 125, Hard > 100.
+- **Files**: `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/pickup.py`
+- **Root cause**: Nearly half of all pickups are non-active items (preview prepicks) that clog inventory.
+  Three code paths cause waste:
+  1. `_step_opportunistic_preview` (line 614-629): picks adjacent preview items with NO guard on item-type count. On Medium (8 types) and Hard (12 types), preview match rate is ~50-60% — items often become junk after order transition.
+  2. `_step_preview_prepick` (line 747-762): walks to distant preview items. For Medium teams, `force_slots` triggers when `active_on_shelves <= 1`, causing aggressive preview filling.
+  3. `_step_rush_deliver` (line 590-612): when rushing to deliver, detours to pick preview items en route — adds items that may not match next order.
+- **How to fix**:
+  1. **Gate preview pickup by item-type count**: Skip `_step_opportunistic_preview` and `_step_preview_prepick` when `n_item_types >= 8` AND `active_on_shelves > 0`. The probability of a preview item matching the next active order drops as item types increase. Only allow preview when the active order is nearly done (0-1 items left).
+  2. **Remove preview detour from `_step_rush_deliver`**: Lines 594-608 detour to pick preview items when rushing to deliver. This delays delivery AND adds potentially useless items. Remove the entire preview-detour block from rush delivery — just go straight to dropoff.
+  3. **Lower `MIN_INV_FOR_NONACTIVE_DELIVERY` from 2 to 1**: Currently bots need 2+ non-active items before they'll dump. With 1, they clear junk faster.
+- **Risk**: Easy might lose 2-3 points if preview is over-restricted (Easy has only 4 types, 75% match rate). Guard changes with `len(item_types_in_game) >= 8` or `num_bots >= 3`.
+- **Expected gain**: +12-20 Medium, +10-15 Hard based on waste reduction freeing inventory for active items.
+
+### T32: Scale MAX_CONCURRENT_DELIVERERS by Bot Count
+- **Agent**: strategy-agent
+- **Status**: in-progress
+- **Priority**: 2 (Expert bottleneck)
+- **Metric**: Expert InvFW=322, Waits=908, MAX_CONCURRENT_DELIVERERS=1 for 8+ bots
+- **Target**: InvFW < 100, Expert > 70
+- **Files**: `grocery_bot/planner/round_planner.py` (lines 355-358), `grocery_bot/constants.py`
+- **Root cause**: `_assign_roles()` line 355-358 sets `max_deliverers = MAX_CONCURRENT_DELIVERERS (=1)` for 8+ bots. With 10 bots and only 1 delivery slot, bots queue endlessly. The delivery queue fills up but only 1 bot can deliver at a time. 322 bot-rounds are spent waiting with full inventory.
+- **How to fix**:
+  1. Change `_assign_roles()` delivery scaling to: `max_deliverers = max(1, len(self.bots) // 4)` — gives 2 for Expert (10 bots), 1 for Hard (5 bots). This is conservative enough to avoid congestion but doubles throughput.
+  2. Wire T30's `get_dropoff_approach_target()` into `_emit_move_or_wait` when target is dropoff — this ensures the 2 deliverers approach from different sides and don't block each other. (Depends on T30-pf completing.)
+  3. Increase `MAX_NONACTIVE_DELIVERERS` from 1 to 2 for teams >= 8 — allows junk clearing in parallel with active delivery.
+- **Risk**: If 2 deliverers approach from same direction, they block each other. Mitigated by T30's approach lanes.
+- **Expected gain**: +8-15 Expert.
+- **Depends on**: T30-pf for full effect, but deliverer scaling alone should help.
+
+### T33: Wire T30 Dropoff Queuing into Planner
+- **Agent**: strategy-agent
+- **Status**: blocked (waiting on T30-pf)
+- **Priority**: 2
+- **Metric**: Expert Waits=908, Stuck%=0.1% (low but waits are high)
+- **Target**: Expert Waits < 500
+- **Files**: `grocery_bot/planner/movement.py`, `grocery_bot/planner/round_planner.py`
+- **Root cause**: `game_state.py` has `get_dropoff_approach_target()`, `is_dropoff_congested()`, and `get_avoidance_target()` but the planner NEVER calls them. All bots target dropoff directly, causing pile-ups.
+- **How to fix**:
+  1. In `_emit_move_or_wait`: when target == self.drop_off and len(self.bots) >= 8, call `gs.get_dropoff_approach_target(bid, pos, drop_off, delivering_bots)` to get a staged target. If `should_wait`, path to wait cell instead of dropoff.
+  2. In `_step_clear_dropoff`: when `gs.is_dropoff_congested(drop_off, bot_positions)`, non-delivering bots call `gs.get_avoidance_target()` and move away.
+  3. Collect `delivering_bots` list during `_update_delivery_queue` — it already tracks who's delivering.
+- **Risk**: Over-staging could slow delivery. Start conservative: only trigger for 8+ bots.
+- **Expected gain**: +5-10 Expert (combined with T32).
+- **Depends on**: T30-pf (pathfinding-agent) completing first.
+
+### T34: Reduce Expert Idle Time (30% -> 15%)
 - **Agent**: strategy-agent
 - **Status**: open
-- **Priority**: 2
-- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/assignment.py`
-- **Description**: 4 of 10 Expert bots are idle >50% of the time (Bot 5: 66%, Bot 6: 64%, Bot 8: 60%). These bots should be doing useful work.
-  Ideas:
-  1. **Assign idle bots to pre-position near likely next-order items** — use item type frequency to predict
-  2. **Relay pattern**: idle bots move toward shelves with needed items, ready to pick instantly
-  3. **Dynamic role assignment**: reduce number of designated "idle" bots when order has many items remaining
-- **Success**: No Expert bot idle >40%. Expert avg > 80.
-- **Depends on**: T25
-
-### T27: Optimize Rounds-Per-Order
-- **Agent**: pathfinding-agent + strategy-agent
-- **Status**: open
 - **Priority**: 3
-- **Files**: `grocery_bot/game_state.py`, `grocery_bot/planner/pickup.py`, `grocery_bot/planner/delivery.py`
-- **Description**: Expert averages 46 rounds/order vs Medium's 23. With 10 bots this should be LOWER than Medium, not 2x higher.
-  Ideas:
-  1. **One-way traffic flow**: designate corridor directions to prevent head-on collisions
-  2. **Dropoff queuing**: bots line up to deliver instead of clustering and blocking
-  3. **Parallel order fulfillment**: assign each bot exactly 1 item, all deliver within a few rounds of each other
-  4. **Reduce collision avoidance radius** — current temporal BFS may be too conservative
-- **Success**: Expert avg rounds/order < 30. Expert avg > 100.
-- **Depends on**: T25, T26
+- **Metric**: Expert Idle%=30.3%, Bots 5-9 idle 36-50%
+- **Target**: No bot idle > 30%. Expert > 75.
+- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/assignment.py`
+- **Root cause**: `_assign_roles()` assigns `active_picker_count = ceil(active_on_shelves / 3)` pickers, then a few preview bots, and ALL remaining bots get role "idle". With 5-item order and 10 bots, only 2 are pickers, 1 delivers, 2 preview => 5 idle.
+- **How to fix**:
+  1. **Assign more pickers**: Change picker count to `min(active_on_shelves, num_bots - max_deliverers)` — every bot should target an item. Even if 2 bots target the same item type, the second-closest is backup.
+  2. **Eliminate idle role for Expert**: When `num_bots >= 8`, assign surplus bots as "pick" with lower-priority items (second-closest copies of needed types). An active picker that arrives and finds its item already taken can immediately re-route to the next needed item.
+  3. **Pre-position idle bots near highest-probability item locations**: In `_try_idle_positioning`, instead of generic corridor spots, target the shelf columns that contain the most distinct item types (more likely to be needed next).
+- **Risk**: More pickers could cause aisle congestion. Mitigate with stagger: only assign 2 bots per aisle column max.
+- **Expected gain**: +5-10 Expert.
+- **Depends on**: T31 (reduced waste means more useful pickups per bot).
+
+### T26: Reduce Expert Idle Time (SUPERSEDED by T34)
+- **Status**: superseded
+- **Note**: Original T26 is replaced by T34 with concrete diagnostic data and specific code changes.
+
+### T27: Optimize Rounds-Per-Order (DEFERRED)
+- **Status**: deferred
+- **Note**: Rounds/order will improve as a side effect of T31-T34. Reassess after those complete.
 
 ### T28: Endgame Delivery Optimization
 - **Agent**: strategy-agent
-- **Status**: open (partially addressed by T29 endgame threshold change)
+- **Status**: open
 - **Priority**: 4
 - **Files**: `grocery_bot/planner/delivery.py`, `grocery_bot/planner/round_planner.py`
-- **Description**: Tune endgame threshold based on bot count and distance to dropoff. Currently triggers at 40 rounds remaining (updated by T29 from 30).
-- **Success**: Improved scores in final rounds across all difficulties.
-- **Depends on**: T18
+- **Description**: Tune endgame threshold based on bot count and distance to dropoff. Currently triggers at 40 rounds remaining.
+- **Depends on**: T31, T32
 
 ---
 
@@ -135,6 +178,7 @@ Easy is near ceiling. Multi-bot efficiency is 10-25% of theoretical. Key bottlen
 
 ## Notes
 
+- **BUG (lead-agent)**: Uncommitted changes to `round_planner.py` use `self._active_delivering` and `PREDICTION_TEAM_MIN` without initializing/importing them. Tests fail with AttributeError/NameError. Pathfinding-agent restored the committed version to unblock testing.
 - Add new tasks at the bottom of "Open Tasks" with the next T-number
 - When completing a task, move it to "Completed Tasks" with a one-line result
 - If a task is blocked, set status to `blocked` and note why

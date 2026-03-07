@@ -163,15 +163,7 @@ def bfs_temporal(
     # current positions)
     future_blocked = blocked_static | predicted_positions
 
-    # Time-expanded BFS: (position, time_step)
-    # We only distinguish step 0 vs step 1+ for blocking rules
-    # Use BFS from goal backward to find the first move from start
-    # Time step 0 = the move we're about to make (start -> next_pos)
-    # Time step 1+ = subsequent moves
-
     # Forward BFS from start
-    # State: (pos, time_step) but we cap time_step at 1 since blocking rules
-    # are the same for all steps >= 1
     visited: set[tuple[tuple[int, int], int]] = {(start, 0)}
     queue: deque[tuple[tuple[int, int], int, Optional[tuple[int, int]]]] = deque(
         [(start, 0, None)]
@@ -202,6 +194,60 @@ def bfs_temporal(
     # (less safe but at least makes progress)
     fallback_blocked = blocked_static | current_positions
     return bfs(start, goal, fallback_blocked)
+
+
+def bfs_toward(
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    blocked: set[tuple[int, int]],
+    max_steps: int = 50,
+) -> Optional[tuple[int, int]]:
+    """BFS that gets as close to goal as possible, even if goal is unreachable.
+
+    Unlike standard bfs(), this returns the first step toward the closest
+    reachable cell to goal. Useful when the goal is surrounded by dynamic
+    obstacles (other bots).
+
+    Args:
+        start: (x, y) current position.
+        goal: (x, y) desired position (may be blocked).
+        blocked: set of (x, y) impassable positions.
+        max_steps: maximum BFS depth to explore.
+
+    Returns:
+        (x, y) next position to step to, or None if start == goal or stuck.
+    """
+    if start == goal:
+        return None
+
+    # Standard forward BFS tracking first-move and best distance to goal
+    visited: dict[tuple[int, int], Optional[tuple[int, int]]] = {start: None}
+    queue = deque([(start, None, 0)])  # (pos, first_move, depth)
+    best_dist = abs(goal[0] - start[0]) + abs(goal[1] - start[1])
+    best_first_move: Optional[tuple[int, int]] = None
+
+    while queue:
+        pos, first_move, depth = queue.popleft()
+        if depth >= max_steps:
+            continue
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            npos = (pos[0] + dx, pos[1] + dy)
+            if npos in visited or npos in blocked:
+                continue
+            visited[npos] = npos
+            next_first = first_move if first_move is not None else npos
+
+            if npos == goal:
+                return next_first
+
+            d = abs(goal[0] - npos[0]) + abs(goal[1] - npos[1])
+            if d < best_dist:
+                best_dist = d
+                best_first_move = next_first
+
+            queue.append((npos, next_first, depth + 1))
+
+    return best_first_move
 
 
 def direction_to(sx: int, sy: int, tx: int, ty: int) -> str:

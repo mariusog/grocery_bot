@@ -13,6 +13,11 @@ from grocery_bot.constants import (
     ZONE_CROSS_PENALTY,
 )
 
+# --- Dropoff congestion constants ---
+DROPOFF_CONGESTION_RADIUS = 3  # cells within this BFS distance are "near dropoff"
+DROPOFF_WAIT_DISTANCE = 4  # bots wait at this distance when queue is full
+MAX_APPROACH_SLOTS = 2  # max bots within congestion radius at once
+
 
 class GameState:
     """Encapsulates all mutable game state and caches for a single game."""
@@ -41,10 +46,22 @@ class GameState:
         # Current active items remaining on shelves (set by RoundPlanner)
         self.active_on_shelves: int = 0
 
+        # Dropoff congestion management (T30)
+        self.drop_off_pos: Optional[tuple[int, int]] = None  # stored during init_static
+        self.dropoff_adjacents: list[tuple[int, int]] = []  # walkable cells adjacent to dropoff
+        self.dropoff_approach_cells: list[tuple[int, int]] = []  # cells within DROPOFF_CONGESTION_RADIUS
+        self.dropoff_approach_set: set[tuple[int, int]] = set()  # fast lookup version
+        self.dropoff_wait_cells: list[tuple[int, int]] = []  # cells at DROPOFF_WAIT_DISTANCE
+
         # T17: Full-path caching — bot_id -> (target, path_remaining, last_recheck_round)
         self.bot_planned_paths: dict[
             int, tuple[tuple[int, int], list[tuple[int, int]], int]
         ] = {}
+
+        # T30: Per-round bot position tracking for congestion detection
+        self._round_bot_positions: dict[int, tuple[int, int]] = {}
+        self._round_bot_targets: dict[int, Optional[tuple[int, int]]] = {}
+        self._round_drop_off: Optional[tuple[int, int]] = None
 
         # --- Persistent coordination state (T15) ---
         # Delivery queue: ordered list of bot IDs waiting to deliver
@@ -76,6 +93,14 @@ class GameState:
         self.bot_tasks = {}
         self.last_active_order_id = None
         self._prev_assignments = {}
+        self.drop_off_pos = None
+        self.dropoff_adjacents = []
+        self.dropoff_approach_cells = []
+        self.dropoff_approach_set = set()
+        self.dropoff_wait_cells = []
+        self._round_bot_positions = {}
+        self._round_bot_targets = {}
+        self._round_drop_off = None
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
@@ -110,6 +135,8 @@ class GameState:
         # Precompute route tables if drop_off is available
         if "drop_off" in state:
             drop_off = tuple(state["drop_off"])
+            self.drop_off_pos = drop_off
+            self._precompute_dropoff_zones(drop_off)
             self._precompute_route_tables(state["items"], drop_off)
 
     def _precompute_route_tables(
@@ -305,6 +332,211 @@ class GameState:
                     pos = (wx, ny)
                     if pos not in self.blocked_static:
                         self.idle_spots.append(pos)
+
+    # ------------------------------------------------------------------
+    # T30: Dropoff congestion management
+    # ------------------------------------------------------------------
+
+    def _precompute_dropoff_zones(self, drop_off: tuple[int, int]) -> None:
+        """Precompute dropoff-adjacent cells, approach zone, and wait zone.
+
+        - dropoff_adjacents: walkable cells directly adjacent to dropoff (up to 4).
+        - dropoff_approach_cells: walkable cells within DROPOFF_CONGESTION_RADIUS
+          of dropoff, sorted by distance (closest first).
+        - dropoff_wait_cells: walkable cells at exactly DROPOFF_WAIT_DISTANCE
+          from dropoff, suitable for bots to wait their turn.
+        """
+        dists = bfs_all(drop_off, self.blocked_static)
+
+        # Adjacent walkable cells
+        self.dropoff_adjacents = []
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            adj = (drop_off[0] + dx, drop_off[1] + dy)
+            if adj in dists:
+                self.dropoff_adjacents.append(adj)
+
+        # Approach zone: cells within congestion radius
+        self.dropoff_approach_cells = sorted(
+            (pos for pos, d in dists.items() if 0 < d <= DROPOFF_CONGESTION_RADIUS),
+            key=lambda p: dists[p],
+        )
+        self.dropoff_approach_set = set(self.dropoff_approach_cells)
+        self.dropoff_approach_set.add(drop_off)
+
+        # Wait zone: cells at wait distance (good staging positions)
+        self.dropoff_wait_cells = sorted(
+            (pos for pos, d in dists.items() if d == DROPOFF_WAIT_DISTANCE),
+            key=lambda p: abs(p[0] - drop_off[0]),  # prefer cells in line with dropoff
+        )
+
+    def get_dropoff_approach_target(
+        self,
+        bot_id: int,
+        bot_pos: tuple[int, int],
+        drop_off: tuple[int, int],
+        delivering_bots: list[tuple[int, tuple[int, int]]],
+    ) -> tuple[tuple[int, int], bool]:
+        """Determine where a delivering bot should path to, managing congestion.
+
+        Args:
+            bot_id: ID of the bot requesting an approach target.
+            bot_pos: Current position of the requesting bot.
+            drop_off: Position of the dropoff cell.
+            delivering_bots: List of (bot_id, bot_pos) for ALL bots heading to
+                dropoff this round (including the requesting bot).
+
+        Returns:
+            (target_pos, should_wait): The position the bot should path toward,
+            and whether it should wait at that position rather than continuing
+            to dropoff. If should_wait is False, the target IS the dropoff.
+        """
+        if not self.dropoff_approach_cells:
+            return drop_off, False
+
+        my_dist = self.dist_static(bot_pos, drop_off)
+
+        # Count bots closer to dropoff than us (they get priority)
+        closer_bots = 0
+        for other_id, other_pos in delivering_bots:
+            if other_id == bot_id:
+                continue
+            other_dist = self.dist_static(other_pos, drop_off)
+            if other_dist < my_dist or (other_dist == my_dist and other_id < bot_id):
+                closer_bots += 1
+
+        # If we are among the closest MAX_APPROACH_SLOTS bots, go directly
+        if closer_bots < MAX_APPROACH_SLOTS:
+            return drop_off, False
+
+        # Otherwise, find a waiting position to avoid congestion
+        if self.dropoff_wait_cells:
+            # Assign different wait cells to different bots to spread them out
+            occupied = {pos for _, pos in delivering_bots if _ != bot_id}
+            # Pick the closest unoccupied wait cell
+            for wc in self.dropoff_wait_cells:
+                if wc not in occupied and wc != bot_pos:
+                    return wc, True
+            # All wait cells occupied — just pick the closest one
+            best_wc = min(
+                self.dropoff_wait_cells,
+                key=lambda p: self.dist_static(bot_pos, p),
+            )
+            return best_wc, True
+
+        return drop_off, False
+
+    def is_dropoff_congested(
+        self,
+        drop_off: tuple[int, int],
+        bot_positions: list[tuple[int, int]],
+    ) -> bool:
+        """Return True if the dropoff area is congested (too many bots nearby).
+
+        Args:
+            drop_off: The dropoff cell position.
+            bot_positions: Positions of all bots.
+
+        Returns:
+            True if more than MAX_APPROACH_SLOTS bots are within
+            DROPOFF_CONGESTION_RADIUS of dropoff.
+        """
+        approach_set = set(self.dropoff_approach_cells)
+        approach_set.add(drop_off)
+        count = sum(1 for pos in bot_positions if pos in approach_set)
+        return count > MAX_APPROACH_SLOTS
+
+    def get_avoidance_target(
+        self,
+        bot_pos: tuple[int, int],
+        drop_off: tuple[int, int],
+    ) -> Optional[tuple[int, int]]:
+        """Return a position away from the dropoff for non-delivering bots.
+
+        When the dropoff area is congested, non-delivering bots should route
+        away from it. Returns the nearest idle spot or wait cell that is
+        farther from the dropoff than the bot's current position, or None
+        if no good position exists.
+        """
+        my_dist = self.dist_static(bot_pos, drop_off)
+        if my_dist > DROPOFF_CONGESTION_RADIUS:
+            return None  # Already far enough
+
+        # Find closest position that is outside the congestion zone
+        best: Optional[tuple[int, int]] = None
+        best_d = float("inf")
+        # Check idle spots first (well-connected positions)
+        candidates = self.idle_spots + self.dropoff_wait_cells
+        for pos in candidates:
+            d_to_drop = self.dist_static(pos, drop_off)
+            if d_to_drop > DROPOFF_CONGESTION_RADIUS:
+                d_from_bot = self.dist_static(bot_pos, pos)
+                if d_from_bot < best_d:
+                    best_d = d_from_bot
+                    best = pos
+        return best
+
+    def update_round_positions(
+        self,
+        bot_positions: dict[int, tuple[int, int]],
+        drop_off: tuple[int, int],
+    ) -> None:
+        """Called at the start of each round to track bot positions for congestion.
+
+        Args:
+            bot_positions: Mapping of bot_id -> (x, y) current position.
+            drop_off: The dropoff cell position.
+        """
+        self._round_bot_positions = dict(bot_positions)
+        self._round_bot_targets = {}
+        self._round_drop_off = drop_off
+
+    def notify_bot_target(self, bot_id: int, target: Optional[tuple[int, int]]) -> None:
+        """Record that a bot is heading toward a specific target.
+
+        Called by the planner when a bot's movement target is determined.
+        Used by congestion detection to count bots converging on dropoff.
+        """
+        self._round_bot_targets[bot_id] = target
+
+    def count_bots_near_dropoff(self, exclude_bot: int = -1) -> int:
+        """Count bots currently within the dropoff approach zone.
+
+        Args:
+            exclude_bot: Bot ID to exclude from the count.
+
+        Returns:
+            Number of bots (excluding exclude_bot) within the approach zone.
+        """
+        if not self.dropoff_approach_cells or self._round_drop_off is None:
+            return 0
+        approach_set = set(self.dropoff_approach_cells)
+        approach_set.add(self._round_drop_off)
+        count = 0
+        for bid, pos in self._round_bot_positions.items():
+            if bid == exclude_bot:
+                continue
+            if pos in approach_set:
+                count += 1
+        return count
+
+    def count_bots_targeting_dropoff(self, exclude_bot: int = -1) -> int:
+        """Count bots whose target is the dropoff cell.
+
+        Args:
+            exclude_bot: Bot ID to exclude from the count.
+
+        Returns:
+            Number of bots (excluding exclude_bot) targeting dropoff.
+        """
+        if self._round_drop_off is None:
+            return 0
+        count = 0
+        for bid, target in self._round_bot_targets.items():
+            if bid == exclude_bot:
+                continue
+            if target == self._round_drop_off:
+                count += 1
+        return count
 
     # Maximum number of BFS results to keep in dist_cache.
     # Expert maps have ~250 walkable cells; 256 covers full map with margin.
