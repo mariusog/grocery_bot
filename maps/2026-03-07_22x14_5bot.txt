@@ -1,0 +1,22 @@
+Map: 22x14 | Bots: 5 | Rounds: 300 | Orders: 10
+Drop-off: (1, 12) | Spawn: (20, 12)
+Legend: # wall  . walkable  D drop-off  S spawn
+        B butter  C cheese  M milk  Y yogurt  E eggs  R bread  A apple  O onion
+
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21
+ 0   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+ 1   #  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  #
+ 2   #  .  #  C  .  B  #  F  .  E  #  C  .  Y  #  O  .  R  #  .  .  #
+ 3   #  .  #  B  .  C  #  C  .  B  #  F  .  E  #  C  .  Y  #  .  .  #
+ 4   #  .  #  P  .  M  #  B  .  C  #  C  .  B  #  F  .  E  #  .  .  #
+ 5   #  .  #  O  .  R  #  P  .  M  #  B  .  C  #  C  .  B  #  .  .  #
+ 6   #  .  #  C  .  Y  #  O  .  R  #  P  .  M  #  B  .  C  #  .  .  #
+ 7   #  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  #
+ 8   #  .  #  C  .  P  #  Y  .  F  #  O  .  R  #  C  .  P  #  .  .  #
+ 9   #  .  #  M  .  O  #  E  .  C  #  C  .  Y  #  M  .  O  #  .  .  #
+10   #  .  #  R  .  C  #  P  .  M  #  F  .  E  #  R  .  C  #  .  .  #
+11   #  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  #
+12   #  D  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  S  #
+13   #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #  #
+
+Item counts: bread=4, butter=4, cereal=6, cheese=4, cream=7, eggs=5, flour=5, milk=6, oats=6, pasta=6, rice=6, yogurt=5
