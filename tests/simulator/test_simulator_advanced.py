@@ -1,5 +1,7 @@
 """Tests for simulator edge cases, difficulty presets, and profiling."""
 
+import os
+
 
 from grocery_bot.simulator import (
     GameSimulator,
@@ -118,6 +120,20 @@ class TestDiagnosticMode:
         total = diag["total_bot_rounds"]
         idle_pct = diag["idle_rounds"] / total * 100 if total > 0 else 0
         assert idle_pct < 10, f"Single bot idle {idle_pct:.1f}% is too high"
+
+
+class TestLocalLogNaming:
+    """Local simulator logs should expose difficulty in the filename."""
+
+    def test_local_log_path_includes_difficulty_slug(self, monkeypatch, tmp_path):
+        from grocery_bot.simulator import game_simulator as gs_mod
+
+        monkeypatch.setattr(gs_mod, "_LOG_DIR", str(tmp_path))
+        sim = GameSimulator(seed=42, **gs_mod.DIFFICULTY_PRESETS["Easy"])
+        result = sim.run(log=True)
+
+        basename = os.path.basename(result["log_path"])
+        assert basename.startswith("local_easy_12x10_1bot_")
 
 
 class TestCongestionProfiler:

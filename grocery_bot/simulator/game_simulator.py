@@ -15,6 +15,7 @@ from grocery_bot.orders import get_needed_items
 
 from grocery_bot.simulator.map_generator import generate_store_layout, generate_orders
 from grocery_bot.simulator.diagnostics import DiagnosticTracker
+from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 
 
 class GameSimulator:
@@ -332,6 +333,24 @@ _LOG_DIR = "logs"
 _MAX_LOCAL_LOGS = 10
 
 
+def _infer_difficulty_slug(sim):
+    """Best-effort difficulty label for local replay/log filenames."""
+    item_type_count = len(
+        getattr(sim, "item_type_names", [])
+        or {it["type"] for it in getattr(sim, "items_on_map", [])}
+    )
+    for name, cfg in DIFFICULTY_PRESETS.items():
+        if (
+            sim.width == cfg["width"]
+            and sim.height == cfg["height"]
+            and sim.num_bots == cfg["num_bots"]
+            and sim.max_rounds == cfg["max_rounds"]
+            and item_type_count == cfg["num_item_types"]
+        ):
+            return name.lower()
+    return "custom"
+
+
 def _log_round(state, actions, log_rows):
     """Record one round of actions in the same CSV format as live games."""
     active_o = next(
@@ -368,7 +387,8 @@ def _save_local_log(sim, log_rows):
     """Save CSV + JSON for a local simulator run, pruning old logs."""
     os.makedirs(_LOG_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"local_{timestamp}"
+    difficulty = _infer_difficulty_slug(sim)
+    prefix = f"local_{difficulty}_{sim.width}x{sim.height}_{sim.num_bots}bot_{timestamp}"
     csv_path = f"{_LOG_DIR}/{prefix}.csv"
     json_path = f"{_LOG_DIR}/{prefix}.json"
 
@@ -388,6 +408,7 @@ def _save_local_log(sim, log_rows):
     meta = {
         "timestamp": timestamp,
         "source": "local_simulator",
+        "difficulty": difficulty,
         "grid": {
             "width": sim.width,
             "height": sim.height,

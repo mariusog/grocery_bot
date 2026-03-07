@@ -23,7 +23,7 @@ class VisualizerHandler(http.server.SimpleHTTPRequestHandler):
         logs = set()
         if os.path.isdir(LOGS_DIR):
             for f in os.listdir(LOGS_DIR):
-                m = re.match(r"((game|local)_\d+_\d+)\.(csv|json)$", f)
+                m = re.match(r"((?:game|local)_[^.]+)\.(csv|json)$", f)
                 if m:
                     logs.add(m.group(1))
         # Only include logs that have BOTH csv and json
