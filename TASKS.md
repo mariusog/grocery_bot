@@ -96,6 +96,38 @@ Status: `open` | `in-progress` | `done` | `blocked`
   5. **Scaling endgame threshold by bot count is harmful** — shorter endgame for Expert regresses all difficulties.
   6. **Single-cell dropoff is the hard bottleneck** — all planner changes that increase dropoff traffic hurt, and all changes that reduce it help only marginally. Expert >70 requires game-level changes (multi-cell dropoff or faster delivery mechanic).
 
+### T41: Production-Grade Refactor — File Size + Test Coverage
+- **Agent**: qa-agent
+- **Status**: done
+- **Priority**: 0 (blocks all other work)
+- **Goal**: Bring entire codebase to production quality. Every file under 300 lines, every public method tested.
+- **Result**: All file splits complete. Source: pickup.py (399->291) + preview.py (120), benchmark.py (396->197) + benchmark_reporting.py (214), round_planner.py (313->298). Tests: 10 oversized test files split into 27 smaller files, all under 300 lines. Shared helpers extracted to conftest.py files in pathfinding/, game_state/, planner/ test dirs. 432 tests pass, benchmark shows no regression.
+- **Source files over 300 lines (MUST split)**:
+  - `grocery_bot/planner/pickup.py` (399 lines) — split preview/detour into `preview.py`
+  - `benchmark.py` (396 lines) — split reporting into `benchmark/reporting.py`
+  - `grocery_bot/planner/round_planner.py` (313 lines) — trim to under 300
+- **Test files over 300 lines (MUST split by test class)**:
+  - `tests/integration/test_decision_preview.py` (1122 lines)
+  - `tests/integration/test_decision_basic.py` (907 lines)
+  - `tests/integration/test_multi_bot.py` (750 lines)
+  - `tests/game_state/test_game_state_unit.py` (709 lines)
+  - `tests/planner/test_movement_unit.py` (451 lines)
+  - `tests/planner/test_pickup_unit.py` (427 lines)
+  - `tests/pathfinding/test_pathfinding.py` (415 lines)
+  - `tests/planner/test_round_planner_unit.py` (370 lines)
+  - `tests/test_simulator.py` (366 lines)
+  - `tests/planner/test_assignment_unit.py` (335 lines)
+- **Missing test coverage**: Write unit tests for every public method in:
+  - `grocery_bot/game_state/distance.py`
+  - `grocery_bot/game_state/path_cache.py`
+  - `grocery_bot/game_state/dropoff.py`
+  - `grocery_bot/planner/steps.py`
+  - `grocery_bot/planner/coordination.py`
+  - `grocery_bot/simulator/diagnostics.py`
+  - `grocery_bot/simulator/map_generator.py`
+- **Quality checks**: SOLID violations, Law of Demeter, magic numbers, type annotations
+- **Success criteria**: All files under 300 lines, all tests pass, every public method has a test
+
 ### T34: Reduce Expert Idle Time (30% -> 15%)
 - **Agent**: strategy-agent
 - **Status**: open

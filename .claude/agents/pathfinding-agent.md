@@ -13,9 +13,9 @@ Expert algorithm and pathfinding engineer. Owns all routing, distance computatio
 | File | Scope |
 |------|-------|
 | `grocery_bot/pathfinding.py` | BFS variants, movement helpers, spatial algorithms |
-| `grocery_bot/game_state.py` | Distance caching, TSP routing, multi-trip planning, assignment, route tables |
+| `grocery_bot/game_state/` (all files) | Distance caching, TSP routing, multi-trip planning, assignment, route tables |
 
-**Do NOT modify**: `bot.py`, `grocery_bot/planner/`, `grocery_bot/simulator.py`, `tests/`
+**Do NOT modify**: `bot.py`, `grocery_bot/planner/`, `grocery_bot/simulator/`, `tests/`
 
 ## Current State
 
@@ -28,14 +28,23 @@ Expert algorithm and pathfinding engineer. Owns all routing, distance computatio
 - `_predict_pos(bx, by, action)` — predicts position after action
 - `find_adjacent_positions(ix, iy, blocked_static)` — walkable cells adjacent to shelf
 
-### game_state.py (GameState class)
-- **Caches**: `dist_cache`, `adj_cache`, `blocked_static` (populated in `init_static`)
-- **Distance**: `dist_static(a, b)`, `get_distances_from(source)`
-- **Routing**: `tsp_route()`, `tsp_cost()`, `plan_multi_trip()`
-- **Assignment**: `assign_items_to_bots()` (Hungarian/greedy with last-item priority boost)
-- **Route tables** (T16): `best_pickup`, `best_pair_route`, `best_triple_route`, `get_optimal_route()`
-- **Map info**: `idle_spots`, `corridor_y`, `grid_width`, `grid_height`
-- **Persistent state**: `bot_history`, `delivery_queue`, `bot_tasks`, `last_active_order_id`
+### game_state/ package (GameState class, split into mixins)
+- `state.py` — Core GameState class, `__init__`, `reset`, `init_static`
+- `distance.py` — DistanceMixin: `dist_static(a, b)`, `get_distances_from(source)`
+- `route_tables.py` — RouteTableMixin: `best_pickup`, `best_pair_route`, `get_optimal_route()`
+- `tsp.py` — TspMixin: `tsp_route()`, `tsp_cost()`, `plan_multi_trip()`
+- `hungarian.py` — AssignmentMixin: `assign_items_to_bots()`, Hungarian/greedy solver
+- `dropoff.py` — DropoffMixin: dropoff congestion zones, approach/wait cells
+- `path_cache.py` — PathCacheMixin: per-bot path caching
+
+## Code Quality Requirements
+
+- **300 lines max** per file, **30 lines max** per method
+- **All BFS functions** must have `max_cells` safety limits to prevent unbounded exploration
+- **Type annotations** on all function signatures
+- **No magic numbers** — thresholds go in `constants.py`
+- **SOLID**: each mixin has a single responsibility (distance, TSP, assignment, etc.)
+- **Law of Demeter**: callers use `gs.dist_static()`, not `gs.dist_cache[pos].get(target)`
 
 ## Constraints
 

@@ -13,13 +13,25 @@ Expert game strategy and decision engineer. Owns all per-round decision logic â€
 | File | Scope |
 |------|-------|
 | `grocery_bot/planner/round_planner.py` | Per-round bot decisions, step chain orchestration |
-| `grocery_bot/planner/movement.py` | BFS dispatch, collision avoidance, emit helpers |
-| `grocery_bot/planner/assignment.py` | Bot-to-item assignment, role management |
-| `grocery_bot/planner/pickup.py` | Active/preview pickup, TSP routes, clustering |
-| `grocery_bot/planner/delivery.py` | Delivery timing, end-game estimation |
-| `grocery_bot/planner/idle.py` | Dropoff clearing, idle positioning |
+| `grocery_bot/planner/steps.py` | StepsMixin: all `_step_*` decision methods |
+| `grocery_bot/planner/coordination.py` | CoordinationMixin: delivery queue, roles, tasks |
+| `grocery_bot/planner/movement.py` | MovementMixin: BFS dispatch, collision avoidance |
+| `grocery_bot/planner/assignment.py` | AssignmentMixin: bot-to-item assignment |
+| `grocery_bot/planner/pickup.py` | PickupMixin: active pickup, routing, clustering |
+| `grocery_bot/planner/delivery.py` | DeliveryMixin: delivery timing, end-game |
+| `grocery_bot/planner/idle.py` | IdleMixin: dropoff clearing, idle positioning |
 
-**Do NOT modify**: `bot.py`, `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py`, `grocery_bot/simulator.py`, `tests/`
+**Do NOT modify**: `bot.py`, `grocery_bot/pathfinding.py`, `grocery_bot/game_state/`, `grocery_bot/simulator/`, `tests/`
+
+## Code Quality Requirements
+
+- **300 lines max** per file, **30 lines max** per method
+- **Type annotations** on all function signatures
+- **No magic numbers** â€” thresholds go in `constants.py`
+- **SOLID**: each mixin has a single responsibility
+- **SRP**: if a step does pickup AND delivery, split it
+- **Law of Demeter**: max one dot-chain depth
+- If `pickup.py` exceeds 300 lines, split preview/detour logic into `preview.py`
 
 ## Current Architecture
 

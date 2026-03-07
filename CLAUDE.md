@@ -8,11 +8,28 @@ grocery_bot/                    # Main package
 ├── constants.py                # Named constants (tuning parameters)
 ├── orders.py                   # Order helpers (get_needed_items)
 ├── pathfinding.py              # BFS variants, direction helpers
-├── game_state.py               # GameState: caches, TSP, Hungarian, route tables
-├── simulator.py                # GameSimulator + DIFFICULTY_PRESETS
+├── game_state/                 # GameState package: caches, routing, assignment
+│   ├── __init__.py             # Re-exports: GameState
+│   ├── state.py                # GameState class: init, reset, static setup
+│   ├── distance.py             # DistanceMixin: BFS distance + caching
+│   ├── route_tables.py         # RouteTableMixin: precomputed pickup routes
+│   ├── tsp.py                  # TspMixin: TSP solver, multi-trip planning
+│   ├── hungarian.py            # AssignmentMixin: bot-to-item assignment
+│   ├── dropoff.py              # DropoffMixin: congestion management
+│   └── path_cache.py           # PathCacheMixin: per-bot path caching
+├── simulator/                  # Simulator package
+│   ├── __init__.py             # Re-exports: GameSimulator, presets, runner
+│   ├── game_simulator.py       # GameSimulator: game loop, physics
+│   ├── replay_simulator.py     # ReplaySimulator: recorded map replay
+│   ├── map_generator.py        # Store layout and order generation
+│   ├── diagnostics.py          # DiagnosticTracker: per-round metrics
+│   ├── presets.py              # DIFFICULTY_PRESETS dict
+│   └── runner.py               # run_benchmark(), profile_congestion()
 └── planner/                    # Per-round decision subpackage
     ├── __init__.py             # Re-exports: RoundPlanner
     ├── round_planner.py        # RoundPlanner: step-chain orchestration
+    ├── steps.py                # StepsMixin: all _step_* decision methods
+    ├── coordination.py         # CoordinationMixin: delivery queue, roles, tasks
     ├── movement.py             # MovementMixin: BFS dispatch, collision, emit
     ├── assignment.py           # AssignmentMixin: bot-to-item assignment
     ├── pickup.py               # PickupMixin: active/preview pickup, TSP routes
@@ -32,7 +49,7 @@ tests/
 │   └── test_multi_bot.py
 ├── pathfinding/                # Matches grocery_bot/pathfinding.py
 │   └── test_pathfinding.py
-├── game_state/                 # Matches grocery_bot/game_state.py
+├── game_state/                 # Matches grocery_bot/game_state/
 │   ├── test_game_state.py
 │   └── test_game_state_unit.py
 └── planner/                    # Matches grocery_bot/planner/
@@ -41,8 +58,41 @@ tests/
     ├── test_assignment_unit.py
     ├── test_pickup_unit.py
     ├── test_delivery_unit.py
-    └── test_idle_unit.py
+    ├── test_idle_unit.py
+    ├── test_role_assignment.py
+    ├── test_step_ordering.py
+    ├── test_dropoff_steps.py
+    ├── test_rush_endgame.py
+    ├── test_plan_integrity.py
+    ├── test_spare_slots.py
+    └── test_nonactive_clearing.py
 ```
+
+## Code Quality Standards
+
+All code in this project MUST follow these principles. The QA agent enforces them strictly.
+
+### Hard Limits
+- **300 lines max per file** (source and test)
+- **200 lines max per class**
+- **30 lines max per method** (excluding docstrings)
+- **No magic numbers** — all thresholds in `constants.py`
+- **Type annotations required** on all function signatures
+
+### SOLID Principles
+- **SRP**: Every class/function has one responsibility. If you can say "and", split it.
+- **OCP**: Step chain is extensible without modifying `_decide_bot()`.
+- **LSP**: `ReplaySimulator` is a drop-in for `GameSimulator`.
+- **ISP**: Specific imports only. No `import *`.
+- **DIP**: Planners use `gs.dist_static()`, never `bfs_all()` directly.
+
+### Law of Demeter
+- Max one dot-chain: `self.gs.dist_static()` OK, `self.gs.dist_cache[pos].get(target)` NOT OK.
+
+### Safety
+- All BFS functions have `max_cells` bounds to prevent unbounded exploration
+- Test data positions must be within grid bounds (`0 <= x < width`, `0 <= y < height`)
+- No unbounded loops or recursion without explicit depth limits
 
 ## Multi-Agent Coordination Protocol
 
@@ -80,9 +130,9 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 | Agent | Owned Files | Role |
 |-------|-------------|------|
 | lead-agent | `bot.py`, `grocery_bot/constants.py`, `TASKS.md`, `CLAUDE.md`, `.claude/agents/` | Architecture, cross-cutting changes, task design |
-| pathfinding-agent | `grocery_bot/pathfinding.py`, `grocery_bot/game_state.py` | Routing, distance, collision, assignment |
+| pathfinding-agent | `grocery_bot/pathfinding.py`, `grocery_bot/game_state/` (all files) | Routing, distance, collision, assignment |
 | strategy-agent | `grocery_bot/planner/` (all files) | Per-round decisions, order management |
-| qa-agent | `tests/`, `grocery_bot/simulator.py`, `benchmark.py`, `docs/` | Testing, benchmarking, profiling |
+| qa-agent | `tests/`, `grocery_bot/simulator/` (all files), `benchmark.py`, `docs/` | Testing, benchmarking, profiling |
 
 The lead-agent has cross-cutting authority — it may modify any file when a fix spans multiple agents' boundaries. Other agents treat `bot.py` and `grocery_bot/constants.py` as read-only.
 
