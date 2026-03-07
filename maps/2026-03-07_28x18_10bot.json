@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260307_101939",
+  "recorded_at": "20260307_163410",
   "source": "live",
   "grid": {
     "width": 28,
@@ -1624,20 +1624,83 @@
     {
       "id": "order_0",
       "items_required": [
-        "bread",
-        "oats",
-        "bananas",
-        "onions"
+        "cereal",
+        "butter",
+        "apples",
+        "cheese"
       ]
     },
     {
       "id": "order_1",
       "items_required": [
-        "cheese",
         "oats",
         "butter",
+        "bread",
+        "flour",
+        "onions"
+      ]
+    },
+    {
+      "id": "order_2",
+      "items_required": [
+        "onions",
+        "pasta",
+        "bananas",
+        "flour"
+      ]
+    },
+    {
+      "id": "order_3",
+      "items_required": [
+        "oats",
+        "apples",
+        "cereal",
+        "rice",
+        "pasta",
+        "oats"
+      ]
+    },
+    {
+      "id": "order_4",
+      "items_required": [
         "milk",
-        "apples"
+        "cream",
+        "cereal",
+        "butter",
+        "cheese",
+        "bananas"
+      ]
+    },
+    {
+      "id": "order_5",
+      "items_required": [
+        "cream",
+        "tomatoes",
+        "tomatoes",
+        "butter",
+        "flour",
+        "bread"
+      ]
+    },
+    {
+      "id": "order_6",
+      "items_required": [
+        "eggs",
+        "milk",
+        "bread",
+        "eggs",
+        "onions"
+      ]
+    },
+    {
+      "id": "order_7",
+      "items_required": [
+        "cereal",
+        "oats",
+        "apples",
+        "apples",
+        "oats",
+        "butter"
       ]
     }
   ]
