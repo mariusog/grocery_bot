@@ -52,6 +52,14 @@ DIFFICULTY_PRESETS = {
         "items_per_order": (4, 6),
         "max_rounds": 300,
     },
+    "Nightmare": {
+        "num_bots": 20,
+        "width": 30,
+        "height": 18,
+        "num_item_types": 21,
+        "items_per_order": (4, 6),
+        "max_rounds": 500,
+    },
 }
 
 
