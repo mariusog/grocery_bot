@@ -14,11 +14,13 @@ from grocery_bot.planner.delivery import DeliveryMixin
 from grocery_bot.planner.idle import IdleMixin
 from grocery_bot.constants import (
     BOT_HISTORY_MAXLEN,
+    CASCADE_DETOUR_STEPS,
     DELIVER_WHEN_CLOSE_DIST,
     DELIVERY_QUEUE_TEAM_MIN,
     ENDGAME_ROUNDS_LEFT,
     LARGE_TEAM_MIN,
     MAX_CONCURRENT_DELIVERERS,
+    MAX_DETOUR_STEPS,
     MAX_INVENTORY,
     MAX_NONACTIVE_DELIVERERS,
     MEDIUM_TEAM_MIN,
@@ -598,6 +600,17 @@ class RoundPlanner(
         """Step 2: all active items picked up -> rush to deliver."""
         if not (ctx.has_active and self.active_on_shelves == 0):
             return False
+
+        # T33: On large teams (8+), only bots in the delivery queue front
+        # rush directly. Others prefer preview detours to spread load and
+        # avoid dropoff pile-ups.
+        is_queue_front = True
+        if len(self.bots) >= PREDICTION_TEAM_MIN and self._use_coordination:
+            gs = self.gs
+            max_deliverers = max(2, len(self.bots) // 4)
+            queue_front = set(gs.delivery_queue[:max_deliverers])
+            is_queue_front = ctx.bid in queue_front
+
         if self.preview and len(ctx.inv) < MAX_INVENTORY:
             adj = self._find_adjacent_needed(
                 ctx.bx, ctx.by, self.net_preview, prefer_cascade=True
@@ -606,8 +619,14 @@ class RoundPlanner(
                 self._claim(adj, self.net_preview)
                 self._emit(ctx.bid, ctx.bx, ctx.by, self._pickup(ctx.bid, adj))
                 return True
+            # Non-front bots on large teams: search harder for preview detours
+            # to stay busy while waiting for their delivery slot.
+            max_detour = MAX_DETOUR_STEPS
+            if not is_queue_front:
+                max_detour = CASCADE_DETOUR_STEPS
             item, cell = self._find_detour_item(
-                ctx.pos, self.net_preview, prefer_cascade=True
+                ctx.pos, self.net_preview, max_detour=max_detour,
+                prefer_cascade=True
             )
             if item:
                 self._claim(item, self.net_preview)
@@ -694,6 +713,7 @@ class RoundPlanner(
         if not ctx.has_active:
             return False
         d_to_drop = self.gs.dist_static(ctx.pos, self.drop_off)
+
         if (
             self.active_on_shelves > 0
             and len(ctx.inv) >= 2

@@ -82,21 +82,19 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Expected gain**: +8-15 Expert.
 - **Depends on**: T30-pf for full effect, but deliverer scaling alone should help.
 
-### T33: Wire T30 Dropoff Queuing into Planner + Make Roles Control Behavior
+### T33: Wire T30 Dropoff Queuing + Delivery Queue Gating
 - **Agent**: strategy-agent
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: 2
-- **Metric**: Expert Waits=908, Stuck%=0.1% (low but waits are high)
-- **Target**: Expert Waits < 500
-- **Files**: `grocery_bot/planner/movement.py`, `grocery_bot/planner/round_planner.py`
-- **Root cause**: `game_state.py` has `get_dropoff_approach_target()`, `is_dropoff_congested()`, and `get_avoidance_target()` but the planner NEVER calls them. All bots target dropoff directly, causing pile-ups.
-- **How to fix**:
-  1. In `_emit_move_or_wait`: when target == self.drop_off and len(self.bots) >= 8, call `gs.get_dropoff_approach_target(bid, pos, drop_off, delivering_bots)` to get a staged target. If `should_wait`, path to wait cell instead of dropoff.
-  2. In `_step_clear_dropoff`: when `gs.is_dropoff_congested(drop_off, bot_positions)`, non-delivering bots call `gs.get_avoidance_target()` and move away.
-  3. Collect `delivering_bots` list during `_update_delivery_queue` — it already tracks who's delivering.
-- **Risk**: Over-staging could slow delivery. Start conservative: only trigger for 8+ bots.
-- **Expected gain**: +5-10 Expert (combined with T32).
-- **Depends on**: T30-pf (pathfinding-agent) completing first.
+- **Result**: Wired T30 `is_dropoff_congested()` + `get_avoidance_target()` into `_try_clear_dropoff` for 8+ bots. Added delivery queue gating to `_step_rush_deliver`: non-front bots search harder for preview detours (CASCADE_DETOUR_STEPS) instead of rushing to dropoff. Expert +1.1 (10-seed: 60.3 vs 59.2). No regression on Easy/Medium/Hard.
+- **Files**: `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/idle.py`
+- **Findings**:
+  1. **`get_dropoff_approach_target()` in `_emit_move_or_wait` is harmful** — redirecting delivering bots to wait cells consistently regresses Expert by 3-5 points. Wait cells waste rounds that could be spent queuing closer.
+  2. **Role gates on step chain are mostly neutral** — gating `_step_active_pickup`, `_step_preview_prepick`, `_step_idle_positioning` by role for 8+ bots showed no improvement. The role system assigns roles but the step chain's priority ordering already produces near-optimal behavior without gates.
+  3. **`_should_deliver_early()` is harmful** — wiring it into `_step_deliver_active` caused Expert regression (54.0 vs 59.2).
+  4. **Scaling `MAX_NONACTIVE_DELIVERERS` is harmful** — increasing from 1 to 2 for Expert causes more dropoff congestion (54.5 vs 59.2).
+  5. **Scaling endgame threshold by bot count is harmful** — shorter endgame for Expert regresses all difficulties.
+  6. **Single-cell dropoff is the hard bottleneck** — all planner changes that increase dropoff traffic hurt, and all changes that reduce it help only marginally. Expert >70 requires game-level changes (multi-cell dropoff or faster delivery mechanic).
 
 ### T34: Reduce Expert Idle Time (30% -> 15%)
 - **Agent**: strategy-agent

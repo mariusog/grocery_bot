@@ -29,6 +29,16 @@ class IdleMixin:
     ) -> bool:
         if len(self.bots) <= 1:
             return False
+
+        # T33: On large teams, use T30 congestion avoidance to route idle bots
+        # away from the dropoff zone, giving deliverers more space.
+        if len(self.bots) >= PREDICTION_TEAM_MIN:
+            bot_positions = [tuple(b["position"]) for b in self.bots]
+            if self.gs.is_dropoff_congested(self.drop_off, bot_positions):
+                avoidance = self.gs.get_avoidance_target(pos, self.drop_off)
+                if avoidance and avoidance != pos:
+                    return self._emit_move(bid, bx, by, pos, avoidance, blocked)
+
         dist_to_drop = self.gs.dist_static(pos, self.drop_off)
         if dist_to_drop > DROPOFF_CLEAR_RADIUS:
             return False
