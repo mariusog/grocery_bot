@@ -3,10 +3,57 @@
 These tests run multiple seeds and are slow. Use `pytest -m "not slow"` to skip them.
 """
 
+import statistics
+
 import pytest
 
 from grocery_bot.simulator import GameSimulator, DIFFICULTY_PRESETS
-from tests.conftest import reset_bot
+
+
+def _run_batch(seeds, *, diagnose=False, **sim_kwargs):
+    """Run a batch of simulator seeds once and return immutable per-seed results."""
+    results = []
+    for seed in seeds:
+        sim = GameSimulator(seed=seed, **sim_kwargs)
+        result = sim.run(diagnose=diagnose)
+        results.append((seed, result))
+    return tuple(results)
+
+
+def _scores(results):
+    return [result["score"] for _, result in results]
+
+
+def _result_for_seed(results, seed):
+    for result_seed, result in results:
+        if result_seed == seed:
+            return result
+    raise AssertionError(f"Missing cached result for seed {seed}")
+
+
+@pytest.fixture(scope="module")
+def easy_results():
+    return _run_batch(tuple(range(1, 11)), **DIFFICULTY_PRESETS["Easy"])
+
+
+@pytest.fixture(scope="module")
+def medium_results():
+    return _run_batch(tuple(range(1, 21)), **DIFFICULTY_PRESETS["Medium"])
+
+
+@pytest.fixture(scope="module")
+def hard_results():
+    return _run_batch(tuple(range(1, 21)), **DIFFICULTY_PRESETS["Hard"])
+
+
+@pytest.fixture(scope="module")
+def hard_diagnostics():
+    return _run_batch(tuple(range(1, 11)), diagnose=True, **DIFFICULTY_PRESETS["Hard"])
+
+
+@pytest.fixture(scope="module")
+def expert_results():
+    return _run_batch(tuple(range(1, 21)), **DIFFICULTY_PRESETS["Expert"])
 
 
 @pytest.mark.slow
@@ -20,35 +67,19 @@ class TestScoreRegression:
       Expert: avg~60,  min~44   -> thresholds: avg>=48,  per-seed>=20
     """
 
-    # --- helpers ---
-
-    @staticmethod
-    def _run_seeds(seeds, **sim_kwargs):
-        """Run simulator for each seed and return list of scores."""
-        scores = []
-        for seed in seeds:
-            reset_bot()
-            sim = GameSimulator(seed=seed, **sim_kwargs)
-            result = sim.run()
-            scores.append(result["score"])
-        return scores
-
     # 1. Easy per-seed baselines
-    def test_easy_single_seed_baselines(self):
+    def test_easy_single_seed_baselines(self, easy_results):
         """Each Easy seed 1-10 should score >= 120 (current min is 133)."""
-        for seed in range(1, 11):
-            reset_bot()
-            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Easy"])
-            result = sim.run()
+        for seed, result in easy_results:
             assert result["score"] >= 120, (
                 f"Easy seed {seed} scored {result['score']} (expected >= 120). "
                 f"Regression in single-bot Easy performance."
             )
 
     # 2. Easy average
-    def test_easy_average_above_threshold(self):
+    def test_easy_average_above_threshold(self, easy_results):
         """Easy average across seeds 1-10 should be >= 125 (current avg ~148)."""
-        scores = self._run_seeds(range(1, 11), **DIFFICULTY_PRESETS["Easy"])
+        scores = _scores(easy_results)
         avg = sum(scores) / len(scores)
         assert avg >= 125, (
             f"Easy average {avg:.1f} fell below 125 (scores: {scores}). "
@@ -56,9 +87,9 @@ class TestScoreRegression:
         )
 
     # 3. Medium average
-    def test_medium_average_above_threshold(self):
+    def test_medium_average_above_threshold(self, medium_results):
         """Medium average across seeds 1-20 should be >= 90 (current avg ~109)."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Medium"])
+        scores = _scores(medium_results)
         avg = sum(scores) / len(scores)
         assert avg >= 90, (
             f"Medium average {avg:.1f} fell below 90 (scores: {scores}). "
@@ -66,9 +97,9 @@ class TestScoreRegression:
         )
 
     # 4. Hard average
-    def test_hard_average_above_threshold(self):
+    def test_hard_average_above_threshold(self, hard_results):
         """Hard average across seeds 1-20 should be >= 67 (current avg ~82)."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Hard"])
+        scores = _scores(hard_results)
         avg = sum(scores) / len(scores)
         assert avg >= 67, (
             f"Hard average {avg:.1f} fell below 67 (scores: {scores}). "
@@ -76,9 +107,9 @@ class TestScoreRegression:
         )
 
     # 5. Expert average
-    def test_expert_average_above_threshold(self):
+    def test_expert_average_above_threshold(self, expert_results):
         """Expert (10 bots) average across seeds 1-20 should be >= 48 (current avg ~60)."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Expert"])
+        scores = _scores(expert_results)
         avg = sum(scores) / len(scores)
         assert avg >= 48, (
             f"Expert average {avg:.1f} fell below 48 (scores: {scores}). "
@@ -86,9 +117,9 @@ class TestScoreRegression:
         )
 
     # 6. Medium no total deadlock
-    def test_medium_no_total_deadlock(self):
+    def test_medium_no_total_deadlock(self, medium_results):
         """No Medium seed (1-20) should score below 20. Catches preview-item deadlock bug (3 bots)."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Medium"])
+        scores = _scores(medium_results)
         for i, score in enumerate(scores):
             seed = i + 1
             assert score >= 20, (
@@ -97,9 +128,9 @@ class TestScoreRegression:
             )
 
     # 7. Hard minimum score
-    def test_hard_minimum_score(self):
+    def test_hard_minimum_score(self, hard_results):
         """No Hard seed (1-20) should score below 10."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Hard"])
+        scores = _scores(hard_results)
         for i, score in enumerate(scores):
             seed = i + 1
             assert score >= 10, (
@@ -108,9 +139,9 @@ class TestScoreRegression:
             )
 
     # 8. Expert minimum score
-    def test_expert_minimum_score(self):
+    def test_expert_minimum_score(self, expert_results):
         """No Expert seed (1-20) should score below 10."""
-        scores = self._run_seeds(range(1, 21), **DIFFICULTY_PRESETS["Expert"])
+        scores = _scores(expert_results)
         for i, score in enumerate(scores):
             seed = i + 1
             assert score >= 10, (
@@ -119,23 +150,19 @@ class TestScoreRegression:
             )
 
     # 9. Round-trip scoring improvement
-    def test_round_trip_scoring_improvement(self):
+    def test_round_trip_scoring_improvement(self, easy_results):
         """Easy seed 1 should score >= 130 (current: 140)."""
-        reset_bot()
-        sim = GameSimulator(seed=1, **DIFFICULTY_PRESETS["Easy"])
-        result = sim.run()
+        result = _result_for_seed(easy_results, 1)
         assert result["score"] >= 130, (
             f"Easy seed 1 scored {result['score']} (expected >= 130). "
             f"Round-trip scoring improvement may have regressed."
         )
 
     # 10. Preview deadlock fix
-    def test_preview_deadlock_fixed(self):
+    def test_preview_deadlock_fixed(self, medium_results):
         """Medium seed 6 should score >= 100 (was 12 before fix, now 174).
         Key regression test for the preview-item inventory deadlock."""
-        reset_bot()
-        sim = GameSimulator(seed=6, **DIFFICULTY_PRESETS["Medium"])
-        result = sim.run()
+        result = _result_for_seed(medium_results, 6)
         assert result["score"] >= 100, (
             f"Medium seed 6 scored {result['score']} (expected >= 100). "
             f"Preview-item inventory deadlock may have regressed."
@@ -146,34 +173,24 @@ class TestScoreRegression:
 class TestCongestionRegression:
     """Tests that catch multi-bot congestion regressions."""
 
-    def test_5bot_no_permanent_deadlock(self):
+    def test_5bot_no_permanent_deadlock(self, hard_results):
         """No 5-bot seed should score below 10 (seeds 1-20)."""
-        for seed in range(1, 21):
-            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
-            result = sim.run()
+        for seed, result in hard_results:
             assert result["score"] >= 10, (
                 f"5-bot seed {seed} scored {result['score']} (below 10 threshold)"
             )
 
-    def test_5bot_average_above_threshold(self):
+    def test_5bot_average_above_threshold(self, hard_results):
         """5-bot average across seeds 1-10 should be >= 60."""
-        scores = []
-        for seed in range(1, 11):
-            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
-            result = sim.run()
-            scores.append(result["score"])
-        import statistics as _stats
-
-        avg = _stats.mean(scores)
+        scores = _scores(hard_results[:10])
+        avg = statistics.mean(scores)
         assert avg >= 60, (
             f"5-bot average score {avg:.1f} is below 60 threshold (scores: {scores})"
         )
 
-    def test_no_excessive_idle_rounds(self):
+    def test_no_excessive_idle_rounds(self, hard_diagnostics):
         """Idle rounds should be < 50% of total bot-rounds for 5 bots."""
-        for seed in range(1, 6):
-            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
-            result = sim.run(diagnose=True)
+        for seed, result in hard_diagnostics[:5]:
             diag = result["diagnostics"]
             total_br = diag["total_bot_rounds"]
             idle_pct = diag["idle_rounds"] / total_br * 100 if total_br > 0 else 0
@@ -182,23 +199,18 @@ class TestCongestionRegression:
                 f"({diag['idle_rounds']}/{total_br})"
             )
 
-    def test_no_long_delivery_gaps(self):
+    def test_no_long_delivery_gaps(self, hard_diagnostics):
         """Max delivery gap should be < 150 rounds for any 5-bot config."""
-        for seed in range(1, 11):
-            sim = GameSimulator(seed=seed, **DIFFICULTY_PRESETS["Hard"])
-            result = sim.run(diagnose=True)
+        for seed, result in hard_diagnostics:
             diag = result["diagnostics"]
             assert diag["max_delivery_gap"] < 150, (
                 f"5-bot seed {seed}: max delivery gap {diag['max_delivery_gap']} "
                 f"exceeds 150 rounds"
             )
 
-    def test_10bot_scores_above_zero(self):
+    def test_10bot_scores_above_zero(self, expert_results):
         """10-bot configs should score > 0 for all seeds 1-10."""
-        cfg = DIFFICULTY_PRESETS["Expert"]
-        for seed in range(1, 11):
-            sim = GameSimulator(seed=seed, **cfg)
-            result = sim.run()
+        for seed, result in expert_results[:10]:
             assert result["score"] > 0, (
                 f"10-bot seed {seed} scored 0 (complete deadlock)"
             )

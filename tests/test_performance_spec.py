@@ -9,6 +9,7 @@ causing a desync that destroys the score. This test catches that.
 """
 
 import time
+from functools import lru_cache
 
 import pytest
 
@@ -32,10 +33,11 @@ MIN_SCORES = {
 }
 
 
-def _run_game_with_timing(preset_name, seed=42):
+@lru_cache(maxsize=None)
+def _run_game_with_timing_cached(preset_name, seed=42):
     """Run a full game, measuring per-round decide_actions latency.
 
-    Returns (result_dict, round_times_ms, max_round_ms).
+    Returns immutable cached results for reuse across assertions.
     """
     params = DIFFICULTY_PRESETS[preset_name]
     sim = GameSimulator(seed=seed, **params)
@@ -54,23 +56,40 @@ def _run_game_with_timing(preset_name, seed=42):
         round_times.append(elapsed_ms)
         sim.apply_actions(actions)
 
-    result = {
-        "score": sim.score,
-        "items_delivered": sim.items_delivered,
-        "orders_completed": sim.orders_completed,
-        "rounds_used": sim.round,
-    }
+    result = (
+        sim.score,
+        sim.items_delivered,
+        sim.orders_completed,
+        sim.round,
+    )
     max_ms = max(round_times) if round_times else 0
-    return result, round_times, max_ms
+    blacklisted_items = tuple(sorted(bot._gs.blacklisted_items))
+    return result, tuple(round_times), max_ms, blacklisted_items
 
 
-def _check_action_position_consistency(preset_name, seed=42):
+def _run_game_with_timing(preset_name, seed=42):
+    """Run a full game, measuring per-round decide_actions latency.
+
+    Returns (result_dict, round_times_ms, max_round_ms).
+    """
+    result, round_times, max_ms, _ = _run_game_with_timing_cached(preset_name, seed)
+    score, items_delivered, orders_completed, rounds_used = result
+    return {
+        "score": score,
+        "items_delivered": items_delivered,
+        "orders_completed": orders_completed,
+        "rounds_used": rounds_used,
+    }, list(round_times), max_ms
+
+
+@lru_cache(maxsize=None)
+def _check_action_position_consistency_cached(preset_name, seed=42):
     """Run a full game and verify every action produces the expected position.
 
     For multi-bot games, a move can be blocked by another bot occupying the
     target cell. These "collision blocks" are expected behavior, not bugs.
 
-    Returns list of (round, bot_id, expected_pos, actual_pos) mismatches
+    Returns immutable mismatches of (round, bot_id, expected_pos, actual_pos)
     that CANNOT be explained by bot-bot collisions.
     """
     params = DIFFICULTY_PRESETS[preset_name]
@@ -125,7 +144,12 @@ def _check_action_position_consistency(preset_name, seed=42):
 
         sim.apply_actions(actions)
 
-    return mismatches
+    return tuple(mismatches)
+
+
+def _check_action_position_consistency(preset_name, seed=42):
+    """Return action-position mismatches as a fresh list."""
+    return list(_check_action_position_consistency_cached(preset_name, seed))
 
 
 # ── Performance: no round exceeds budget ─────────────────────────────────
@@ -206,20 +230,9 @@ class TestScoreSanity:
 
     def test_easy_no_blacklisted_items(self):
         """Easy difficulty should complete without blacklisting any items."""
-        params = DIFFICULTY_PRESETS["Easy"]
-        sim = GameSimulator(seed=42, **params)
-        bot.reset_state()
-
-        while not sim.is_over():
-            state = sim.get_state()
-            if not state["orders"]:
-                break
-            actions = bot.decide_actions(state)
-            sim.apply_actions(actions)
-
-        gs = bot._gs
-        assert len(gs.blacklisted_items) == 0, (
-            f"Blacklisted items in Easy: {gs.blacklisted_items}"
+        _, _, _, blacklisted_items = _run_game_with_timing_cached("Easy")
+        assert len(blacklisted_items) == 0, (
+            f"Blacklisted items in Easy: {blacklisted_items}"
         )
 
 
