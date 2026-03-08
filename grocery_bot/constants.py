@@ -33,7 +33,6 @@ SMALL_TEAM_MAX = 3  # len(bots) <= this for small-team logic
 MEDIUM_TEAM_MIN = 5  # len(bots) >= this for medium-team logic
 LARGE_TEAM_MIN = 6  # len(bots) >= this for large-team logic
 PREDICTION_TEAM_MIN = 8  # len(bots) >= this to use predicted positions
-MIN_CLAIM_LARGE_TEAM = 2  # min items per bot for 8+ bot teams (reduce delivery trips)
 
 # ---------------------------------------------------------------------------
 # Blocking / collision avoidance
