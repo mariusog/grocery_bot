@@ -19,6 +19,33 @@ def _make_large_team(n: int, items: list, orders: list, **kw):
 
 
 class TestSpeculativePickup:
+    def test_prefers_preview_type_for_speculative_target(self):
+        """Preview-order types should outrank unrelated speculative targets."""
+        planner = _make_large_team(
+            10,
+            items=[
+                {"id": "active_0", "type": "cheese", "position": [4, 2]},
+                {"id": "near_other", "type": "coffee", "position": [18, 4]},
+                {"id": "preview_0", "type": "bread", "position": [24, 2]},
+            ],
+            orders=[
+                _active_order(["cheese"]),
+                {
+                    "id": "preview_1",
+                    "items_required": ["bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+        )
+        planner.claimed = set()
+        planner.net_preview = {"bread": 1}
+        planner._spec_types_claimed = set()
+        item, _cell = planner._find_spec_target((18, 4), set(), {})
+        assert item is not None
+        assert item["type"] == "bread"
+
     def test_skipped_for_small_teams(self):
         """Speculative pickup only activates for 8+ bots."""
         planner = make_planner(

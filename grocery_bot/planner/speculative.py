@@ -11,12 +11,21 @@ from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     MAX_INVENTORY,
     MEDIUM_TEAM_MIN,
+    PREDICTION_TEAM_MIN,
     SPEC_MAX_TEAM_COPIES,
 )
 
 
 class SpeculativeMixin:
     """Mixin providing speculative item pickup for idle bots."""
+
+    def _is_preferred_spec_type(self, item_type: str) -> bool:
+        """Prefer preview-needed types for speculative pickup when available."""
+        return bool(
+            len(self.bots) < PREDICTION_TEAM_MIN * 2
+            and self.preview
+            and self.net_preview.get(item_type, 0) > 0
+        )
 
     def _step_speculative_pickup(self, ctx) -> bool:
         """Speculatively pick up items when idle (large teams)."""
@@ -55,9 +64,6 @@ class SpeculativeMixin:
                 team_type_count[it_type] = team_type_count.get(it_type, 0) + 1
 
         bot_types = set(inv)
-        free = MAX_INVENTORY - len(inv)
-        if free <= 0:
-            return False
 
         # Pass 1: adjacent pickup (zero travel cost — always take it)
         item = self._find_spec_adjacent(
@@ -90,6 +96,8 @@ class SpeculativeMixin:
         team_type_count: dict[str, int],
     ) -> Optional[dict[str, Any]]:
         """Find an adjacent item suitable for speculative pickup."""
+        preview_item: Optional[dict[str, Any]] = None
+        fallback_item: Optional[dict[str, Any]] = None
         for dx, dy in DIRECTIONS:
             for it in self.items_at_pos.get((bx + dx, by + dy), []):
                 if not self._is_available(it):
@@ -101,8 +109,14 @@ class SpeculativeMixin:
                     continue
                 if team_type_count.get(t, 0) >= SPEC_MAX_TEAM_COPIES:
                     continue
-                return it
-        return None
+                if self._is_preferred_spec_type(t):
+                    preview_item = it
+                    break
+                if fallback_item is None:
+                    fallback_item = it
+            if preview_item is not None:
+                return preview_item
+        return fallback_item
 
     def _find_spec_target(
         self,
@@ -113,7 +127,7 @@ class SpeculativeMixin:
         """Find the nearest walkable item of an uncovered type."""
         best_item: Optional[dict[str, Any]] = None
         best_cell: Optional[tuple[int, int]] = None
-        best_dist: float = float("inf")
+        best_key: tuple[int, float] = (2, float("inf"))
         for it in self.items:
             if not self._is_available(it):
                 continue
@@ -125,8 +139,9 @@ class SpeculativeMixin:
             if team_type_count.get(t, 0) >= SPEC_MAX_TEAM_COPIES:
                 continue
             cell, d = self.gs.find_best_item_target(pos, it)
-            if cell and d < best_dist:
-                best_dist = d
+            key = (0 if self._is_preferred_spec_type(t) else 1, d)
+            if cell and key < best_key:
+                best_key = key
                 best_item = it
                 best_cell = cell
         return best_item, best_cell
