@@ -40,6 +40,18 @@ class StepsMixin:
                 return True
         return False
 
+    def _step_break_oscillation(self, ctx) -> bool:
+        """Break A-B-A oscillation: carry -> deliver, empty -> wait."""
+        if not self._is_stuck_oscillating(ctx.bid):
+            return False
+        if ctx.inv:
+            self._emit_move_or_wait(
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+            )
+            return True
+        self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "wait"})
+        return True
+
     def _step_deliver_at_dropoff(self, ctx) -> bool:
         """At drop-off with active items -> deliver."""
         if ctx.pos == self.drop_off and ctx.has_active:
@@ -205,21 +217,14 @@ class StepsMixin:
         """Bot has non-active items clogging inventory."""
         if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
             return False
-
         num_bots = len(self.bots)
-        if num_bots <= SMALL_TEAM_MAX:
-            if len(ctx.inv) < MIN_INV_FOR_NONACTIVE_DELIVERY:
-                return False
-        elif num_bots < PREDICTION_TEAM_MIN:
-            if len(ctx.inv) < MAX_INVENTORY:
-                return False
-        else:
-            # Large teams: only clear when inventory is completely full
-            if len(ctx.inv) < MAX_INVENTORY:
-                return False
-
-        # Purely non-active inventory cannot be delivered; sitting on the
-        # dropoff and spamming drop_off only blocks real deliverers.
+        min_inv = (
+            MIN_INV_FOR_NONACTIVE_DELIVERY
+            if num_bots <= SMALL_TEAM_MAX
+            else MAX_INVENTORY
+        )
+        if len(ctx.inv) < min_inv:
+            return False
         if ctx.pos == self.drop_off:
             return False
         if (

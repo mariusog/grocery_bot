@@ -19,9 +19,27 @@ from grocery_bot.constants import (
     SMALL_TEAM_MAX,
 )
 
+# Minimum history length to detect A-B-A oscillation.
+# Should match BOT_HISTORY_MAXLEN (3). Move to constants.py later.
+_OSCILLATION_HISTORY_MIN = 3
+
 
 class IdleMixin:
     """Mixin providing idle bot positioning and dropoff area clearing."""
+
+    def _is_stuck_oscillating(self, bid: int) -> bool:
+        """Detect sustained A-B-A oscillation from position history.
+
+        Returns True when the last 3 positions form an A-B-A bounce,
+        meaning the bot toggled between exactly two cells without making
+        progress.  This catches oscillation caused by different steps
+        alternating control on successive rounds.
+        """
+        history = self.gs.bot_history.get(bid)
+        if not history or len(history) < _OSCILLATION_HISTORY_MIN:
+            return False
+        # A-B-A pattern: first == third, first != second
+        return history[-3] == history[-1] and history[-3] != history[-2]
 
     def _preview_stage_weight(self, bid: int) -> Optional[float]:
         """Return the dropoff-bias weight for preview-only staging, if any."""

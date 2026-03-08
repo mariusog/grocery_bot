@@ -389,6 +389,7 @@ RoundPlanner._STEP_CHAIN = [
     RoundPlanner._step_deliver_active,
     RoundPlanner._step_clear_nonactive_inventory,
     RoundPlanner._step_preview_prepick,
+    RoundPlanner._step_break_oscillation,
     RoundPlanner._step_clear_dropoff,
     RoundPlanner._step_idle_nonactive_deliver,
     RoundPlanner._step_idle_positioning,
