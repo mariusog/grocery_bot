@@ -8,13 +8,13 @@ Recorded order prefixes are padded with deterministic synthetic tail orders.
 
 | Map | Bots | Grid | Score | Recorded | Total | Done | Items | Wall Time |
 |-----|------|------|-------|----------|-------|------|-------|-----------|
-| 2026-03-07_12x10_1bot.json | 1 | 12x10 | 126 | 17 | 50 | 15 | 51 | 0.021s |
-| 2026-03-07_16x12_3bot.json | 3 | 16x12 | 142 | 17 | 50 | 15 | 67 | 0.099s |
-| 2026-03-07_22x14_5bot.json | 5 | 22x14 | 103 | 17 | 50 | 11 | 48 | 0.177s |
-| 2026-03-07_28x18_10bot.json | 10 | 28x18 | 91 | 10 | 50 | 9 | 46 | 0.424s |
-| 2026-03-07_30x18_20bot.json | 20 | 30x18 | 151 | 16 | 50 | 14 | 81 | 1.050s |
+| 2026-03-07_12x10_1bot.json | 1 | 12x10 | 126 | 17 | 50 | 15 | 51 | 0.020s |
+| 2026-03-07_16x12_3bot.json | 3 | 16x12 | 142 | 17 | 50 | 15 | 67 | 0.098s |
+| 2026-03-07_22x14_5bot.json | 5 | 22x14 | 112 | 17 | 50 | 12 | 52 | 0.195s |
+| 2026-03-07_28x18_10bot.json | 10 | 28x18 | 104 | 10 | 50 | 10 | 54 | 0.405s |
+| 2026-03-07_30x18_20bot.json | 20 | 30x18 | 151 | 16 | 100 | 14 | 81 | 0.970s |
 
-**Total score:** 613
-**Total orders:** 64
-**Total items:** 293
-**Average wall time:** 0.354s
+**Total score:** 635
+**Total orders:** 66
+**Total items:** 305
+**Average wall time:** 0.338s
