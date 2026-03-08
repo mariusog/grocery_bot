@@ -14,7 +14,7 @@ from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 
 
 _LOG_DIR = "logs"
-_MAX_LOCAL_LOGS = 10
+_MAX_LOCAL_LOGS = 20
 
 
 def make_timings() -> defaultdict:
@@ -175,7 +175,7 @@ def _write_meta_json(
 
 def _prune_old_logs() -> None:
     """Remove oldest local log files beyond the retention limit."""
-    local_csvs = sorted(glob.glob(f"{_LOG_DIR}/local_*.csv"))
+    local_csvs = sorted(glob.glob(f"{_LOG_DIR}/local_*.csv"), key=os.path.getmtime)
     while len(local_csvs) > _MAX_LOCAL_LOGS:
         old_csv = local_csvs.pop(0)
         old_json = old_csv.replace(".csv", ".json")

@@ -26,11 +26,15 @@ class VisualizerHandler(http.server.SimpleHTTPRequestHandler):
                 m = re.match(r"((?:game|local)_[^.]+)\.(csv|json)$", f)
                 if m:
                     logs.add(m.group(1))
-        # Only include logs that have BOTH csv and json
-        complete = sorted(
+        # Only include logs that have BOTH csv and json, newest first
+        complete = [
             name for name in logs
             if os.path.exists(f"{LOGS_DIR}/{name}.csv")
             and os.path.exists(f"{LOGS_DIR}/{name}.json")
+        ]
+        complete.sort(
+            key=lambda n: os.path.getmtime(f"{LOGS_DIR}/{n}.csv"),
+            reverse=True,
         )
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
