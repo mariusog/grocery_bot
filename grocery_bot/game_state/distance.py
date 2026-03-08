@@ -2,11 +2,8 @@
 
 from typing import Any, Optional
 
+from grocery_bot.constants import DIST_CACHE_MAX
 from grocery_bot.pathfinding import bfs_all, find_adjacent_positions
-
-# Maximum number of BFS results to keep in dist_cache.
-# Expert maps have ~250 walkable cells; 256 covers full map with margin.
-DIST_CACHE_MAX = 512
 
 
 class DistanceMixin:

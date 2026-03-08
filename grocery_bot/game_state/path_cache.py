@@ -2,10 +2,8 @@
 
 from typing import Optional
 
+from grocery_bot.constants import PATH_RECHECK_INTERVAL
 from grocery_bot.pathfinding import bfs_full_path
-
-# How often (in rounds) to recheck whether a shorter path has opened.
-PATH_RECHECK_INTERVAL = 5
 
 
 class PathCacheMixin:

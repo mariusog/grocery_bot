@@ -2,12 +2,12 @@
 
 from typing import Optional
 
+from grocery_bot.constants import (
+    DROPOFF_CONGESTION_RADIUS,
+    DROPOFF_WAIT_DISTANCE,
+    MAX_APPROACH_SLOTS,
+)
 from grocery_bot.pathfinding import bfs_all
-
-# --- Dropoff congestion constants ---
-DROPOFF_CONGESTION_RADIUS = 3
-DROPOFF_WAIT_DISTANCE = 4
-MAX_APPROACH_SLOTS = 2
 
 
 class DropoffMixin:

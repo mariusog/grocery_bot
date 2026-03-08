@@ -3,13 +3,15 @@
 from collections import deque
 from typing import Optional
 
+from grocery_bot.constants import BFS_MAX_CELLS, TEMPORAL_BFS_MAX_CELLS
+
 DIRECTIONS: list[tuple[int, int]] = [(0, -1), (0, 1), (-1, 0), (1, 0)]
 
 
 def bfs_all(
     source: tuple[int, int],
     blocked: set[tuple[int, int]],
-    max_cells: int = 2000,
+    max_cells: int = BFS_MAX_CELLS,
 ) -> dict[tuple[int, int], int]:
     """BFS from source to ALL reachable cells. Returns {pos: distance}.
 
@@ -41,7 +43,7 @@ def bfs(
     start: tuple[int, int],
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
-    max_cells: int = 2000,
+    max_cells: int = BFS_MAX_CELLS,
 ) -> Optional[tuple[int, int]]:
     """BFS pathfinding from start to goal. Returns next position to move to.
 
@@ -84,7 +86,7 @@ def bfs_full_path(
     start: tuple[int, int],
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
-    max_cells: int = 2000,
+    max_cells: int = BFS_MAX_CELLS,
 ) -> list[tuple[int, int]]:
     """BFS returning the full shortest path from start to goal (inclusive).
 
@@ -178,7 +180,7 @@ def bfs_temporal(
     )
 
     while queue:
-        if len(visited) >= 4000:
+        if len(visited) >= TEMPORAL_BFS_MAX_CELLS:
             break
         pos, t, first_move = queue.popleft()
         next_t = min(t + 1, 1)  # Cap at 1 since rules are same for t >= 1

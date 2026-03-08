@@ -106,3 +106,31 @@ LAST_ITEM_COST_MULTIPLIER = 0.33  # cost multiplier (3x priority = 1/3 cost)
 DELIVERY_QUEUE_TEAM_MIN = 4  # len(bots) >= this to use delivery queue
 MAX_CONCURRENT_DELIVERERS = 2  # max bots navigating to dropoff at once (large teams)
 TASK_COMMITMENT_ROUNDS = 5  # min rounds a bot stays committed to a task
+
+# ---------------------------------------------------------------------------
+# Dropoff congestion management (game_state/dropoff.py)
+# ---------------------------------------------------------------------------
+DROPOFF_CONGESTION_RADIUS = 3  # adjacents within this BFS dist of dropoff
+DROPOFF_WAIT_DISTANCE = 4  # wait cells sit at this BFS dist from dropoff
+MAX_APPROACH_SLOTS = 2  # max bots allowed to approach dropoff simultaneously
+
+# ---------------------------------------------------------------------------
+# Distance / path caching (game_state/)
+# ---------------------------------------------------------------------------
+DIST_CACHE_MAX = 512  # max entries in dist_cache LRU
+PATH_RECHECK_INTERVAL = 5  # rounds between path-cache validity rechecks
+
+# ---------------------------------------------------------------------------
+# BFS exploration limits (pathfinding.py)
+# ---------------------------------------------------------------------------
+BFS_MAX_CELLS = 2000  # max cells explored by standard BFS functions
+TEMPORAL_BFS_MAX_CELLS = 4000  # max cells explored by temporal BFS
+
+# ---------------------------------------------------------------------------
+# Diagnostic thresholds (simulator/runner.py)
+# ---------------------------------------------------------------------------
+DIAG_LOW_SCORE = 50  # score < this flags LOW_SCORE
+DIAG_HIGH_IDLE_PCT = 30  # idle% > this flags HIGH_IDLE
+DIAG_HIGH_STUCK_PCT = 10  # stuck% > this flags HIGH_STUCK
+DIAG_LONG_GAP = 40  # max_delivery_gap > this flags LONG_GAP
+DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING

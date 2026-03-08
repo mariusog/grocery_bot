@@ -3,6 +3,13 @@
 import statistics
 import time
 
+from grocery_bot.constants import (
+    DIAG_HIGH_IDLE_PCT,
+    DIAG_HIGH_STUCK_PCT,
+    DIAG_LONG_GAP,
+    DIAG_LOW_SCORE,
+    DIAG_OSCILLATION,
+)
 from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 from grocery_bot.simulator.game_simulator import GameSimulator
 
@@ -78,15 +85,15 @@ def profile_congestion(num_bots, seeds, verbose=False):
         stuck_pct = (diag["stuck_rounds"] / total_br * 100) if total_br > 0 else 0
 
         problems = []
-        if result["score"] < 50:
+        if result["score"] < DIAG_LOW_SCORE:
             problems.append("LOW_SCORE")
-        if idle_pct > 30:
+        if idle_pct > DIAG_HIGH_IDLE_PCT:
             problems.append("HIGH_IDLE")
-        if stuck_pct > 10:
+        if stuck_pct > DIAG_HIGH_STUCK_PCT:
             problems.append("HIGH_STUCK")
-        if diag["max_delivery_gap"] > 40:
+        if diag["max_delivery_gap"] > DIAG_LONG_GAP:
             problems.append("LONG_GAP")
-        if diag["oscillation_count"] > 20:
+        if diag["oscillation_count"] > DIAG_OSCILLATION:
             problems.append("OSCILLATING")
         status = ", ".join(problems) if problems else "OK"
 
@@ -103,10 +110,10 @@ def profile_congestion(num_bots, seeds, verbose=False):
     problem_seeds = [
         r["seed"]
         for r in all_results
-        if r["score"] < 50
+        if r["score"] < DIAG_LOW_SCORE
         or (
             r["diagnostics"]["idle_rounds"] / r["diagnostics"]["total_bot_rounds"] * 100
-            > 30
+            > DIAG_HIGH_IDLE_PCT
         )
     ]
     if problem_seeds:
