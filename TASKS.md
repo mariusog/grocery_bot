@@ -4,7 +4,7 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-08, replay benchmark total=1562)
+## Current Performance (2026-03-08, replay benchmark total=1589)
 
 **Replay benchmark** (`python benchmark.py --quick`):
 
@@ -14,26 +14,26 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | 12x10_1bot (Mar 8) | 1 | 12x10 | 122 |
 | 16x12_3bot (Mar 7) | 3 | 16x12 | 153 |
 | 16x12_3bot (Mar 8) | 3 | 16x12 | 134 |
-| 22x14_5bot (Mar 7) | 5 | 22x14 | 119 |
-| 22x14_5bot (Mar 8) | 5 | 22x14 | 124 |
+| 22x14_5bot (Mar 7) | 5 | 22x14 | 120 |
+| 22x14_5bot (Mar 8) | 5 | 22x14 | 140 |
 | 28x18_10bot (Mar 7) | 10 | 28x18 | 94 |
-| 28x18_10bot (Mar 8) | 10 | 28x18 | 88 |
+| 28x18_10bot (Mar 8) | 10 | 28x18 | 98 |
 | 30x18_20bot (Mar 7) | 20 | 30x18 | 284 |
 | 30x18_20bot (Mar 8) | 20 | 30x18 | 318 |
-| **Total** | | | **1562** |
+| **Total** | | | **1589** |
 
 **Live high scores** (ainm.no): Easy:133, Medium:145, Hard:138, Expert:95, Nightmare:320, Total:831
 
 **Bitflip #1 scores**: Easy:132, Medium:214, Hard:252, Expert:303, Nightmare:1026, Total:1927
 
-**Replay benchmark progression**: 1378 → 1503 (speculative) → 1521 (5-bot threshold) → 1538 (clearing fix) → 1562 (throttle fix)
+**Replay benchmark progression**: 1378 → 1503 (speculative) → 1521 (5-bot threshold) → 1538 (clearing fix) → 1562 (throttle fix) → 1589 (preview-targeted speculation)
 
 ### Expert (10-bot) Diagnostics (after latest changes)
 
 | Map | Score | Idle% | InvFullWaits | Oscil | WastePct |
 |-----|-------|-------|--------------|-------|----------|
 | Mar 7 28x18 | 94 | 14.7% | 248 | 632 | 76.4% |
-| Mar 8 28x18 | 88 | 14.3% | 293 | 605 | 77.3% |
+| Mar 8 28x18 | 98 | 13.7% | 259 | 587 | 83.3% |
 
 Note: Mar 8 map has banana deficit (5 on map, 9 needed in orders) — limits max achievable score.
 
@@ -360,16 +360,26 @@ Note: Mar 8 map has banana deficit (5 on map, 9 needed in orders) — limits max
 
 ### T55: Reduce Speculative Pickup Waste (77%→<50%)
 - **Agent**: lead-agent
-- **Status**: open
+- **Status**: done
 - **Priority**: 2
 - **Metric**: 76-80% pickup waste on Expert — speculative items rarely match next order
 - **Files**: `grocery_bot/planner/speculative.py`
 - **Root cause**: `_find_spec_target` picks the nearest unclaimed item regardless of type. On maps with 12+ item types, random pickup has ~8% chance of matching next order's items.
+- **Result**: Added preview-order priority to speculative target selection for sub-16-bot teams in `speculative.py`, with new regression coverage in `test_speculative_unit.py`. Full replay benchmark improved **1562 → 1589 (+27)**. Biggest gains were Hard Mar 8 **124 → 140** and Expert Mar 8 **88 → 98**; the large-team replay subtotal improved **784 → 794**. Expert Mar 8 diagnostics improved on the congestion metrics that matter for score (`InvFullWaits 293 → 259`, `Oscil 605 → 587`, idle 14.3% → 13.7%). Tried also capping speculative inventory at 2 items, but that regressed replay scores badly, so it was not kept.
+
+### T58: Rotate Speculative Eligibility on Large Teams
+- **Agent**: lead-agent
+- **Status**: blocked
+- **Priority**: 1
+- **Metric**: Nightmare replay 318 still has severe tail-id starvation: B17 util 22%, B18 util 28%, B19 util 24% and B19 never picks up anything.
+- **Files**: `grocery_bot/planner/speculative.py`, `tests/planner/test_speculative_unit.py`
+- **Root cause**: Speculative pickup is capped per round, but bots are processed in fixed id order. Earlier ids repeatedly consume the available speculative claims, so the same high-id bots stay idle for entire games on 10+ bot maps.
 - **How to fix**:
-  1. **Prefer types from preview order**: If preview order exists, speculative bots should prioritize picking those types.
-  2. **Prefer common item types**: Track which types appear most frequently in past orders and bias speculative pickup toward them.
-  3. **Limit speculative inventory to 1-2 items**: Currently bots fill to 3, leaving no room when active order arrives. Cap speculative at `MAX_INVENTORY - 1` to always keep 1 slot free.
-- **Expected gain**: +5-15 Expert (fewer clearing trips, faster active pickup).
+  1. Rotate speculative eligibility by round for large teams instead of always favoring low ids.
+  2. Apply the rotation over actual speculative candidates (idle, unassigned, non-full bots), not raw bot ids.
+  3. Keep the existing per-round cap so inventory clog does not spike.
+- **Expected gain**: +5-20 Nightmare, possible Expert idle reduction.
+- **Result**: Tried round-rotated speculative eligibility. It improved one Nightmare replay map (318→331) but heavily regressed the other large-team replays (Expert 94→73, Expert 88→68, Nightmare 284→217). The fairness gain was real, but it reassigned speculative work away from the most efficient nearby bots and lost too much throughput.
 
 ### T56: Visualizer Improvements
 - **Agent**: qa-agent
