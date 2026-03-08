@@ -24,7 +24,8 @@ grocery_bot/                    # Main package
 │   ├── map_generator.py        # Store layout and order generation
 │   ├── diagnostics.py          # DiagnosticTracker: per-round metrics
 │   ├── presets.py              # DIFFICULTY_PRESETS dict
-│   └── runner.py               # run_benchmark(), profile_congestion()
+│   ├── runner.py               # run_benchmark(), profile_congestion()
+│   └── log_replay.py           # Log replay: verify live scores via physics
 └── planner/                    # Per-round decision subpackage
     ├── __init__.py             # Re-exports: RoundPlanner
     ├── round_planner.py        # RoundPlanner: step-chain orchestration
