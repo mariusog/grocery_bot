@@ -94,11 +94,11 @@ class TestPreviewPickupOnSecondTrip:
             f"Should not pick up preview yogurt when active items need slots, got {action}"
         )
 
-    def test_pick_preview_on_way_to_last_active_item(self):
-        """While heading to pick up the last active item, if a preview item
-        is adjacent, pick it up (free slot available)."""
+    def test_active_prioritized_over_adjacent_preview(self):
+        """Active items take priority: bot moves toward active cheese
+        instead of picking up adjacent preview milk."""
         reset_bot()
-        # Bot heading toward active cheese at (8,3). Preview milk at (4,5) is adjacent.
+        # Bot heading toward active cheese at (8,2). Preview milk at (4,5) is adjacent.
         state = make_state(
             bots=[{"id": 0, "position": [3, 5], "inventory": []}],
             items=[
@@ -134,11 +134,11 @@ class TestPreviewPickupOnSecondTrip:
         )
         actions = bot.decide_actions(state)
         action = get_action(actions)
-        # Preview milk is adjacent and bot has 3 empty slots. Should pick it up.
-        assert action["action"] == "pick_up", (
-            f"Should pick up adjacent preview item when passing by, got {action}"
+        # Bot should move toward active item, not pick up preview.
+        # The +5 order bonus makes completing active orders faster more valuable.
+        assert action["action"] != "pick_up" or action["item_id"] != "item_1", (
+            "Bot should prioritize active item over adjacent preview"
         )
-        assert action["item_id"] == "item_1"
 
     def test_pick_preview_near_route_to_dropoff(self):
         """When heading to deliver 1 active item with 2 empty slots,

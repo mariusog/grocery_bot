@@ -111,13 +111,33 @@ class StepsMixin:
         return True
 
     def _step_opportunistic_preview(self, ctx) -> bool:
-        """Opportunistic adjacent preview pickup (spare slots only)."""
+        """Opportunistic adjacent preview pickup (spare slots only).
+
+        Skip when active items should be prioritized:
+        - Solo bots: any active items on shelves
+        - Small teams (<3): assigned bots always skip
+        - Medium+ teams (>3): assigned bots skip when active on shelves
+        - Any bot: adjacent active item exists
+        """
         if not (
             self.preview
             and self._spare_slots(ctx.inv, ctx.bid) > 0
-            and not (len(self.bots) == 1 and self.active_on_shelves > 1)
+            and not (len(self.bots) == 1 and self.active_on_shelves > 0)
         ):
             return False
+        if (
+            len(self.bots) < SMALL_TEAM_MAX
+            and self.bot_assignments.get(ctx.bid)
+        ):
+            return False
+        if self.active_on_shelves > 0 and len(ctx.inv) < MAX_INVENTORY:
+            for dx, dy in DIRECTIONS:
+                for it in self.items_at_pos.get((ctx.bx + dx, ctx.by + dy), []):
+                    if (
+                        self._is_available(it)
+                        and self.net_active.get(it["type"], 0) > 0
+                    ):
+                        return False
         adj = self._find_adjacent_needed(
             ctx.bx, ctx.by, self.net_preview, prefer_cascade=True
         )

@@ -80,6 +80,28 @@ class TestSpareSlotsMath:
             f"assignments={p.bot_assignments}"
         )
 
+    def test_unassigned_bot_gets_full_spare(self):
+        """Unassigned bot gets full spare — preview picking is useful."""
+        p = _planner(
+            [
+                {"id": 0, "position": [5, 4], "inventory": []},
+                {"id": 1, "position": [3, 3], "inventory": []},
+                {"id": 2, "position": [7, 3], "inventory": []},
+            ],
+            [
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [6, 2]},
+            ],
+            [_order(["cheese", "milk"])],
+        )
+        p._compute_bot_assignments()
+        if not p.bot_assignments.get(0):
+            spare = p._spare_slots([], bid=0)
+            assert spare == MAX_INVENTORY, (
+                f"Unassigned bot spare={spare}, expected {MAX_INVENTORY}. "
+                f"Unassigned bots should use full capacity for preview."
+            )
+
     def test_assigned_bot_reserves_slots_on_small_team(self):
         """Assigned bot on 3-bot team should reserve slots for active items."""
         p = _planner(
