@@ -261,6 +261,7 @@ async def play():
 
             if msg_type == "game_over":
                 dbg(f"GAME_OVER msg#{msg_count} len={msg_len}")
+                game_meta["orders"] = recorded_orders
                 _log_game_over(data, game_meta, log_rows, log_path, meta_path)
                 _save_recorded_map(map_snapshot, recorded_orders, timestamp)
                 break
@@ -537,6 +538,7 @@ def _build_game_meta(data, timestamp):
             {"type": it["type"], "position": it["position"]} for it in data["items"]
         ],
         "drop_off": data["drop_off"],
+        "drop_off_zones": data.get("drop_off_zones", [data["drop_off"]]),
         "max_rounds": data["max_rounds"],
         "total_orders": data.get("total_orders", "?"),
         "spawn": data["bots"][0]["position"],
@@ -597,6 +599,7 @@ def _log_game_over(data, game_meta, log_rows, log_path, meta_path):
     }
     if _gs.blacklisted_items:
         game_meta["blacklisted_items"] = list(_gs.blacklisted_items)
+    # Orders are added to game_meta by play() after game_over
 
     with open(log_path, "w", newline="") as f:
         writer = csv.DictWriter(
