@@ -115,8 +115,11 @@ class IdleMixin:
                 if avoidance and avoidance != pos:
                     return self._emit_move(bid, bx, by, pos, avoidance, blocked)
 
+        n_zones = max(1, len(self.drop_off_zones))
+        bots_per_zone = len(self.bots) // n_zones
+        clear_radius = max(DROPOFF_CLEAR_RADIUS, bots_per_zone // 2)
         dist_to_drop = self.gs.dist_static(pos, nearest)
-        if dist_to_drop > DROPOFF_CLEAR_RADIUS:
+        if dist_to_drop > clear_radius:
             return False
         best_away: Optional[tuple[int, int]] = None
         best_dist = dist_to_drop
@@ -235,14 +238,20 @@ class IdleMixin:
                         target_y = col_ys[len(col_ys) // 2]
                         item_target = (target_x, target_y)
 
+        n_zones = max(1, len(self.drop_off_zones))
+        bots_per_zone = len(self.bots) // n_zones
+        drop_penalty_radius = max(
+            IDLE_DROPOFF_PENALTY_RADIUS, bots_per_zone // 2,
+        )
+
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
             s = 0.0
             # Penalize being near any dropoff
             drop_dist = self.gs.dist_static(p, self._nearest_dropoff(p))
-            if drop_dist <= IDLE_DROPOFF_PENALTY_RADIUS:
+            if drop_dist <= drop_penalty_radius:
                 s += (
-                    IDLE_DROPOFF_PENALTY_RADIUS + 1 - drop_dist
+                    drop_penalty_radius + 1 - drop_dist
                 ) * IDLE_DROPOFF_PENALTY_FACTOR
             # Penalize being near other bots
             for ob_pos in other_bot_positions:
