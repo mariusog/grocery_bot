@@ -4,25 +4,41 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-07, 10-seed benchmark)
+## Current Performance (2026-03-08, 10-seed synthetic + replay maps)
 
-| Difficulty | Bots | Sim Avg | Live Score | Waste% | InvFW | Rds/Ord | Idle% |
-|------------|------|---------|------------|--------|-------|---------|-------|
-| Easy       | 1    | 146.3   | 133        | 10.6%  | 0     | 16.9    | 0.9%  |
-| Medium     | 3    | 113.2   | 110        | 43.4%  | 0     | 23.5    | 1.8%  |
-| Hard       | 5    | 89.2    | 70         | 47.8%  | 49    | 29.8    | 15.3% |
-| Expert     | 10   | 59.2    | 46         | 39.9%  | 322   | 50.9    | 30.3% |
+**Synthetic benchmark** (`python benchmark.py --synthetic --seeds 10 --diagnostics`):
 
-**Per-bot idle (Expert):** B0:4% B1:8% B2:20% B3:21% B4:32% B5:36% B6:44% B7:45% B8:44% B9:50%
+| Difficulty | Bots | Avg | Min | Max | StdDev | Waste% | Rds/Ord | Idle% | AvgDel |
+|------------|------|-----|-----|-----|--------|--------|---------|-------|--------|
+| Easy       | 1    | 148.5 | 138 | 153 | 6.0 | 13.7% | 16.7 | 1.2% | 2.98 |
+| Medium     | 3    | 154.3 | 119 | 178 | 16.4 | 56.5% | 17.2 | 7.0% | 2.36 |
+| Hard       | 5    | 136.3 | 111 | 154 | 11.8 | 61.1% | 19.5 | 23.8% | 1.86 |
+| Expert     | 10   | 108.6 | 97 | 133 | 11.5 | 61.4% | 27.3 | 45.4% | 1.82 |
+| Nightmare  | 20   | 82.5 | 1 | 215 | 71.8 | 55.7% | 36.1 | 80.6% | 1.83 |
 
-### Key Bottlenecks (ranked by impact — updated 2026-03-08 from game log analysis)
-1. **Multi-bot scaling is broken** — 1 bot scores 126pts but 10 bots only 104pts (9.5x less efficient per bot-round). In 20-bot games, 60% of bots contribute zero items. Bots oscillate between two cells for hundreds of rounds.
-2. **Bot processing order is arbitrary** — `round_planner.py:113` iterates in server order, not urgency. A delivering bot (urgency 0) may act last, finding its path claimed by idle bots. The `_yield_to` mechanism only avoids positions, not paths. See T42.
-3. **`_spare_slots` blocks preview pickups globally** — `round_planner.py:366` subtracts `active_on_shelves` from ALL bots' spare slots. If 2 active items remain, ALL bots get `spare=0` even when other bots handle those items. See T43.
-4. **30% idle on Expert** — bots 5-9 idle 36-50%, positioned generically instead of near preview items. See T34.
-5. **Single-cell dropoff is the hard bottleneck** — T33 confirmed all planner changes that increase dropoff traffic hurt. Expert >70 may require game-level changes.
-6. ~~43-48% waste on Medium/Hard~~ — T31 confirmed waste% is misleading; preview pickup is optimal behavior.
-7. ~~MAX_CONCURRENT_DELIVERERS=1~~ — Fixed by T32 (scaled to max(2, bots//4)).
+**Replay benchmark** (`python benchmark.py`):
+
+| Map | Bots | Grid | Score |
+|-----|------|------|-------|
+| 12x10_1bot | 1 | 12x10 | 126 |
+| 16x12_3bot | 3 | 16x12 | 142 |
+| 22x14_5bot | 5 | 22x14 | 112 |
+| 28x18_10bot | 10 | 28x18 | 104 |
+| 30x18_20bot | 20 | 30x18 | 151 |
+
+**Per-bot util (Expert 10-seed):** B0:95% B1:87% B2:80% B3:67% B4:61% B5:50% B6:32% B7:32% B8:28% B9:15%
+**Per-bot util (Nightmare 10-seed):** Highly variable (StdDev=71.8). Best seeds use ~6 bots; worst seeds score 1 point.
+
+### Key Bottlenecks (ranked by impact — updated 2026-03-08 from Nightmare analysis)
+1. **Assignment system doesn't scale** — On Nightmare (20 bots), 12/20 bots never pick up a single item across 500 rounds. The planner assigns work to 5-6 nearest bots and leaves 14 permanently idle. See T34, T49.
+2. **Spawn gridlock** — All bots spawn at a single cell (28,16). With 20 bots, only 1-2 can move per round → 75 rounds wasted just dispersing. See T49.
+3. **Oscillation at scale** — Bot 0 (top performer, 93% util) oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496) carrying 2 items. The idle positioning logic bounces bots between adjacent cells when no clear assignment exists. See T50.
+4. **Bot processing order is arbitrary** — `round_planner.py:113` iterates in server order, not urgency. See T42.
+5. **`_spare_slots` blocks preview pickups globally** — reserves slots for active items across ALL bots. See T43.
+6. **80.8% idle on Nightmare, 30% on Expert** — most bots have nothing to do. See T34.
+7. **Single-cell dropoff is the hard bottleneck** — T33 confirmed all planner changes that increase dropoff traffic hurt.
+8. ~~43-48% waste on Medium/Hard~~ — T31 confirmed waste% is misleading; preview pickup is optimal behavior.
+9. ~~MAX_CONCURRENT_DELIVERERS=1~~ — Fixed by T32 (scaled to max(2, bots//4)).
 
 ---
 
@@ -130,21 +146,22 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Quality checks**: SOLID violations, Law of Demeter, magic numbers, type annotations
 - **Success criteria**: All files under 300 lines, all tests pass, every public method has a test
 
-### T34: Reduce Expert Idle Time (30% -> 15%)
+### T34: Reduce Idle Time (Expert 30%→15%, Nightmare 80%→40%)
 - **Agent**: strategy-agent
 - **Status**: open
-- **Priority**: 3
-- **Metric**: Expert Idle%=30.3%, Bots 5-9 idle 36-50%
-- **Target**: No bot idle > 30%. Expert > 75.
+- **Priority**: 1
+- **Metric**: Expert Idle%=30.3% (B5-B9 idle 36-50%). Nightmare Idle%=80.8% (12/20 bots never pick up anything).
+- **Target**: No bot idle > 30%. Expert > 75. Nightmare > 200.
 - **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/round_planner.py`, `grocery_bot/planner/assignment.py`
-- **Root cause**: `_assign_roles()` assigns `active_picker_count = ceil(active_on_shelves / 3)` pickers, then a few preview bots, and ALL remaining bots get role "idle". With 5-item order and 10 bots, only 2 are pickers, 1 delivers, 2 preview => 5 idle.
+- **Root cause**: `_assign_roles()` assigns `active_picker_count = ceil(active_on_shelves / 3)` pickers, then a few preview bots, and ALL remaining bots get role "idle". With 6-item order and 20 bots, only 2 are pickers, 1-5 deliver, 2 preview ⇒ 11-15 idle. The assignment system never gives far-away bots anything to do.
 - **How to fix**:
   1. **Assign more pickers**: Change picker count to `min(active_on_shelves, num_bots - max_deliverers)` — every bot should target an item. Even if 2 bots target the same item type, the second-closest is backup.
-  2. **Eliminate idle role for Expert**: When `num_bots >= 8`, assign surplus bots as "pick" with lower-priority items (second-closest copies of needed types). An active picker that arrives and finds its item already taken can immediately re-route to the next needed item.
+  2. **Eliminate idle role for large teams**: When `num_bots >= 8`, assign surplus bots as "pick" with lower-priority items (second-closest copies of needed types). An active picker that arrives and finds its item already taken can immediately re-route to the next needed item.
   3. **Pre-stage idle bots near preview-order items**: In `_try_idle_positioning`, position empty idle bots near known preview-order item shelf locations (not generic corridor spots). When the order transitions, these bots can start picking immediately instead of traversing the map. The `_preview_stage_weight` in idle.py only works for bots carrying preview items — extend to empty bots too.
+  4. **Distribute work across map regions**: On Nightmare, items span the full 30-wide grid but only bots near the left side (close to dropoff) get assigned. Assign far-side bots to far-side items — even though delivery takes longer, it's better than 0 contribution.
 - **Risk**: More pickers could cause aisle congestion. Mitigate with stagger: only assign 2 bots per aisle column max.
-- **Expected gain**: +5-10 Expert.
-- **Depends on**: T31 (reduced waste means more useful pickups per bot).
+- **Expected gain**: +5-10 Expert, +30-50 Nightmare.
+- **Depends on**: T49 (bots must disperse from spawn first).
 
 ### T26: Reduce Expert Idle Time (SUPERSEDED by T34)
 - **Status**: superseded
@@ -214,19 +231,15 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ### T42: Sort Bot Processing by Urgency Order (round_planner.py)
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: done (no code changes — regresses all difficulties)
 - **Priority**: 1
-- **Metric**: On multi-bot maps, high-urgency bots (delivering, full inventory) find paths already claimed by lower-priority bots processed earlier. Game log analysis shows bots with urgency 0 (full active inventory) waiting behind idle bots.
-- **Files**: `grocery_bot/planner/round_planner.py` (line 113), `grocery_bot/planner/assignment.py` (`_bot_urgency`)
-- **Root cause**: `round_planner.py:113` iterates `self.bots` in server-provided order. Urgency is computed (line 110) but only used for `_yield_to` position avoidance — high-urgency bots don't get first pick of movement paths.
-- **How to fix**: Sort `self.bots` by urgency before the decision loop:
-  ```python
-  sorted_bots = sorted(self.bots, key=lambda b: urgency[b["id"]])
-  for bot in sorted_bots:
-  ```
-  This lets delivering bots (urgency 0) claim optimal paths first. Lower-urgency bots route around them.
-- **Risk**: Low — urgency is already computed, just unused for ordering. The `_yield_to` set becomes redundant but harmless.
-- **Expected gain**: +3-8 on Hard/Expert (reduces round waste from path conflicts).
+- **Result**: Tested urgency-sorted bot processing with 20-seed benchmarks. Regresses all multi-bot difficulties: Hard -9.6 (124.3 vs 133.9), Expert -20.8 (89.4 vs 110.2), Nightmare -39.6 (103.2 vs 142.8). Also tested yielding to predicted positions of already-decided higher-urgency bots — still regresses Expert by 6.3 (103.9 vs 110.2).
+- **Findings**:
+  1. **Processing order affects `predicted` (hard blocks) while `_yield_to` affects `_emit` (soft redirects).** When delivering bots are processed first, they claim `predicted` positions along their delivery paths. Picker bots processed later find cells hard-blocked and must take longer routes or wait.
+  2. **The current system (server order + `_yield_to`) is cooperative scheduling.** Pickers plan routes first, then soft-yield at emission time when they'd collide with higher-urgency bots. This is cheaper than hard-blocking paths.
+  3. **Single-cell dropoff amplifies the problem.** Delivering bots all route toward the same dropoff cell. When they go first, they block the main corridors. Pickers need those corridors to reach item aisles.
+  4. **`_yield_to` with urgency sorting becomes redundant.** With sorted processing, higher-urgency bots are already decided when lower-urgency bots are processed, so the `_yield_to` set (which excludes decided bots) is always empty — removing the soft collision avoidance entirely.
+- **Recommendation**: The current architecture is near-optimal for bot ordering. Future improvements should focus on reducing the number of bots competing for the same paths (T34, T49) rather than reordering processing.
 
 ### T44: Split movement.py (417 lines → ≤300)
 - **Agent**: strategy-agent
@@ -254,15 +267,9 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ### T47: Centralize Module-Level Constants into constants.py
 - **Agent**: lead-agent
-- **Status**: open
+- **Status**: done
 - **Priority**: 1 (quality)
-- **Root cause**: Constants scattered across modules instead of centralized in `constants.py`:
-  - `dropoff.py`: `DROPOFF_CONGESTION_RADIUS=3`, `DROPOFF_WAIT_DISTANCE=4`, `MAX_APPROACH_SLOTS=2`
-  - `distance.py`: `DIST_CACHE_MAX=512`
-  - `path_cache.py`: `PATH_RECHECK_INTERVAL=5`
-  - `pathfinding.py`: `4000` temporal BFS max cells (unnamed)
-  - `steps.py`/`coordination.py`: `max(2, num_bots // 4)` duplicated deliverer scaling
-  - `runner.py`: diagnostic thresholds `50, 30, 10, 40, 20` (unnamed)
+- **Result**: Moved 12 constants from 5 modules into `constants.py`. Updated imports in `dropoff.py`, `distance.py`, `path_cache.py`, `pathfinding.py`, `runner.py`, and `game_state/__init__.py`. Added `BFS_MAX_CELLS`, `TEMPORAL_BFS_MAX_CELLS`, `DIAG_*` thresholds. All 544 tests pass, no benchmark regression. Deferred: `max(2, num_bots // 4)` deliverer scaling dedup in `steps.py`/`coordination.py` (strategy-agent files, active worktrees).
 - **Files**: `grocery_bot/constants.py` and all affected modules
 
 ### T48: Add Type Annotations to bot.py and simulator/
@@ -271,6 +278,34 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Priority**: 2 (quality)
 - **Root cause**: ~40 functions missing param and/or return type annotations, concentrated in `bot.py` (19 functions) and `grocery_bot/simulator/` (10+ functions). Also `planner/steps.py` has 15 step methods with untyped `ctx` parameter.
 - **Files**: `bot.py`, `grocery_bot/simulator/*.py`, `grocery_bot/planner/steps.py`
+
+### T49: Spawn Dispersal for Large Teams (20+ bots)
+- **Agent**: strategy-agent
+- **Status**: open
+- **Priority**: 1
+- **Metric**: Nightmare wastes ~75 rounds dispersing 20 bots from a single spawn cell (28,16). Only 1-2 bots can move per round due to collision. By round 50, score is still 3.
+- **Files**: `grocery_bot/planner/movement.py`, `grocery_bot/planner/idle.py`
+- **Root cause**: All bots spawn stacked at the same cell. The planner doesn't have special spawn-phase logic — bots compete for the same movement directions, most wait. First order completion (O1) doesn't happen until R63.
+- **How to fix**:
+  1. **Directional fan-out from spawn**: On round 0-5, assign each bot a unique dispersal direction based on `bot_id % 4` (up/down/left/right). Stagger movement so bot 0 moves first, bot 1 waits 1 round, etc.
+  2. **Pre-assign initial targets**: Instead of all bots computing the same closest item, use the Hungarian assignment immediately at round 0 to spread bots across different items/regions.
+  3. **Spawn corridor clearing**: Bots without assignments should move to pre-computed corridor positions away from spawn, clearing the way for assigned bots.
+- **Risk**: Low — only affects first ~20 rounds. No regression on small teams (1-5 bots disperse in 1-2 rounds).
+- **Expected gain**: +10-20 Nightmare (reclaiming 50+ wasted rounds).
+
+### T50: Fix Oscillation in Idle Positioning
+- **Agent**: strategy-agent
+- **Status**: in-progress
+- **Priority**: 1
+- **Metric**: Bot 0 on Nightmare oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496) carrying 2 items. Bot 0 also oscillated (1,12)↔(1,13) for 30 rounds (R90-R118). The oscillation detector in `analyze_replay.py` finds 112 problems.
+- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/movement.py`
+- **Root cause**: When a bot has inventory but no clear delivery or pickup target, `_try_idle_positioning` sends it toward a corridor position. But the next round, a different step (e.g., `_step_deliver_active` or `_step_preview_prepick`) sends it the opposite way. The two steps alternate control, causing the bot to bounce between two cells indefinitely.
+- **How to fix**:
+  1. **Oscillation detection in planner**: Track each bot's last 4 positions. If `pos[t] == pos[t-2]` for 3+ consecutive rounds, force the bot to commit to its current direction for 5 rounds (sticky decision).
+  2. **Idle positioning hysteresis**: In `_try_idle_positioning`, don't change target if the bot is already moving toward a valid idle position and hasn't arrived yet.
+  3. **Deliver-or-hold decision**: A bot carrying items with no active assignment should deliver immediately (even partial inventory) rather than oscillate. On Nightmare, Bot 0 holds `[juice;sugar]` for 150 rounds — delivering would score +2 and free it for new work.
+- **Risk**: Low — oscillation is pure waste. Any action beats bouncing.
+- **Expected gain**: +5-15 Nightmare, +2-5 Expert.
 
 ### T43: Fix `_spare_slots` Over-Conservatism (round_planner.py)
 - **Agent**: strategy-agent
@@ -339,24 +374,45 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ---
 
-## Game Log Analysis (2026-03-08)
+## Nightmare Deep-Dive (seed=42, 2026-03-08)
 
-Analysis of game logs from the visualizer (`serve_visualizer.py`, 43 logs).
+- 12/20 bots (B7-B19) never picked up a single item in 500 rounds
+- Bot 0 (93% util) oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496)
+- First order doesn't complete until R63 (spawn dispersal takes ~50 rounds)
+- Only B0-B5 do useful work; B6 picks up 1 item total
+- MaxGap=192 rounds without scoring, AvgDel=1.81 items per delivery
+- 3-bot game is 9.5x more efficient per bot-round than 20-bot
 
-| Game | Grid | Bots | Rounds | Score | Items | Orders | Idle% |
-|------|------|------|--------|-------|-------|--------|-------|
-| game_192600 (medium) | 16x12 | 3 | 300 | 145 | 70 | 15 | 5.2% |
-| local_medium | 16x12 | 3 | 300 | 137 | 67 | 14 | 4.8% |
-| game_190120 (nightmare) | 30x18 | 20 | 500 | 152 | 82 | 14 | 70.4% |
-| local_nightmare | 30x18 | 20 | 500 | 151 | 81 | 14 | ~70% |
+## Replay Analyzer Usage
 
-**Key observations from logs:**
-- **Efficiency ratio**: 3-bot game is 9.5x more efficient per bot-round than 20-bot
-- **Partial deliveries**: avg 2.0-2.6 items per dropoff (max 3). Many single-item deliveries observed.
-- **Delivery gaps**: up to 65 rounds between score increases (nightmare), 34 rounds (medium)
-- **Bot oscillation**: In 20-bot games, bots 8-19 alternate between two cells for 100+ rounds
-- **Spawn gridlock**: 20 bots at same spawn cell takes 18+ rounds to disperse
-- **Order bonus under-optimized**: +5 bonus is 46-60% of total score, but more bots = fewer orders completed
+Use `analyze_replay.py` to debug game runs. **Agents MUST use this tool after any benchmark run with `--diagnostics` to verify changes.**
+
+```sh
+# List available logs
+python analyze_replay.py --list
+
+# Full summary + auto-detected problems (run this first)
+python analyze_replay.py <log>
+
+# ASCII grid at a specific round (use to inspect bot positions)
+python analyze_replay.py <log> --grid 50
+
+# Bot timeline (condensed action history with streak compression)
+python analyze_replay.py <log> --bot 3
+
+# Round-by-round detail for a range (use after finding a problem round)
+python analyze_replay.py <log> --rounds 40-60
+
+# Only auto-detected problems (idle streaks, oscillation, delivery gaps)
+python analyze_replay.py <log> --problems
+```
+
+**Validation workflow for optimization tasks:**
+1. Run `python benchmark.py --synthetic -d Nightmare --quick --diagnostics` (or other difficulty)
+2. Run `python analyze_replay.py --list` to find the new log
+3. Run `python analyze_replay.py <log>` to check summary + problems
+4. Compare problem count and idle% before/after your change
+5. Use `--bot <id>` and `--grid <round>` to drill into specific regressions
 
 ## Notes
 
