@@ -15,12 +15,14 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 **Per-bot idle (Expert):** B0:4% B1:8% B2:20% B3:21% B4:32% B5:36% B6:44% B7:45% B8:44% B9:50%
 
-### Key Bottlenecks (ranked by impact)
-1. **43-48% waste on Medium/Hard** — preview pickups clog inventory, no clearing mechanism for medium teams
-2. **MAX_CONCURRENT_DELIVERERS=1 on Expert** — 10 bots share 1 delivery slot, causes 322 inv-full waits and 908 total waits
-3. **30% idle on Expert** — bots 5-9 idle 36-50%, doing nothing useful
-4. **T30 dropoff queuing infra built but NOT wired** — `get_dropoff_approach_target()` exists in game_state.py but planner never calls it
-5. **Rounds/order 50.9 on Expert** — should be <20 with 10 bots, coordination overhead destroys throughput
+### Key Bottlenecks (ranked by impact — updated 2026-03-08 from game log analysis)
+1. **Multi-bot scaling is broken** — 1 bot scores 126pts but 10 bots only 104pts (9.5x less efficient per bot-round). In 20-bot games, 60% of bots contribute zero items. Bots oscillate between two cells for hundreds of rounds.
+2. **Bot processing order is arbitrary** — `round_planner.py:113` iterates in server order, not urgency. A delivering bot (urgency 0) may act last, finding its path claimed by idle bots. The `_yield_to` mechanism only avoids positions, not paths. See T42.
+3. **`_spare_slots` blocks preview pickups globally** — `round_planner.py:366` subtracts `active_on_shelves` from ALL bots' spare slots. If 2 active items remain, ALL bots get `spare=0` even when other bots handle those items. See T43.
+4. **30% idle on Expert** — bots 5-9 idle 36-50%, positioned generically instead of near preview items. See T34.
+5. **Single-cell dropoff is the hard bottleneck** — T33 confirmed all planner changes that increase dropoff traffic hurt. Expert >70 may require game-level changes.
+6. ~~43-48% waste on Medium/Hard~~ — T31 confirmed waste% is misleading; preview pickup is optimal behavior.
+7. ~~MAX_CONCURRENT_DELIVERERS=1~~ — Fixed by T32 (scaled to max(2, bots//4)).
 
 ---
 
@@ -139,7 +141,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **How to fix**:
   1. **Assign more pickers**: Change picker count to `min(active_on_shelves, num_bots - max_deliverers)` — every bot should target an item. Even if 2 bots target the same item type, the second-closest is backup.
   2. **Eliminate idle role for Expert**: When `num_bots >= 8`, assign surplus bots as "pick" with lower-priority items (second-closest copies of needed types). An active picker that arrives and finds its item already taken can immediately re-route to the next needed item.
-  3. **Pre-position idle bots near highest-probability item locations**: In `_try_idle_positioning`, instead of generic corridor spots, target the shelf columns that contain the most distinct item types (more likely to be needed next).
+  3. **Pre-stage idle bots near preview-order items**: In `_try_idle_positioning`, position empty idle bots near known preview-order item shelf locations (not generic corridor spots). When the order transitions, these bots can start picking immediately instead of traversing the map. The `_preview_stage_weight` in idle.py only works for bots carrying preview items — extend to empty bots too.
 - **Risk**: More pickers could cause aisle congestion. Mitigate with stagger: only assign 2 bots per aisle column max.
 - **Expected gain**: +5-10 Expert.
 - **Depends on**: T31 (reduced waste means more useful pickups per bot).
@@ -167,6 +169,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add: `if self._should_deliver_early(ctx.pos, ctx.inv): [deliver]`.
 - **Risk**: Low. Method exists with tests. Just needs wiring.
 - **Expected gain**: +2-4 Medium/Hard.
+- **WARNING**: T33 finding #3 shows this REGRESSES Expert (54.0 vs 59.2). May need to gate by team size — only apply for teams < 8.
 
 ### T36: Use `_flexible_tsp` for Multi-Bot Routes (pickup.py)
 - **Agent**: strategy-agent
@@ -190,6 +193,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **How to fix**: `endgame_threshold = max(15, ENDGAME_ROUNDS_LEFT - len(self.bots) * 2)` gives Easy=38, Medium=34, Hard=30, Expert=20.
 - **Risk**: Medium — needs benchmarking.
 - **Expected gain**: +2-5 Expert.
+- **WARNING**: T33 finding #5 says "scaling endgame threshold by bot count is harmful — shorter endgame for Expert regresses all difficulties." May need a different approach (e.g. smarter endgame behavior rather than shorter window).
 
 ### T39: Lower `MIN_INV_FOR_NONACTIVE_DELIVERY` for Large Teams (constants.py)
 - **Agent**: lead-agent
@@ -207,6 +211,41 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Status**: done
 - **Priority**: 5
 - **Result**: Added preview-inventory endgame delivery path to `_try_maximize_items` in delivery.py. Code is correct and neutral (20-seed benchmark confirms no regression). Currently unreachable because `_step_endgame` in round_planner.py gates `_try_maximize_items` calls on `ctx.has_active and self.active_on_shelves > 0`. Requires round_planner.py update to also call `_try_maximize_items` for bots with preview-only inventory during endgame.
+
+### T42: Sort Bot Processing by Urgency Order (round_planner.py)
+- **Agent**: strategy-agent
+- **Status**: open
+- **Priority**: 1
+- **Metric**: On multi-bot maps, high-urgency bots (delivering, full inventory) find paths already claimed by lower-priority bots processed earlier. Game log analysis shows bots with urgency 0 (full active inventory) waiting behind idle bots.
+- **Files**: `grocery_bot/planner/round_planner.py` (line 113), `grocery_bot/planner/assignment.py` (`_bot_urgency`)
+- **Root cause**: `round_planner.py:113` iterates `self.bots` in server-provided order. Urgency is computed (line 110) but only used for `_yield_to` position avoidance — high-urgency bots don't get first pick of movement paths.
+- **How to fix**: Sort `self.bots` by urgency before the decision loop:
+  ```python
+  sorted_bots = sorted(self.bots, key=lambda b: urgency[b["id"]])
+  for bot in sorted_bots:
+  ```
+  This lets delivering bots (urgency 0) claim optimal paths first. Lower-urgency bots route around them.
+- **Risk**: Low — urgency is already computed, just unused for ordering. The `_yield_to` set becomes redundant but harmless.
+- **Expected gain**: +3-8 on Hard/Expert (reduces round waste from path conflicts).
+
+### T43: Fix `_spare_slots` Over-Conservatism (round_planner.py)
+- **Agent**: strategy-agent
+- **Status**: open
+- **Priority**: 2
+- **Metric**: Preview pickups blocked even when other bots handle all active items. Bots idle with empty inventory instead of pre-picking.
+- **Files**: `grocery_bot/planner/round_planner.py` (line 366-367)
+- **Root cause**: `_spare_slots(inv)` returns `(MAX_INVENTORY - len(inv)) - self.active_on_shelves`. This globally reserves slots for `active_on_shelves` items across ALL bots. Example: 2 active items on shelves, Bot A has 1 item → `spare = (3-1)-2 = 0`. Bot A is blocked from preview pickup even if Bot B and Bot C are already assigned to those 2 active items.
+- **How to fix**: Account for per-bot assignment. If this bot has no active assignment (or its assigned items are already picked), don't subtract `active_on_shelves`:
+  ```python
+  def _spare_slots(self, inv: list[str], bid: int = -1) -> int:
+      my_active = len(self.bot_assignments.get(bid, []))
+      reserve = min(self.active_on_shelves, max(0, my_active))
+      return (MAX_INVENTORY - len(inv)) - reserve
+  ```
+  Bots assigned to active items still reserve slots; unassigned bots can freely preview-pick.
+- **Risk**: Medium — over-picking preview items could clog inventory. Gate by team size if needed.
+- **Expected gain**: +3-8 on Medium/Hard (more preview pipelining, fewer idle rounds).
+- **Depends on**: T42 (urgency ordering ensures active pickers still get priority).
 
 ---
 
@@ -253,6 +292,25 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | T29: Cross-cutting perf and yield fix | BFS memory optimization, endgame threshold 30->40, dist cache 256->512, yield-to logic fix. Hard +3.5, Expert InvFW -28%. Stuck% halved. |
 
 ---
+
+## Game Log Analysis (2026-03-08)
+
+Analysis of game logs from the visualizer (`serve_visualizer.py`, 43 logs).
+
+| Game | Grid | Bots | Rounds | Score | Items | Orders | Idle% |
+|------|------|------|--------|-------|-------|--------|-------|
+| game_192600 (medium) | 16x12 | 3 | 300 | 145 | 70 | 15 | 5.2% |
+| local_medium | 16x12 | 3 | 300 | 137 | 67 | 14 | 4.8% |
+| game_190120 (nightmare) | 30x18 | 20 | 500 | 152 | 82 | 14 | 70.4% |
+| local_nightmare | 30x18 | 20 | 500 | 151 | 81 | 14 | ~70% |
+
+**Key observations from logs:**
+- **Efficiency ratio**: 3-bot game is 9.5x more efficient per bot-round than 20-bot
+- **Partial deliveries**: avg 2.0-2.6 items per dropoff (max 3). Many single-item deliveries observed.
+- **Delivery gaps**: up to 65 rounds between score increases (nightmare), 34 rounds (medium)
+- **Bot oscillation**: In 20-bot games, bots 8-19 alternate between two cells for 100+ rounds
+- **Spawn gridlock**: 20 bots at same spawn cell takes 18+ rounds to disperse
+- **Order bonus under-optimized**: +5 bonus is 46-60% of total score, but more bots = fewer orders completed
 
 ## Notes
 
