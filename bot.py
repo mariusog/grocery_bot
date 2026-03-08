@@ -300,7 +300,6 @@ async def play():
                     desync_count += 1
                     # Figure out what move WOULD produce actual position
                     if exp_pos:
-                        prev_bot_pos = None
                         # Try to figure out which action produced this position
                         act_name = last_act.get("action", "?")
                         desync_details.append(

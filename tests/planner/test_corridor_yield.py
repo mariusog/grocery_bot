@@ -80,7 +80,7 @@ class TestIdleBotYieldsToActive:
 
         # Bot 1 should not just wait — it should move out of the way
         assert a1["action"] != "wait", \
-            f"Idle bot should not wait when blocking active bot's path"
+            "Idle bot should not wait when blocking active bot's path"
 
     def test_no_yield_when_not_in_path(self):
         """Idle bot NOT in the active bot's path should not be forced to yield."""

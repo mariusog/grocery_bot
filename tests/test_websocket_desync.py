@@ -114,8 +114,6 @@ class TestPickupAfterRestock:
         from grocery_bot.simulator import GameSimulator
 
         sim = GameSimulator(seed=42, num_bots=1, width=12, height=10)
-        original_ids = {it["id"] for it in sim.items_on_map}
-
         # Find an item and its position
         item = sim.items_on_map[0]
         item_id = item["id"]

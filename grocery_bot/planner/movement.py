@@ -12,7 +12,6 @@ from grocery_bot.pathfinding import (
 from grocery_bot.constants import (
     BLOCKING_RADIUS_LARGE_TEAM,
     DROPOFF_CLEAR_RADIUS,
-    MAX_INVENTORY,
     MEDIUM_TEAM_MIN,
 )
 
@@ -136,7 +135,6 @@ class MovementMixin:
             bid: int = b["id"]
             pos: tuple[int, int] = tuple(b["position"])
             has_active: bool = self.bot_has_active.get(bid, False)
-            inv: list[str] = b["inventory"]
 
             target: Optional[tuple[int, int]] = None
 
