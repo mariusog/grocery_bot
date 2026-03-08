@@ -4,46 +4,70 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-08, 10-seed synthetic + replay maps)
+## Current Performance (2026-03-08, replay benchmark total=1562)
 
-**Synthetic benchmark** (`python benchmark.py --synthetic --seeds 10 --diagnostics`):
-
-| Difficulty | Bots | Avg | Min | Max | StdDev | Waste% | Rds/Ord | Idle% | AvgDel |
-|------------|------|-----|-----|-----|--------|--------|---------|-------|--------|
-| Easy       | 1    | 148.5 | 138 | 153 | 6.0 | 13.7% | 16.7 | 1.2% | 2.98 |
-| Medium     | 3    | 158.4 | 98 | 188 | 24.9 | 56.5% | 17.2 | 7.0% | 2.36 |
-| Hard       | 5    | 133.3 | 112 | 156 | 14.1 | 61.1% | 19.5 | 23.8% | 1.86 |
-| Expert     | 10   | 109.2 | 78 | 135 | 16.3 | 61.4% | 27.3 | 45.4% | 1.82 |
-| Nightmare  | 20   | 123.9 | 1 | 218 | 84.7 | 55.7% | 36.1 | 80.6% | 1.83 |
-
-**Replay benchmark** (`python benchmark.py`):
+**Replay benchmark** (`python benchmark.py --quick`):
 
 | Map | Bots | Grid | Score |
 |-----|------|------|-------|
-| 12x10_1bot | 1 | 12x10 | 126 |
-| 16x12_3bot | 3 | 16x12 | 153 |
-| 22x14_5bot | 5 | 22x14 | 111 |
-| 28x18_10bot | 10 | 28x18 | 95 |
-| 30x18_20bot (Mar 7) | 20 | 30x18 | 119 |
-| 30x18_20bot (Mar 8) | 20 | 30x18 | 124 |
+| 12x10_1bot (Mar 7) | 1 | 12x10 | 126 |
+| 12x10_1bot (Mar 8) | 1 | 12x10 | 122 |
+| 16x12_3bot (Mar 7) | 3 | 16x12 | 153 |
+| 16x12_3bot (Mar 8) | 3 | 16x12 | 134 |
+| 22x14_5bot (Mar 7) | 5 | 22x14 | 119 |
+| 22x14_5bot (Mar 8) | 5 | 22x14 | 124 |
+| 28x18_10bot (Mar 7) | 10 | 28x18 | 94 |
+| 28x18_10bot (Mar 8) | 10 | 28x18 | 88 |
+| 30x18_20bot (Mar 7) | 20 | 30x18 | 284 |
+| 30x18_20bot (Mar 8) | 20 | 30x18 | 318 |
+| **Total** | | | **1562** |
 
-**Per-bot util (Expert 10-seed):** B0:95% B1:87% B2:80% B3:67% B4:61% B5:50% B6:32% B7:32% B8:28% B9:15%
-**Per-bot util (Nightmare 10-seed):** Highly variable (StdDev=71.8). Best seeds use ~6 bots; worst seeds score 1 point.
+**Live high scores** (ainm.no): Easy:133, Medium:145, Hard:138, Expert:95, Nightmare:320, Total:831
 
-### Key Bottlenecks (ranked by impact — updated 2026-03-08 from Nightmare analysis)
-1. **Assignment system doesn't scale** — On Nightmare (20 bots), 12/20 bots never pick up a single item across 500 rounds. The planner assigns work to 5-6 nearest bots and leaves 14 permanently idle. See T34, T49.
-2. **Spawn gridlock** — All bots spawn at a single cell (28,16). With 20 bots, only 1-2 can move per round → 75 rounds wasted just dispersing. See T49.
-3. **Oscillation at scale** — Bot 0 (top performer, 93% util) oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496) carrying 2 items. The idle positioning logic bounces bots between adjacent cells when no clear assignment exists. See T50.
-4. **`_spare_slots` blocks preview pickups globally** — reserves slots for active items across ALL bots. See T43.
-5. **80.8% idle on Nightmare, 45% on Expert** — most bots have nothing to do. See T34.
-6. ~~Bot processing order is arbitrary~~ — T42 proved server order + soft yields is near-optimal cooperative scheduling.
-7. **Single-cell dropoff is the hard bottleneck** — T33 confirmed all planner changes that increase dropoff traffic hurt.
-8. ~~43-48% waste on Medium/Hard~~ — T31 confirmed waste% is misleading; preview pickup is optimal behavior.
-9. ~~MAX_CONCURRENT_DELIVERERS=1~~ — Fixed by T32 (scaled to max(2, bots//4)).
+**Bitflip #1 scores**: Easy:132, Medium:214, Hard:252, Expert:303, Nightmare:1026, Total:1927
+
+**Replay benchmark progression**: 1378 → 1503 (speculative) → 1521 (5-bot threshold) → 1538 (clearing fix) → 1562 (throttle fix)
+
+### Expert (10-bot) Diagnostics (after latest changes)
+
+| Map | Score | Idle% | InvFullWaits | Oscil | WastePct |
+|-----|-------|-------|--------------|-------|----------|
+| Mar 7 28x18 | 94 | 14.7% | 248 | 632 | 76.4% |
+| Mar 8 28x18 | 88 | 14.3% | 293 | 605 | 77.3% |
+
+Note: Mar 8 map has banana deficit (5 on map, 9 needed in orders) — limits max achievable score.
+
+### Key Bottlenecks (ranked by impact — updated 2026-03-08)
+1. **InvFullWaits still high on Expert** — 248-293 bot-rounds waiting with full non-active inventory. Non-active delivery throttle increased from `num_bots//5` to `num_bots//3` (T51), brought InvFullWaits down from 423→248. Still needs work.
+2. **Oscillation extremely high** — 605-632 on Expert maps. `_step_break_oscillation` catches A-B-A but doesn't prevent the root cause: idle positioning score ties causing bouncing.
+3. **~77% pickup waste on Expert** — speculative pickup fills inventories with wrong items. Need smarter speculative item selection (e.g., items matching recent order patterns).
+4. **Assignment system doesn't scale** — On Nightmare (20 bots), many bots never pick up items. See T34, T49.
+5. **Spawn gridlock** — All bots spawn at single cell. See T49.
+6. ~~**`_precompute_dropoff_zones` never called**~~ — Fixed: `drop_off` now passed to `init_static`. See T52.
+7. ~~**Speculative pickup missing**~~ — Fixed: idle bots now pick up items speculatively. See T53.
+8. ~~**Non-active clearing throttle too low**~~ — Fixed: `num_bots//5` → `num_bots//3`. See T51.
 
 ---
 
 ## Completed Recent Tasks
+
+### T53: Speculative Pickup for Idle Bots
+- **Agent**: lead-agent
+- **Status**: done
+- **Result**: Added `SpeculativeMixin` (`grocery_bot/planner/speculative.py`) — idle bots on 5+ bot teams pick up items speculatively so they're ready when next order activates. Nightmare waits dropped 77%→21%, scores 214→324 locally, 152→320 live. Step chain now has 17 steps. Threshold lowered from `PREDICTION_TEAM_MIN` (8) to `MEDIUM_TEAM_MIN` (5), improving 5-bot maps by +8-10 each. Added `SPEC_MAX_TEAM_COPIES=2` to constants.
+- **Files**: `grocery_bot/planner/speculative.py` (NEW), `grocery_bot/planner/round_planner.py`, `grocery_bot/constants.py`, `tests/planner/test_speculative_unit.py` (NEW), `tests/planner/test_step_ordering.py`
+
+### T52: Fix `_precompute_dropoff_zones` Never Called
+- **Agent**: lead-agent
+- **Status**: done
+- **Result**: `init_static` was called without `drop_off` key, so `_precompute_dropoff_zones` never ran. Fixed by adding `"drop_off": list(self.drop_off)` to the `init_static` call in `round_planner.py`. All dropoff congestion management (approach cells, wait cells, queuing) is now functional. Added regression test in `test_dropoff_steps.py`.
+- **Files**: `grocery_bot/planner/round_planner.py`, `tests/planner/test_dropoff_steps.py`
+
+### T51: Increase Non-Active Delivery Throttle for Large Teams
+- **Agent**: lead-agent
+- **Status**: done
+- **Result**: Changed non-active delivery throttle from `max(1, num_bots//5)` to `max(1, num_bots//3)` in both `_step_clear_nonactive_inventory` and `_step_idle_nonactive_deliver`. 10-bot teams now allow 3 simultaneous non-active deliverers (was 2). InvFullWaits dropped 423→248. Also preserved 1 speculative item for unassigned bots (`min_inv=2` for unassigned, `min_inv=1` for assigned). Benchmark: 1538→1562 (+24). Nightmare +31, Expert -7 (trade-off accepted).
+- **Files**: `grocery_bot/planner/steps.py`, `tests/planner/test_nonactive_clearing.py`
 
 ### T24: A/B Strategy Testing Framework
 - **Agent**: qa-agent
@@ -320,6 +344,52 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Risk**: Medium — over-picking preview items could clog inventory. Gate by team size if needed.
 - **Expected gain**: +3-8 on Medium/Hard (more preview pipelining, fewer idle rounds).
 - **Depends on**: T42 (urgency ordering ensures active pickers still get priority).
+
+### T54: Reduce Oscillation on Expert (632→<200)
+- **Agent**: lead-agent
+- **Status**: open
+- **Priority**: 1
+- **Metric**: 605-632 oscillations on Expert maps, 170-213 on Hard maps
+- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/movement.py`
+- **Root cause**: `_step_break_oscillation` detects A-B-A patterns but doesn't prevent the underlying cause. Idle positioning score function produces near-ties that flip between adjacent cells each round. `IDLE_STAY_IMPROVEMENT_THRESHOLD=0.5` helps but isn't enough when scores are volatile (e.g., other bots moving changes proximity penalties).
+- **How to fix**:
+  1. **Increase stay threshold for large teams**: Scale `IDLE_STAY_IMPROVEMENT_THRESHOLD` by team size (e.g., `0.5 + 0.1 * (num_bots - 3)`) — larger teams need more stability.
+  2. **Add position stickiness**: Once an idle bot selects a position, add a penalty for the previous position (so it doesn't go back) and a bonus for the current target.
+  3. **Longer oscillation detection**: Detect A-B-C-B-A and longer cycles, not just A-B-A.
+- **Expected gain**: +5-10 Expert (fewer wasted moves = more productive rounds).
+
+### T55: Reduce Speculative Pickup Waste (77%→<50%)
+- **Agent**: lead-agent
+- **Status**: open
+- **Priority**: 2
+- **Metric**: 76-80% pickup waste on Expert — speculative items rarely match next order
+- **Files**: `grocery_bot/planner/speculative.py`
+- **Root cause**: `_find_spec_target` picks the nearest unclaimed item regardless of type. On maps with 12+ item types, random pickup has ~8% chance of matching next order's items.
+- **How to fix**:
+  1. **Prefer types from preview order**: If preview order exists, speculative bots should prioritize picking those types.
+  2. **Prefer common item types**: Track which types appear most frequently in past orders and bias speculative pickup toward them.
+  3. **Limit speculative inventory to 1-2 items**: Currently bots fill to 3, leaving no room when active order arrives. Cap speculative at `MAX_INVENTORY - 1` to always keep 1 slot free.
+- **Expected gain**: +5-15 Expert (fewer clearing trips, faster active pickup).
+
+### T56: Visualizer Improvements
+- **Agent**: qa-agent
+- **Status**: done
+- **Result**: Added difficulty filter dropdown and human-readable labels (e.g., `[local] Expert 28x18 10bot 10:51:52`) to log visualizer. Log list sorted by mtime (newest first). Log pruning fixed from alphabetical to mtime sort.
+- **Files**: `visualizer.html`, `serve_visualizer.py`, `grocery_bot/simulator/sim_logging.py`
+
+### T57: Next Session Priority Checklist
+- **Status**: open (meta-task)
+- **Priority**: 0
+- **Actions for next session**:
+  1. **Run live games** to validate current changes (especially dropoff congestion fix T52)
+  2. **T54**: Reduce oscillation (biggest remaining waste on Expert)
+  3. **T55**: Smarter speculative pickup (reduce 77% waste)
+  4. **T43**: Fix `_spare_slots` over-conservatism
+  5. **T49**: Spawn dispersal for Nightmare
+  6. **Always use TDD** — user requirement, write tests BEFORE implementing fixes
+  7. **Commit style**: short single-sentence messages, no co-author line
+- **Uncommitted changes**: `grocery_bot/planner/steps.py` (throttle `//5`→`//3`), `tests/planner/test_nonactive_clearing.py` (new throttle test) — need to commit
+- **File size violations**: `round_planner.py` ~448 lines, `movement.py` ~418 lines (both over 300 limit)
 
 ---
 
