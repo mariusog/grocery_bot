@@ -4,6 +4,7 @@ import os
 
 
 from grocery_bot.simulator import (
+    DIFFICULTY_PRESETS,
     GameSimulator,
     profile_congestion,
 )
@@ -126,10 +127,10 @@ class TestLocalLogNaming:
     """Local simulator logs should expose difficulty in the filename."""
 
     def test_local_log_path_includes_difficulty_slug(self, monkeypatch, tmp_path):
-        from grocery_bot.simulator import game_simulator as gs_mod
+        from grocery_bot.simulator import sim_logging as log_mod
 
-        monkeypatch.setattr(gs_mod, "_LOG_DIR", str(tmp_path))
-        sim = GameSimulator(seed=42, **gs_mod.DIFFICULTY_PRESETS["Easy"])
+        monkeypatch.setattr(log_mod, "_LOG_DIR", str(tmp_path))
+        sim = GameSimulator(seed=42, **DIFFICULTY_PRESETS["Easy"])
         result = sim.run(log=True)
 
         basename = os.path.basename(result["log_path"])
