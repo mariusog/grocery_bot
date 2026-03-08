@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260308_135512",
+  "recorded_at": "20260308_171151",
   "source": "live",
   "grid": {
     "width": 30,
@@ -2165,6 +2165,18 @@
         "pasta",
         "cheese",
         "rice"
+      ]
+    },
+    {
+      "id": "order_32",
+      "items_required": [
+        "bananas",
+        "lettuce",
+        "tomatoes",
+        "oats",
+        "apples",
+        "butter",
+        "oats"
       ]
     },
     {

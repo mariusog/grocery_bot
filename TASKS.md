@@ -41,9 +41,28 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ## Priority Tasks (path to 1000 points)
 
+### T61: Rounds-Per-Order Threshold Integration Tests
+- **Status**: open
+- **Priority**: 0 (infrastructure — do first)
+- **Difficulty**: Easy (1-2 hours)
+- **Files**: `tests/test_replay_regression.py`
+- **Goal**: Add replay-based threshold tests for rounds-per-order and InvFull waits, similar to existing minimum score tests. These give us a fast TDD feedback loop: set a target threshold, make code changes, and verify the threshold passes without regressing other difficulties.
+- **How to implement**:
+  1. Add `test_rounds_per_order_bounded` to `TestReplayMinimumScores` — assert `avg_rounds_per_order` stays below per-difficulty ceilings:
+     ```python
+     MAX_ROUNDS_PER_ORDER = {1: 25, 3: 20, 5: 25, 10: 35, 20: 20}
+     ```
+  2. Add `test_inv_full_waits_bounded` — assert `inv_full_waits` stays below per-difficulty ceilings:
+     ```python
+     MAX_INV_FULL_WAITS = {1: 20, 3: 30, 5: 100, 10: 300, 20: 500}
+     ```
+  3. Start with generous thresholds (current values + 20% headroom), then tighten as T59/T60/T43 land improvements.
+- **Why**: Each optimization task (T59, T60, T43) can then tighten these thresholds as proof of progress, and any regression is caught automatically.
+
 ### T59: Wire `_should_deliver_early()` for Small Teams
 - **Status**: open
 - **Priority**: 1 (highest impact for Medium/Hard)
+- **Difficulty**: Easy (1-2 hours)
 - **Files**: `grocery_bot/planner/steps.py`
 - **Root cause**: `_should_deliver_early()` in `delivery.py` is dead code. On 3-5 bot teams, bots with 1 active item walk to far items when delivering immediately would be cheaper. This inflates rounds-per-order.
 - **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add early delivery for teams < PREDICTION_TEAM_MIN (8):
@@ -54,11 +73,12 @@ Status: `open` | `in-progress` | `done` | `blocked`
   ```
 - **Gate**: Only for teams < 8 (T33 showed it regresses Expert).
 - **Expected gain**: +5-10 Medium, +5-10 Hard.
-- **TDD**: Write test that verifies early delivery triggers for 3-bot team when cost comparison favors it.
+- **TDD**: Write test that verifies early delivery triggers for 3-bot team when cost comparison favors it. Tighten T61 rounds-per-order thresholds for 3-bot and 5-bot maps.
 
 ### T60: Lower Non-Active Clear Threshold for Medium Teams
 - **Status**: open
 - **Priority**: 1 (directly addresses Hard InvFull)
+- **Difficulty**: Easy (1 hour)
 - **Files**: `grocery_bot/planner/steps.py`, `grocery_bot/constants.py`
 - **Root cause**: `_step_clear_nonactive_inventory` requires `min_inv = MAX_INVENTORY (3)` for 4-7 bot teams. Bot 4 on Hard held 2 non-active items for 41 rounds waiting for a 3rd. The 3-item threshold was designed to prevent premature clearing but is too conservative.
 - **How to fix**: Change medium team threshold from `MAX_INVENTORY` to `MIN_INV_FOR_NONACTIVE_DELIVERY` (2):
@@ -69,11 +89,12 @@ Status: `open` | `in-progress` | `done` | `blocked`
       min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY  # was MAX_INVENTORY (3)
   ```
 - **Expected gain**: +5-10 Hard, +2-5 Medium.
-- **TDD**: Write test for 5-bot team clearing at 2 items instead of 3.
+- **TDD**: Write test for 5-bot team clearing at 2 items instead of 3. Tighten T61 InvFull threshold for 5-bot maps.
 
 ### T43: Fix `_spare_slots` Over-Conservatism
 - **Status**: open
 - **Priority**: 2
+- **Difficulty**: Medium (2-3 hours)
 - **Files**: `grocery_bot/planner/round_planner.py`
 - **Root cause**: `_spare_slots(inv)` globally reserves slots for `active_on_shelves` across ALL bots. Unassigned bots can't preview-pick even when other bots handle all active items.
 - **How to fix**: Per-bot assignment awareness:
@@ -89,6 +110,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 ### T54: Reduce Oscillation on Expert (632 -> <200)
 - **Status**: open
 - **Priority**: 2
+- **Difficulty**: Medium (2-4 hours)
 - **Files**: `grocery_bot/planner/idle.py`
 - **Root cause**: Idle positioning score produces near-ties that flip between adjacent cells. `IDLE_STAY_IMPROVEMENT_THRESHOLD=0.5` is insufficient when proximity penalties are volatile.
 - **How to fix**:
@@ -100,6 +122,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 ### T34: Activate Tail Bots on Nightmare
 - **Status**: open
 - **Priority**: 2 (large potential but harder to execute)
+- **Difficulty**: Hard (4-8 hours)
 - **Files**: `grocery_bot/planner/assignment.py`, `grocery_bot/planner/idle.py`
 - **Root cause**: Assignment gives `active_picker_count = ceil(active_on_shelves / 3)` pickers. With 6-item orders and 20 bots, 11-15 bots sit idle. B16-B19 never contribute.
 - **How to fix**: Assign surplus bots as secondary pickers targeting different map regions. Even slow far-side pickups beat 0 contribution.
@@ -108,6 +131,7 @@ Status: `open` | `in-progress` | `done` | `blocked`
 ### T39: Single-Item Delivery for Large Teams
 - **Status**: open
 - **Priority**: 3
+- **Difficulty**: Easy (1 hour)
 - **Files**: `grocery_bot/planner/steps.py`
 - **Root cause**: `MIN_INV_FOR_NONACTIVE_DELIVERY=2` blocks 1-item deliveries on Expert. Idle bots hold 1 speculative item worth +1 but never deliver it.
 - **How to fix**: Already partially done — `min_inv = 1` for assigned bots on 8+ teams. Extend to unassigned idle bots too.
