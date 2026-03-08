@@ -139,3 +139,8 @@ DIAG_HIGH_IDLE_PCT = 30  # idle% > this flags HIGH_IDLE
 DIAG_HIGH_STUCK_PCT = 10  # stuck% > this flags HIGH_STUCK
 DIAG_LONG_GAP = 40  # max_delivery_gap > this flags LONG_GAP
 DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING
+
+# ---------------------------------------------------------------------------
+# Speculative pickup (planner/speculative.py)
+# ---------------------------------------------------------------------------
+SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots

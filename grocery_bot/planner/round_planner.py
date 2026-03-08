@@ -23,6 +23,7 @@ from grocery_bot.planner.pickup import PickupMixin
 from grocery_bot.planner.preview import PreviewMixin
 from grocery_bot.planner.delivery import DeliveryMixin
 from grocery_bot.planner.idle import IdleMixin
+from grocery_bot.planner.speculative import SpeculativeMixin
 from grocery_bot.planner.coordination import CoordinationMixin
 from grocery_bot.planner.steps import StepsMixin
 
@@ -32,7 +33,7 @@ BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active 
 
 class RoundPlanner(
     MovementMixin, AssignmentMixin, PickupMixin, PreviewMixin, DeliveryMixin,
-    IdleMixin, CoordinationMixin, StepsMixin,
+    IdleMixin, SpeculativeMixin, CoordinationMixin, StepsMixin,
 ):
     """Plans actions for all bots in a single round."""
 
@@ -74,6 +75,8 @@ class RoundPlanner(
         self._yield_to: set[tuple[int, int]] = set()
         self._nonactive_delivering: int = 0
         self._preview_walkers: int = 0
+        self._speculative_pickers: int = 0
+        self._spec_types_claimed: set[str] = set()
 
     def plan(self) -> list[dict[str, Any]]:
         """Main entry: return list of action dicts for all bots."""
@@ -434,6 +437,7 @@ RoundPlanner._STEP_CHAIN = [
     RoundPlanner._step_deliver_active,
     RoundPlanner._step_clear_nonactive_inventory,
     RoundPlanner._step_preview_prepick,
+    RoundPlanner._step_speculative_pickup,
     RoundPlanner._step_break_oscillation,
     RoundPlanner._step_clear_dropoff,
     RoundPlanner._step_idle_nonactive_deliver,
