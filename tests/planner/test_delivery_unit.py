@@ -178,6 +178,24 @@ class TestShouldDeliverEarlyEdgeCases:
         assert isinstance(result, bool)
 
 
+class TestEarlyDeliveryFunction:
+    """Tests for _should_deliver_early cost comparison logic."""
+
+    def test_returns_false_when_far_from_dropoff(self):
+        """Bot far from dropoff should NOT deliver early."""
+        planner = make_planner(
+            bots=[{"id": 0, "position": [5, 3], "inventory": ["cheese"]}],
+            items=[
+                {"id": "i0", "type": "milk", "position": [6, 2]},
+            ],
+            orders=[_active_order(["cheese", "milk"])],
+            drop_off=[1, 8],
+        )
+        # Bot is far from dropoff, nearby items — should pick up
+        result = planner._should_deliver_early((5, 3), ["cheese"])
+        assert result is False
+
+
 class TestEstimateRoundsEdgeCases:
     def test_single_nearby_item(self):
         """Estimate for a single nearby item should be reasonable."""

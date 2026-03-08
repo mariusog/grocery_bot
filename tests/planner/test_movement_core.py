@@ -141,6 +141,22 @@ class TestBuildBlocked:
         assert pred_1 in blocked
 
 
+    def test_huge_team_tighter_radius(self):
+        """With 15+ bots, blocking radius is 3 (tighter than 5-7 bots)."""
+        bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(15)]
+        planner = make_planner(
+            bots=bots,
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+            width=20,
+            height=9,
+        )
+        blocked = planner._build_blocked(0)
+        # Bot 1 at (2,3) is distance 1 from bot 0 at (1,3) — within radius 3
+        pred_1 = planner.predicted.get(1, (2, 3))
+        assert pred_1 in blocked
+
+
 class TestFindYieldAlternative:
     def test_finds_alternative_direction(self):
         """Should find an alternative move when target is blocked by yielding."""

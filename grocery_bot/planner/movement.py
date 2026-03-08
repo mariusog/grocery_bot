@@ -11,6 +11,7 @@ from grocery_bot.pathfinding import (
 )
 from grocery_bot.constants import (
     BLOCKING_RADIUS_EXPERT,
+    BLOCKING_RADIUS_HUGE_TEAM,
     BLOCKING_RADIUS_LARGE_TEAM,
     DROPOFF_CLEAR_RADIUS,
     MEDIUM_TEAM_MIN,
@@ -407,6 +408,8 @@ class MovementMixin:
             max_dist: float = float("inf")
         elif PREDICTION_TEAM_MIN <= num_bots < 15:
             max_dist = BLOCKING_RADIUS_EXPERT
+        elif num_bots >= 15:
+            max_dist = BLOCKING_RADIUS_HUGE_TEAM
         else:
             max_dist = BLOCKING_RADIUS_LARGE_TEAM
         other: set[tuple[int, int]] = set()
