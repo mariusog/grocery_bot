@@ -83,7 +83,10 @@ class TestSmallTeamClears:
 
 
 class TestMediumTeamFullOnly:
+    """Medium teams (4-7 bots) require full inventory to clear."""
+
     def test_partial_skips(self):
+        """5-bot team should NOT clear at 2 items (needs full=3)."""
         bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]}
                 ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)]
         p = _planner(bots, [{"id": "i0", "type": "cheese", "position": [4, 2]}], [_order(["cheese"])])

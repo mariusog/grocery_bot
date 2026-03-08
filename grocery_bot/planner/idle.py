@@ -287,14 +287,13 @@ class IdleMixin:
                 best = npos
 
         if best:
-            # When already at an idle spot, bias toward staying still:
-            # only move if improvement is significant (>= 0.5 threshold).
-            # This reduces oscillation from marginal score differences
-            # when the bot is already well-positioned.
-            # However, if the bot is stale (same position for IDLE_STALE_ROUNDS),
-            # always move to prevent long-term corridor blocking.
+            # Bias toward staying still when improvement is marginal.
+            # For large teams, apply at ALL positions (not just idle spots)
+            # because proximity penalties shift every round as other bots move,
+            # causing persistent oscillation from near-tied scores.
+            should_bias = at_idle_spot or is_large_team
             if (
-                at_idle_spot
+                should_bias
                 and not is_stale
                 and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD
             ):
