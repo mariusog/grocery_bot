@@ -236,7 +236,7 @@ class StepsMixin:
         if self._is_at_any_dropoff(ctx.pos):
             return False
         max_na_del = (
-            max(MAX_NONACTIVE_DELIVERERS, num_bots // 5)
+            max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
             if num_bots >= PREDICTION_TEAM_MIN
             else MAX_NONACTIVE_DELIVERERS
         )
@@ -281,7 +281,7 @@ class StepsMixin:
         if self._is_at_any_dropoff(ctx.pos):
             return False
         max_na_del = (
-            max(MAX_NONACTIVE_DELIVERERS, num_bots // 5)
+            max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
             if num_bots >= PREDICTION_TEAM_MIN
             else MAX_NONACTIVE_DELIVERERS
         )

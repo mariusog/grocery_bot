@@ -98,6 +98,31 @@ class TestMediumTeamFullOnly:
         assert p._step_clear_nonactive_inventory(ctx) is True
 
 
+class TestNonactiveDeliveryThrottle:
+    """Verify enough bots can clear non-active inventory simultaneously."""
+
+    def test_10bot_allows_multiple_clearers(self):
+        """With 10 bots, at least 3 bots should be allowed to clear simultaneously."""
+        bots_list = [
+            {"id": 0, "position": [2, 4], "inventory": ["bread", "butter", "eggs"]},
+            {"id": 1, "position": [3, 4], "inventory": ["milk", "flour", "sugar"]},
+            {"id": 2, "position": [4, 4], "inventory": ["jam", "rice", "pasta"]},
+            {"id": 3, "position": [5, 4], "inventory": ["tea", "honey", "salt"]},
+        ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(4, 10)]
+        p = _planner(
+            bots_list,
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])],
+            width=18,
+        )
+        cleared = 0
+        for bid in [0, 1, 2, 3]:
+            ctx = p._build_bot_context(p.bots_by_id[bid])
+            if p._step_clear_nonactive_inventory(ctx):
+                cleared += 1
+        assert cleared >= 3, f"Only {cleared} bots cleared; expected >= 3"
+
+
 class TestGuards:
     def test_skips_when_has_active(self):
         bots = [
