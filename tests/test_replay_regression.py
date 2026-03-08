@@ -122,7 +122,7 @@ MAX_INV_FULL_WAITS = {
     1: 10,     # Easy:      current ~0
     3: 40,     # Medium:    current ~8
     5: 120,    # Hard:      current ~80
-    10: 350,   # Expert:    current ~258
+    10: 400,   # Expert:    current ~357
     20: 600,   # Nightmare: current ~200
 }
 
