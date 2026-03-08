@@ -46,7 +46,7 @@ def run_game(difficulty, seed, diagnose=False):
 
     sim = GameSimulator(seed=seed, **cfg)
     t0 = time.perf_counter()
-    result = sim.run(profile=True, diagnose=diagnose)
+    result = sim.run(profile=True, diagnose=diagnose, log=diagnose)
     wall = time.perf_counter() - t0
 
     result["difficulty"] = difficulty

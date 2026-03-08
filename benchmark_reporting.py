@@ -34,6 +34,12 @@ def print_summary_table(all_results):
         )
 
 
+def _safe_avg_diag(diag_results: list, key: str, default: float = 0.0) -> float:
+    """Average a diagnostics key, returning default if key is missing."""
+    vals = [r["diagnostics"][key] for r in diag_results if key in r["diagnostics"]]
+    return statistics.mean(vals) if vals else default
+
+
 def print_diagnostics_table(all_results):
     """Print a diagnostic summary table showing action breakdown and efficiency metrics."""
     print("\n" + "=" * 90)
@@ -45,9 +51,9 @@ def print_diagnostics_table(all_results):
         f"\n{'Diff':<8} {'Bots':>4} {'Score':>5} "
         f"{'Moves':>6} {'Waits':>6} {'Picks':>5} {'Deliv':>5} "
         f"{'Waste%':>6} {'InvFW':>5} {'Rds/Ord':>7} {'P/D':>5} "
-        f"{'Idle%':>5} {'Stuck%':>6}"
+        f"{'Idle%':>5} {'Stuck%':>6} {'AvDel':>5} {'Blk%':>5}"
     )
-    print("-" * 90)
+    print("-" * 100)
 
     for diff in ["Easy", "Medium", "Hard", "Expert", "Nightmare"]:
         if diff not in all_results:
@@ -76,46 +82,85 @@ def print_diagnostics_table(all_results):
         total_br = avg_diag("total_bot_rounds")
         idle_pct = avg_diag("idle_rounds") / total_br * 100 if total_br > 0 else 0
         stuck_pct = avg_diag("stuck_rounds") / total_br * 100 if total_br > 0 else 0
+        avg_del = _safe_avg_diag(diag_results, "avg_delivery_size")
+        blk_pct = _safe_avg_diag(diag_results, "blocked_move_pct")
 
         print(
             f"{diff:<8} {num_bots:>4} {avg_score:>5.0f} "
             f"{moves:>6.0f} {waits:>6.0f} {pickups:>5.0f} {delivers:>5.0f} "
             f"{waste_pct:>5.1f}% {inv_full:>5.0f} {rds_per_order:>7.1f} {pd_ratio:>5.2f} "
-            f"{idle_pct:>4.1f}% {stuck_pct:>5.1f}%"
+            f"{idle_pct:>4.1f}% {stuck_pct:>5.1f}% {avg_del:>5.2f} {blk_pct:>4.1f}%"
         )
 
-    # Per-bot idle breakdown for multi-bot difficulties
-    print("\n--- Per-Bot Idle Rounds (avg across seeds) ---")
+    # Per-bot action breakdown for multi-bot difficulties
+    _print_per_bot_actions(all_results)
+
+    # Order completion timeline
+    _print_order_timeline(all_results)
+
+    print()
+    # Legend
+    print("Legend: Waste%=non-active pickups, InvFW=inventory-full waits,")
+    print("        Rds/Ord=avg rounds per order, P/D=pickup-to-delivery ratio,")
+    print("        AvDel=avg items per delivery, Blk%=blocked moves")
+    print("=" * 100)
+
+
+def _print_per_bot_actions(all_results: dict) -> None:
+    """Print per-bot action breakdown for multi-bot difficulties."""
+    print("\n--- Per-Bot Actions (avg across seeds) ---")
     for diff in ["Medium", "Hard", "Expert"]:
         if diff not in all_results:
             continue
-        diag_results = [r for r in all_results[diff] if "diagnostics" in r]
+        diag_results = [
+            r for r in all_results[diff]
+            if "diagnostics" in r and "per_bot_actions" in r["diagnostics"]
+        ]
         if not diag_results:
             continue
 
         num_bots = diag_results[0]["num_bots"]
         total_rounds = statistics.mean([r["rounds_used"] for r in diag_results])
+        print(f"  {diff} ({num_bots} bots, {total_rounds:.0f} rounds):")
+        print(f"    {'Bot':>5} {'Moves':>6} {'Picks':>5} {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}")
+        for bid in range(num_bots):
+            bkey = str(bid) if str(bid) in diag_results[0]["diagnostics"]["per_bot_actions"] else bid
+            vals = [r["diagnostics"]["per_bot_actions"].get(bkey, {}) for r in diag_results]
+            moves = statistics.mean([v.get("moves", 0) for v in vals])
+            picks = statistics.mean([v.get("pickups", 0) for v in vals])
+            deliv = statistics.mean([v.get("delivers", 0) for v in vals])
+            idle = statistics.mean([v.get("idle", 0) for v in vals])
+            stuck = statistics.mean([v.get("stuck", 0) for v in vals])
+            util = (moves + picks + deliv) / max(1, total_rounds) * 100
+            print(f"    B{bid:<4} {moves:>6.0f} {picks:>5.0f} {deliv:>5.0f} {idle:>5.0f} {stuck:>5.0f} {util:>4.0f}%")
 
-        # Aggregate per-bot idle across seeds
-        bot_idles = {}
-        for r in diag_results:
-            for bid_str, idle in r["diagnostics"]["per_bot_idle"].items():
-                bid = int(bid_str) if isinstance(bid_str, str) else bid_str
-                bot_idles.setdefault(bid, []).append(idle)
 
-        bot_avgs = {bid: statistics.mean(vals) for bid, vals in bot_idles.items()}
-        parts = []
-        for bid in sorted(bot_avgs):
-            idle_avg = bot_avgs[bid]
-            pct = idle_avg / total_rounds * 100 if total_rounds > 0 else 0
-            parts.append(f"B{bid}:{pct:.0f}%")
-        print(f"  {diff:<8} {' '.join(parts)}")
+def _print_order_timeline(all_results: dict) -> None:
+    """Print order completion timeline summary."""
+    print("\n--- Order Completion Timeline (avg across seeds) ---")
+    for diff in ["Easy", "Medium", "Hard", "Expert"]:
+        if diff not in all_results:
+            continue
+        diag_results = [
+            r for r in all_results[diff]
+            if "diagnostics" in r and "order_completion_rounds" in r["diagnostics"]
+        ]
+        if not diag_results:
+            continue
 
-    print()
-    # Legend
-    print("Legend: Waste%=non-active pickups, InvFW=inventory-full waits,")
-    print("        Rds/Ord=avg rounds per order, P/D=pickup-to-delivery ratio")
-    print("=" * 90)
+        all_timelines = [r["diagnostics"]["order_completion_rounds"] for r in diag_results]
+        max_orders = max(len(t) for t in all_timelines) if all_timelines else 0
+        if max_orders == 0:
+            continue
+
+        avg_rounds = []
+        for i in range(min(max_orders, 10)):
+            vals = [t[i] for t in all_timelines if i < len(t)]
+            avg_rounds.append(statistics.mean(vals) if vals else 0)
+
+        timeline = " -> ".join(f"O{i + 1}@R{r:.0f}" for i, r in enumerate(avg_rounds))
+        suffix = f" ... ({max_orders} total)" if max_orders > 10 else ""
+        print(f"  {diff:<8} {timeline}{suffix}")
 
 
 def generate_markdown_report(all_results):
@@ -175,39 +220,24 @@ def generate_replay_markdown_report(results):
     lines = [
         "# Replay Benchmark Results\n",
         "Generated by `benchmark.py` from recorded maps in `maps/`.\n",
-        "Recorded order prefixes are padded with deterministic synthetic tail orders.\n",
         "## Summary\n",
-        "| Map | Bots | Grid | Score | Recorded | Total | Done | Items | Wall Time |",
-        "|-----|------|------|-------|----------|-------|------|-------|-----------|",
+        "| Map | Bots | Grid | Score | Recorded | Total | Done | Items | Wall |",
+        "|-----|------|------|-------|----------|-------|------|-------|------|",
     ]
-
-    total_score = 0
-    total_orders = 0
-    total_items = 0
-    wall_times: list[float] = []
-
-    for result in results:
-        total_score += result["score"]
-        total_orders += result["orders_completed"]
-        total_items += result["items_delivered"]
-        wall_times.append(result["wall_time_s"])
+    for r in results:
         lines.append(
-            f"| {result['map_file']} | {result['num_bots']} | {result['grid_size']} "
-            f"| {result['score']} | {result['recorded_orders']} "
-            f"| {result['total_orders']} | {result['orders_completed']} "
-            f"| {result['items_delivered']} | {result['wall_time_s']:.3f}s |"
+            f"| {r['map_file']} | {r['num_bots']} | {r['grid_size']} "
+            f"| {r['score']} | {r['recorded_orders']} | {r['total_orders']} "
+            f"| {r['orders_completed']} | {r['items_delivered']} | {r['wall_time_s']:.3f}s |"
         )
-
     if results:
-        lines.extend([
-            "",
-            f"**Total score:** {total_score}",
-            f"**Total orders:** {total_orders}",
-            f"**Total items:** {total_items}",
-            f"**Average wall time:** {statistics.mean(wall_times):.3f}s",
-            "",
-        ])
-
+        scores = [r["score"] for r in results]
+        items = sum(r["items_delivered"] for r in results)
+        walls = [r["wall_time_s"] for r in results]
+        lines.append(
+            f"\n**Total: {sum(scores)}** | Orders: {sum(r['orders_completed'] for r in results)}"
+            f" | Items: {items} | Avg wall: {statistics.mean(walls):.3f}s\n"
+        )
     return "\n".join(lines)
 
 
@@ -219,7 +249,7 @@ def run_replay_game(map_path, diagnose=False, pad_orders=True):
     bot.reset_state()
     sim = ReplaySimulator(map_path, pad_orders=pad_orders)
     t0 = time.perf_counter()
-    result = sim.run(profile=True, diagnose=diagnose)
+    result = sim.run(profile=True, diagnose=diagnose, log=diagnose)
     wall = time.perf_counter() - t0
 
     result["map_file"] = os.path.basename(map_path)
