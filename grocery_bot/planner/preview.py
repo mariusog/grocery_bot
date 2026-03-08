@@ -43,8 +43,8 @@ class PreviewMixin:
 
         # Pass 2: walk to distant preview items
         if not is_preview_bot:
-            if len(self.bots) < MEDIUM_TEAM_MIN and self.active_on_shelves > 0:
-                # Small teams: don't divert from active work
+            if len(self.bots) <= MEDIUM_TEAM_MIN and self.active_on_shelves > 0:
+                # Small/medium teams (≤5): don't divert from active work
                 return False
             if len(self.bots) >= PREDICTION_TEAM_MIN:
                 max_walkers = max(2, len(self.bots) - self.active_on_shelves - 2)
