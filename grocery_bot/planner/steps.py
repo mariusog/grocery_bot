@@ -222,7 +222,11 @@ class StepsMixin:
             return False
         num_bots = len(self.bots)
         if num_bots >= PREDICTION_TEAM_MIN:
-            min_inv = 1
+            has_assignment = (
+                ctx.bid in self.bot_assignments
+                and bool(self.bot_assignments[ctx.bid])
+            )
+            min_inv = 1 if has_assignment else 2
         elif num_bots <= SMALL_TEAM_MAX:
             min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY
         else:

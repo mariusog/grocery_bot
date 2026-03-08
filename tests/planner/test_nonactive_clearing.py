@@ -42,13 +42,23 @@ class TestLargeTeamClearsWhenFull:
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_clear_nonactive_inventory(ctx) is True
 
-    def test_10bot_partial_clears(self):
-        """Large teams (8+) clear even partial non-active inventory (min_inv=1)."""
+    def test_10bot_unassigned_clears_when_2_items(self):
+        """Large teams: unassigned bots clear when 2+ non-active items (min_inv=2)."""
         bots = [{"id": 0, "position": [2, 4], "inventory": ["bread", "butter"]}
                 ] + [{"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)]
         p = _planner(bots, [{"id": "i0", "type": "cheese", "position": [4, 2]}], [_order(["cheese"])], width=14)
         ctx = p._build_bot_context(p.bots_by_id[0])
+        # Bot 0 has no assignment, min_inv=2; 2 items >= 2 → clear
         assert p._step_clear_nonactive_inventory(ctx) is True
+
+    def test_10bot_unassigned_keeps_1_speculative(self):
+        """Large teams: unassigned bots keep 1 speculative item."""
+        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread"]}
+                ] + [{"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)]
+        p = _planner(bots, [{"id": "i0", "type": "cheese", "position": [4, 2]}], [_order(["cheese"])], width=14)
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        # Bot 0 has no assignment, min_inv=2; 1 item < 2 → keep
+        assert p._step_clear_nonactive_inventory(ctx) is False
 
 
 class TestSmallTeamClears:

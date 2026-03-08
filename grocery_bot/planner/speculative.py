@@ -10,7 +10,7 @@ from typing import Any, Optional
 from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     MAX_INVENTORY,
-    PREDICTION_TEAM_MIN,
+    MEDIUM_TEAM_MIN,
     SPEC_MAX_TEAM_COPIES,
 )
 
@@ -20,7 +20,7 @@ class SpeculativeMixin:
 
     def _step_speculative_pickup(self, ctx) -> bool:
         """Speculatively pick up items when idle (large teams)."""
-        if len(self.bots) < PREDICTION_TEAM_MIN:
+        if len(self.bots) < MEDIUM_TEAM_MIN:
             return False
         if ctx.has_active or len(ctx.inv) >= MAX_INVENTORY:
             return False
