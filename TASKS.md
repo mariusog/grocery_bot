@@ -4,7 +4,7 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-08, replay benchmark total=1589)
+## Current Performance (2026-03-08, replay benchmark total=1603)
 
 **Replay benchmark** (`python benchmark.py --quick`):
 
@@ -18,15 +18,15 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | 22x14_5bot (Mar 8) | 5 | 22x14 | 140 |
 | 28x18_10bot (Mar 7) | 10 | 28x18 | 94 |
 | 28x18_10bot (Mar 8) | 10 | 28x18 | 98 |
-| 30x18_20bot (Mar 7) | 20 | 30x18 | 284 |
-| 30x18_20bot (Mar 8) | 20 | 30x18 | 318 |
-| **Total** | | | **1589** |
+| 30x18_20bot (Mar 7) | 20 | 30x18 | 285 |
+| 30x18_20bot (Mar 8) | 20 | 30x18 | 331 |
+| **Total** | | | **1603** |
 
 **Live high scores** (ainm.no): Easy:133, Medium:145, Hard:138, Expert:95, Nightmare:320, Total:831
 
 **Bitflip #1 scores**: Easy:132, Medium:214, Hard:252, Expert:303, Nightmare:1026, Total:1927
 
-**Replay benchmark progression**: 1378 → 1503 (speculative) → 1521 (5-bot threshold) → 1538 (clearing fix) → 1562 (throttle fix) → 1589 (preview-targeted speculation)
+**Replay benchmark progression**: 1378 → 1503 (speculative) → 1521 (5-bot threshold) → 1538 (clearing fix) → 1562 (throttle fix) → 1589 (preview-targeted speculation) → 1603 (spawn fan-out)
 
 ### Expert (10-bot) Diagnostics (after latest changes)
 
@@ -42,7 +42,7 @@ Note: Mar 8 map has banana deficit (5 on map, 9 needed in orders) — limits max
 2. **Oscillation extremely high** — 605-632 on Expert maps. `_step_break_oscillation` catches A-B-A but doesn't prevent the root cause: idle positioning score ties causing bouncing.
 3. **~77% pickup waste on Expert** — speculative pickup fills inventories with wrong items. Need smarter speculative item selection (e.g., items matching recent order patterns).
 4. **Assignment system doesn't scale** — On Nightmare (20 bots), many bots never pick up items. See T34, T49.
-5. **Spawn gridlock** — All bots spawn at single cell. See T49.
+5. **Spawn gridlock is reduced but not solved** — T49 improved Nightmare opening throughput, but 20-bot maps still leave high-id bots underutilized later. See T34.
 6. ~~**`_precompute_dropoff_zones` never called**~~ — Fixed: `drop_off` now passed to `init_static`. See T52.
 7. ~~**Speculative pickup missing**~~ — Fixed: idle bots now pick up items speculatively. See T53.
 8. ~~**Non-active clearing throttle too low**~~ — Fixed: `num_bots//5` → `num_bots//3`. See T51.
@@ -306,17 +306,10 @@ Note: Mar 8 map has banana deficit (5 on map, 9 needed in orders) — limits max
 
 ### T49: Spawn Dispersal for Large Teams (20+ bots)
 - **Agent**: strategy-agent
-- **Status**: open
+- **Status**: done
 - **Priority**: 1
-- **Metric**: Nightmare wastes ~75 rounds dispersing 20 bots from a single spawn cell (28,16). Only 1-2 bots can move per round due to collision. By round 50, score is still 3.
-- **Files**: `grocery_bot/planner/movement.py`, `grocery_bot/planner/idle.py`
-- **Root cause**: All bots spawn stacked at the same cell. The planner doesn't have special spawn-phase logic — bots compete for the same movement directions, most wait. First order completion (O1) doesn't happen until R63.
-- **How to fix**:
-  1. **Directional fan-out from spawn**: On round 0-5, assign each bot a unique dispersal direction based on `bot_id % 4` (up/down/left/right). Stagger movement so bot 0 moves first, bot 1 waits 1 round, etc.
-  2. **Pre-assign initial targets**: Instead of all bots computing the same closest item, use the Hungarian assignment immediately at round 0 to spread bots across different items/regions.
-  3. **Spawn corridor clearing**: Bots without assignments should move to pre-computed corridor positions away from spawn, clearing the way for assigned bots.
-- **Risk**: Low — only affects first ~20 rounds. No regression on small teams (1-5 bots disperse in 1-2 rounds).
-- **Expected gain**: +10-20 Nightmare (reclaiming 50+ wasted rounds).
+- **Result**: Added `SpawnMixin` to reserve opening spawn exits for productive 20-bot waiters only. The step infers the stacked spawn cell, holds preview/idle bots at spawn while assigned/active waiters remain queued, and uses a deterministic fan-out (`low bid -> up`, `high bid -> left`) so the opening shelves are not pre-claimed by bots that cannot leave yet. Replay benchmark improved from `1589 -> 1603` (+14): Mar 7 Nightmare `284 -> 285`, Mar 8 Nightmare `318 -> 331`.
+- **Files**: `grocery_bot/planner/spawn.py` (NEW), `grocery_bot/planner/round_planner.py`, `grocery_bot/game_state/state.py`, `grocery_bot/constants.py`, `tests/integration/test_spawn_dispersal_priority.py` (NEW)
 
 ### T50: Fix Oscillation in Idle Positioning
 - **Agent**: strategy-agent → lead-agent (re-merged)
