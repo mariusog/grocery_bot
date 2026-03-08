@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260308_092837",
+  "recorded_at": "20260308_101056",
   "source": "live",
   "grid": {
     "width": 30,
@@ -715,6 +715,20 @@
   "drop_off": [
     1,
     16
+  ],
+  "drop_off_zones": [
+    [
+      1,
+      16
+    ],
+    [
+      15,
+      16
+    ],
+    [
+      27,
+      16
+    ]
   ],
   "spawn": [
     28,
@@ -1942,6 +1956,27 @@
         "rice",
         "eggs",
         "yogurt"
+      ]
+    },
+    {
+      "id": "order_14",
+      "items_required": [
+        "cheese",
+        "bread",
+        "bananas",
+        "sugar",
+        "peppers"
+      ]
+    },
+    {
+      "id": "order_15",
+      "items_required": [
+        "bread",
+        "oats",
+        "eggs",
+        "lettuce",
+        "bananas",
+        "onions"
       ]
     },
     {
