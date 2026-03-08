@@ -86,7 +86,11 @@ class RoundPlanner(
         self._expire_blacklists()
 
         if self.gs.blocked_static is None:
-            self.gs.init_static({"grid": self._state_grid(), "items": self.items})
+            self.gs.init_static({
+                "grid": self._state_grid(),
+                "items": self.items,
+                "drop_off": list(self.drop_off),
+            })
 
         self.active: Optional[dict[str, Any]] = next(
             (o for o in self.orders
