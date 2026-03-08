@@ -23,6 +23,14 @@ def _matching_preset(recorded):
     return None
 
 
+def _default_total_orders(recorded):
+    """Infer the live total-order count when older recordings omitted it."""
+    preset = _matching_preset(recorded)
+    if preset is not None and preset.get("max_rounds", 0) >= 500:
+        return 100
+    return DEFAULT_REPLAY_TOTAL_ORDERS
+
+
 def _infer_items_per_order(recorded):
     """Infer the synthetic padding order size range for a recorded map."""
     preset = _matching_preset(recorded)
@@ -110,7 +118,7 @@ class ReplaySimulator(GameSimulator):
         self.recorded_order_count = len(self.orders)
         requested_total = recorded.get("total_orders", total_orders)
         if requested_total is None:
-            requested_total = DEFAULT_REPLAY_TOTAL_ORDERS
+            requested_total = _default_total_orders(recorded)
         self.total_orders = max(self.recorded_order_count, requested_total)
         self.synthetic_order_count = 0
 

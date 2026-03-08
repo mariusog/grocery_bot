@@ -73,3 +73,37 @@ def test_run_replay_game_reports_recorded_and_padded_order_counts(tmp_path):
     assert result["recorded_orders"] == 2
     assert result["synthetic_orders"] == 3
     assert result["total_orders"] == 5
+
+
+def test_replay_simulator_uses_nightmare_default_total_when_missing(tmp_path):
+    map_path = tmp_path / "2026-03-07_30x18_20bot.json"
+    recorded = {
+        "version": 1,
+        "recorded_at": "2026-03-07T00:00:00Z",
+        "source": "live",
+        "grid": {
+            "width": 30,
+            "height": 18,
+            "walls": [],
+        },
+        "drop_off": [1, 16],
+        "spawn": [28, 16],
+        "num_bots": 20,
+        "max_rounds": 500,
+        "items": [
+            {"id": "item_0", "type": "milk", "position": [3, 2]},
+            {"id": "item_1", "type": "bread", "position": [5, 2]},
+            {"id": "item_2", "type": "cheese", "position": [7, 2]},
+            {"id": "item_3", "type": "yogurt", "position": [9, 2]},
+        ],
+        "orders": [
+            {"id": "order_0", "items_required": ["milk", "bread", "cheese"]},
+        ],
+    }
+    map_path.write_text(json.dumps(recorded))
+
+    sim = ReplaySimulator(str(map_path))
+
+    assert sim.recorded_order_count == 1
+    assert sim.total_orders == 100
+    assert sim.synthetic_order_count == 99
