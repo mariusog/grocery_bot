@@ -55,6 +55,8 @@ IDLE_BOT_PROXIMITY_FACTOR = 2  # weight: (radius+1 - dist) * factor
 IDLE_TARGET_DISTANCE_WEIGHT = 0.5  # reward proximity to target position
 IDLE_STAY_IMPROVEMENT_THRESHOLD = 0.5  # only move from idle spot if improvement >= this
 IDLE_CORRIDOR_PENALTY = 4  # penalty for idle bots sitting in main corridor rows (large teams)
+IDLE_PREVIEW_STAGE_WEIGHT_5BOT = 0.5  # dropoff bias for 5-bot preview carriers
+IDLE_PREVIEW_STAGE_WEIGHT_10BOT = 0.4  # dropoff bias for 10-bot preview carriers
 
 # ---------------------------------------------------------------------------
 # Zone-based assignment penalties

@@ -132,6 +132,109 @@ class TestTryIdlePositioning:
         # With 8 bots, idle spots should be used for positioning
         assert len(planner.gs.idle_spots) > 0
 
+    def test_preview_stage_target_biases_5bot_carrier_toward_dropoff(self):
+        """Hard-map preview carriers should stage closer to dropoff."""
+        bots = [{"id": 0, "position": [18, 7], "inventory": ["bread"]}]
+        bots += [{"id": i, "position": [20, 7], "inventory": []} for i in range(1, 5)]
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [4, 6]},
+                {"id": "i2", "type": "bread", "position": [16, 2]},
+                {"id": "i3", "type": "butter", "position": [16, 6]},
+            ],
+            orders=[
+                _active_order(["cheese"]),
+                {
+                    "id": "preview_1",
+                    "items_required": ["bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 12],
+            width=22,
+            height=14,
+        )
+        blocked = planner._build_blocked(0)
+        target = planner._get_preview_stage_target(0, (18, 7), blocked)
+        assert target in planner.gs.idle_spots
+        assert planner.gs.dist_static(target, planner.drop_off) < planner.gs.dist_static(
+            (18, 7), planner.drop_off
+        )
+
+    def test_preview_stage_target_biases_10bot_carrier_toward_dropoff(self):
+        """Expert-map preview carriers should stage closer to dropoff."""
+        bots = [{"id": 0, "position": [24, 9], "inventory": ["bread"]}]
+        bots += [{"id": i, "position": [26, 9], "inventory": []} for i in range(1, 10)]
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [4, 6]},
+                {"id": "i2", "type": "bread", "position": [20, 2]},
+                {"id": "i3", "type": "butter", "position": [20, 6]},
+            ],
+            orders=[
+                _active_order(["cheese"]),
+                {
+                    "id": "preview_1",
+                    "items_required": ["bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 16],
+            width=28,
+            height=18,
+        )
+        blocked = planner._build_blocked(0)
+        target = planner._get_preview_stage_target(0, (24, 9), blocked)
+        assert target in planner.gs.idle_spots
+        assert planner.gs.dist_static(target, planner.drop_off) < planner.gs.dist_static(
+            (24, 9), planner.drop_off
+        )
+
+    def test_preview_carrier_moves_toward_stage_target(self):
+        """Preview-only carriers should head toward the selected stage target."""
+        bots = [{"id": 0, "position": [24, 9], "inventory": ["bread"]}]
+        bots += [{"id": i, "position": [26, 9], "inventory": []} for i in range(1, 10)]
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [4, 6]},
+                {"id": "i2", "type": "bread", "position": [20, 2]},
+                {"id": "i3", "type": "butter", "position": [20, 6]},
+            ],
+            orders=[
+                _active_order(["cheese"]),
+                {
+                    "id": "preview_1",
+                    "items_required": ["bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+            drop_off=[1, 16],
+            width=28,
+            height=18,
+        )
+        planner.actions = []
+        blocked = planner._build_blocked(0)
+        target = planner._get_preview_stage_target(0, (24, 9), blocked)
+        result = planner._try_idle_positioning(0, 24, 9, (24, 9), blocked)
+        assert result is True
+        assert target is not None
+        next_pos = planner.predicted[0]
+        assert planner.gs.dist_static(next_pos, target) < planner.gs.dist_static(
+            (24, 9), target
+        )
+
 
 class TestTryClearDropoffEdgeCases:
     def test_at_dropoff_moves_away(self):

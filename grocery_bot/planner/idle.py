@@ -11,6 +11,8 @@ from grocery_bot.constants import (
     IDLE_CORRIDOR_PENALTY,
     IDLE_DROPOFF_PENALTY_FACTOR,
     IDLE_DROPOFF_PENALTY_RADIUS,
+    IDLE_PREVIEW_STAGE_WEIGHT_10BOT,
+    IDLE_PREVIEW_STAGE_WEIGHT_5BOT,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
     IDLE_TARGET_DISTANCE_WEIGHT,
     PREDICTION_TEAM_MIN,
@@ -20,6 +22,57 @@ from grocery_bot.constants import (
 
 class IdleMixin:
     """Mixin providing idle bot positioning and dropoff area clearing."""
+
+    def _preview_stage_weight(self, bid: int) -> Optional[float]:
+        """Return the dropoff-bias weight for preview-only staging, if any."""
+        if not self.preview or self.bot_has_active.get(bid, False):
+            return None
+
+        inv = self.bots_by_id[bid]["inventory"]
+        if not inv:
+            return None
+
+        team_size = len(self.bots)
+        if team_size == 5:
+            return IDLE_PREVIEW_STAGE_WEIGHT_5BOT
+        if team_size == 10:
+            return IDLE_PREVIEW_STAGE_WEIGHT_10BOT
+        return None
+
+    def _get_preview_stage_target(
+        self,
+        bid: int,
+        pos: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> Optional[tuple[int, int]]:
+        """Pick a dropoff-biased idle spot for bots carrying preview-only items."""
+        weight = self._preview_stage_weight(bid)
+        if weight is None:
+            return None
+
+        idle_spots = getattr(self.gs, "idle_spots", None)
+        if not idle_spots:
+            return None
+
+        occupied: set[tuple[int, int]] = {
+            self.predicted.get(b["id"], tuple(b["position"]))
+            for b in self.bots
+            if b["id"] != bid
+        }
+
+        best_target: Optional[tuple[int, int]] = None
+        best_score = float("inf")
+        for cell in idle_spots:
+            if cell in blocked or cell in occupied:
+                continue
+            d_from_bot = self.gs.dist_static(pos, cell)
+            if d_from_bot == float("inf"):
+                continue
+            score = d_from_bot + weight * self.gs.dist_static(cell, self.drop_off)
+            if score < best_score:
+                best_score = score
+                best_target = cell
+        return best_target
 
     def _try_clear_dropoff(
         self,
@@ -85,6 +138,10 @@ class IdleMixin:
         """
         if len(self.bots) <= 1:
             return False
+
+        preview_stage_target = self._get_preview_stage_target(bid, pos, blocked)
+        if preview_stage_target and preview_stage_target != pos:
+            return self._emit_move(bid, bx, by, pos, preview_stage_target, blocked)
 
         # For large teams (8+), use predicted positions for active bots
         # (assigned or delivering) to better anticipate where they'll be.
