@@ -408,11 +408,7 @@ class RoundPlanner(
         return pos in self.drop_off_zones
 
     def _spare_slots(self, inv: list[str], bid: int = -1) -> int:
-        if (
-            bid >= 0
-            and len(self.bots) >= PREDICTION_TEAM_MIN
-            and hasattr(self, 'bot_assignments')
-        ):
+        if bid >= 0 and len(self.bots) >= 2 and hasattr(self, 'bot_assignments'):
             my_assigned = len(self.bot_assignments.get(bid, []))
             reserve = min(self.active_on_shelves, my_assigned)
         else:
