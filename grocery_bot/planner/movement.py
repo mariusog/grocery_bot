@@ -10,9 +10,11 @@ from grocery_bot.pathfinding import (
     _predict_pos,
 )
 from grocery_bot.constants import (
+    BLOCKING_RADIUS_EXPERT,
     BLOCKING_RADIUS_LARGE_TEAM,
     DROPOFF_CLEAR_RADIUS,
     MEDIUM_TEAM_MIN,
+    PREDICTION_TEAM_MIN,
 )
 
 
@@ -400,11 +402,13 @@ class MovementMixin:
     def _build_blocked(self, bid: int) -> set[tuple[int, int]]:
         """Build blocked set for a specific bot (static + nearby other bots)."""
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
-        max_dist: float = (
-            BLOCKING_RADIUS_LARGE_TEAM
-            if len(self.bots) >= MEDIUM_TEAM_MIN
-            else float("inf")
-        )
+        num_bots = len(self.bots)
+        if num_bots < MEDIUM_TEAM_MIN:
+            max_dist: float = float("inf")
+        elif PREDICTION_TEAM_MIN <= num_bots < 15:
+            max_dist = BLOCKING_RADIUS_EXPERT
+        else:
+            max_dist = BLOCKING_RADIUS_LARGE_TEAM
         other: set[tuple[int, int]] = set()
         for b in self.bots:
             if b["id"] == bid:

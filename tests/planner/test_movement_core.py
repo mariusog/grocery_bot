@@ -128,7 +128,7 @@ class TestBuildBlocked:
             assert pred_0 not in blocked
 
     def test_large_team_blocking_radius(self):
-        """With 5+ bots, blocking radius is limited to Manhattan dist 6."""
+        """With 5+ bots, blocking radius is limited to Manhattan dist 4."""
         bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(5)]
         planner = make_planner(
             bots=bots,
@@ -136,10 +136,9 @@ class TestBuildBlocked:
             orders=[_active_order(["cheese"])],
         )
         blocked = planner._build_blocked(0)
-        # Bot 4 is at (5, 3), distance from bot 0 at (1,3) is 4 <= 6
-        # So it should be included
-        pred_4 = planner.predicted.get(4, (5, 3))
-        assert pred_4 in blocked
+        # Bot 1 at (2,3) is distance 1 from bot 0 at (1,3) — within radius 4
+        pred_1 = planner.predicted.get(1, (2, 3))
+        assert pred_1 in blocked
 
 
 class TestFindYieldAlternative:
