@@ -2,7 +2,13 @@
 
 from typing import Any, Optional
 
-from grocery_bot.constants import MAX_INVENTORY, MEDIUM_TEAM_MIN, ZONE_CROSS_PENALTY
+from grocery_bot.constants import (
+    ASSIGNMENT_DROPOFF_WEIGHT,
+    MAX_INVENTORY,
+    MEDIUM_TEAM_MIN,
+    SMALL_TEAM_MAX,
+    ZONE_CROSS_PENALTY,
+)
 
 
 class AssignmentMixin:
@@ -122,13 +128,19 @@ class AssignmentMixin:
             )
         zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
 
+        drop_off = (
+            self._nearest_dropoff(assignable[0][1])
+            if len(self.bots) > SMALL_TEAM_MAX
+            else None
+        )
         max_slots = max(s for _, _, s in assignable)
         if max_slots == 1 or len(assignable) >= len(candidates):
             self.bot_assignments = self.gs.assign_items_to_bots(
-                assignable, candidates, zone_width=zone_width
+                assignable, candidates, zone_width=zone_width,
+                drop_off=drop_off,
             )
         else:
-            self._greedy_assign(assignable, candidates, zone_width)
+            self._greedy_assign(assignable, candidates, zone_width, drop_off)
         taken_items: set[str] = {
             it["id"] for items in self.bot_assignments.values() for it in items
         }
@@ -140,6 +152,7 @@ class AssignmentMixin:
         assignable: list[tuple[int, tuple[int, int], int]],
         candidates: list[dict[str, Any]],
         zone_width: Optional[float],
+        drop_off: Optional[tuple[int, int]] = None,
     ) -> None:
         """Greedy distance-sorted assignment supporting multi-slot bots."""
         n_bots = len(assignable)
@@ -149,6 +162,10 @@ class AssignmentMixin:
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
             for ii, it in enumerate(candidates):
                 _, d = self.gs.find_best_item_target(bot_pos, it)
+                if drop_off is not None:
+                    ix, iy = it["position"]
+                    dx, dy = drop_off
+                    d += (abs(ix - dx) + abs(iy - dy)) * ASSIGNMENT_DROPOFF_WEIGHT
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY

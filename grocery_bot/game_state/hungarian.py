@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from grocery_bot.constants import (
+    ASSIGNMENT_DROPOFF_WEIGHT,
     HUNGARIAN_MAX_PAIRS,
     LAST_ITEM_BOOST_THRESHOLD,
     LAST_ITEM_COST_MULTIPLIER,
@@ -18,6 +19,7 @@ class AssignmentMixin:
         assignable_bots: list[tuple[int, tuple[int, int], int]],
         candidate_items: list[dict[str, Any]],
         zone_width: Optional[float] = None,
+        drop_off: Optional[tuple[int, int]] = None,
     ) -> dict[int, list[dict[str, Any]]]:
         """Assign items to bots optimally using Hungarian algorithm."""
         if not assignable_bots or not candidate_items:
@@ -36,6 +38,10 @@ class AssignmentMixin:
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
             for ii, it in enumerate(candidate_items):
                 _, d = self.find_best_item_target(bot_pos, it)
+                if drop_off is not None:
+                    ix, iy = it["position"]
+                    dx, dy = drop_off
+                    d += (abs(ix - dx) + abs(iy - dy)) * ASSIGNMENT_DROPOFF_WEIGHT
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
