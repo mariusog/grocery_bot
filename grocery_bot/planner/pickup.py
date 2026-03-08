@@ -86,7 +86,7 @@ class PickupMixin:
             if cell and d < float("inf"):
                 assigned.append((it, cell))
         if assigned:
-            return self.gs.tsp_route(pos, assigned, self.drop_off)
+            return self.gs.tsp_route(pos, assigned, self._nearest_dropoff(pos))
         return None
 
     def _build_greedy_route(
@@ -109,7 +109,7 @@ class PickupMixin:
                 cell, d = self.gs.find_best_item_target(pos, it)
                 if not cell or d == float("inf"):
                     continue
-                d_drop = self.gs.dist_static(cell, self.drop_off)
+                d_drop = self.gs.dist_static(cell, self._nearest_dropoff(cell))
             round_trip = d + 1 + d_drop
             if round_trip < self.rounds_left:
                 score = d + d_drop
@@ -135,9 +135,10 @@ class PickupMixin:
 
         if not selected:
             return None
+        nd = self._nearest_dropoff(pos)
         if len(selected) > slots:
-            return self.gs.plan_multi_trip(pos, selected, self.drop_off, slots)
-        return self.gs.tsp_route(pos, selected, self.drop_off)
+            return self.gs.plan_multi_trip(pos, selected, nd, slots)
+        return self.gs.tsp_route(pos, selected, nd)
 
     def _build_single_bot_route(
         self, pos: tuple[int, int], inv: list[str]
@@ -160,8 +161,9 @@ class PickupMixin:
             return None
 
         # Try precomputed optimal route (deterministic, no per-round recomputation)
+        nd = self._nearest_dropoff(pos)
         route_types = needed_types[:slots]
-        optimal = self.gs.get_optimal_route(route_types, pos, self.drop_off)
+        optimal = self.gs.get_optimal_route(route_types, pos, nd)
         if optimal:
             # Map (type, cell) -> (item, cell), verify reachability
             selected: list[tuple[Any, tuple[int, int]]] = []
@@ -170,7 +172,7 @@ class PickupMixin:
                 if it is None:
                     continue
                 d_bot = self.gs.dist_static(pos, cell)
-                d_drop = self.gs.dist_static(cell, self.drop_off)
+                d_drop = self.gs.dist_static(cell, nd)
                 if d_bot + 1 + d_drop < self.rounds_left:
                     selected.append((it, cell))
             if selected:
@@ -189,7 +191,7 @@ class PickupMixin:
                 it = type_to_item[t]
                 cell, d = self.gs.find_best_item_target(pos, it)
                 if cell and d < float("inf"):
-                    d_drop = self.gs.dist_static(cell, self.drop_off)
+                    d_drop = self.gs.dist_static(cell, nd)
                     if d + 1 + d_drop < self.rounds_left:
                         candidates.append((it, cell, d + d_drop))
 
@@ -200,7 +202,7 @@ class PickupMixin:
         selected = [(it, cell) for it, cell, _ in candidates[:slots]]
         if not selected:
             return None
-        return self._flexible_tsp(pos, selected, self.drop_off)
+        return self._flexible_tsp(pos, selected, nd)
 
     def _flexible_tsp(
         self,

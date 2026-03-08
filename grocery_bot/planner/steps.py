@@ -33,7 +33,7 @@ class StepsMixin:
                         self._claim(it, self.net_active)
                         self._emit(ctx.bid, ctx.bx, ctx.by, self._pickup(ctx.bid, it))
                         return True
-        if self._spare_slots(ctx.inv) > 0:
+        if self._spare_slots(ctx.inv, ctx.bid) > 0:
             if self._try_preview_prepick(
                 ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked
             ):
@@ -45,8 +45,9 @@ class StepsMixin:
         if not self._is_stuck_oscillating(ctx.bid):
             return False
         if ctx.inv:
+            nd = self._nearest_dropoff(ctx.pos)
             self._emit_move_or_wait(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked
             )
             return True
         self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "wait"})
@@ -54,7 +55,7 @@ class StepsMixin:
 
     def _step_deliver_at_dropoff(self, ctx) -> bool:
         """At drop-off with active items -> deliver."""
-        if ctx.pos == self.drop_off and ctx.has_active:
+        if self._is_at_any_dropoff(ctx.pos) and ctx.has_active:
             self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
             return True
         return False
@@ -113,7 +114,7 @@ class StepsMixin:
         """Opportunistic adjacent preview pickup (spare slots only)."""
         if not (
             self.preview
-            and self._spare_slots(ctx.inv) > 0
+            and self._spare_slots(ctx.inv, ctx.bid) > 0
             and not (len(self.bots) == 1 and self.active_on_shelves > 1)
         ):
             return False
@@ -137,16 +138,17 @@ class StepsMixin:
 
     def _step_zero_cost_delivery(self, ctx) -> bool:
         """Zero-cost delivery -- deliver if adjacent to dropoff."""
+        nd = self._nearest_dropoff(ctx.pos)
         if not (
             ctx.has_active
-            and ctx.pos != self.drop_off
-            and self.gs.dist_static(ctx.pos, self.drop_off) == 1
+            and not self._is_at_any_dropoff(ctx.pos)
+            and self.gs.dist_static(ctx.pos, nd) == 1
             and not self._bot_delivery_completes_order(ctx.bot)
         ):
             return False
         next_item_pos = self._find_nearest_active_item_pos(ctx.pos)
         if next_item_pos is not None:
-            dist_via_dropoff = 1 + self.gs.dist_static(self.drop_off, next_item_pos)
+            dist_via_dropoff = 1 + self.gs.dist_static(nd, next_item_pos)
             dist_direct = self.gs.dist_static(ctx.pos, next_item_pos)
             if dist_via_dropoff <= dist_direct + 1:
                 self._emit_delivery_move_or_wait(
@@ -159,7 +161,8 @@ class StepsMixin:
         """Improved end-game strategy."""
         if not (self.endgame and ctx.inv):
             return False
-        d = self.gs.dist_static(ctx.pos, self.drop_off)
+        nd = self._nearest_dropoff(ctx.pos)
+        d = self.gs.dist_static(ctx.pos, nd)
         if d + 1 >= self.rounds_left:
             if ctx.has_active:
                 self._emit_delivery_move_or_wait(
@@ -167,7 +170,7 @@ class StepsMixin:
                 )
             else:
                 self._emit_move_or_wait(
-                    ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+                    ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked
                 )
             return True
         if ctx.has_active and self.active_on_shelves > 0:
@@ -189,7 +192,7 @@ class StepsMixin:
         """Deliver active items."""
         if not ctx.has_active:
             return False
-        d_to_drop = self.gs.dist_static(ctx.pos, self.drop_off)
+        d_to_drop = self.gs.dist_static(ctx.pos, self._nearest_dropoff(ctx.pos))
 
         if (
             self.active_on_shelves > 0
@@ -201,7 +204,7 @@ class StepsMixin:
             )
             return True
 
-        spare = self._spare_slots(ctx.inv)
+        spare = self._spare_slots(ctx.inv, ctx.bid)
         if self.preview and spare > 0 and not self.order_nearly_complete:
             item, cell = self._find_detour_item(ctx.pos, self.net_preview)
             if item:
@@ -218,23 +221,27 @@ class StepsMixin:
         if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
             return False
         num_bots = len(self.bots)
-        min_inv = (
-            MIN_INV_FOR_NONACTIVE_DELIVERY
-            if num_bots <= SMALL_TEAM_MAX
-            else MAX_INVENTORY
-        )
+        if num_bots >= PREDICTION_TEAM_MIN:
+            min_inv = 1
+        elif num_bots <= SMALL_TEAM_MAX:
+            min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY
+        else:
+            min_inv = MAX_INVENTORY
         if len(ctx.inv) < min_inv:
             return False
-        if ctx.pos == self.drop_off:
+        if self._is_at_any_dropoff(ctx.pos):
             return False
-        if (
-            num_bots >= MEDIUM_TEAM_MIN
-            and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS
-        ):
+        max_na_del = (
+            max(MAX_NONACTIVE_DELIVERERS, num_bots // 5)
+            if num_bots >= PREDICTION_TEAM_MIN
+            else MAX_NONACTIVE_DELIVERERS
+        )
+        if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
             return False
         self._nonactive_delivering += 1
+        nd = self._nearest_dropoff(ctx.pos)
         self._emit_move_or_wait(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked
         )
         return True
 
@@ -242,16 +249,11 @@ class StepsMixin:
         """Pre-pick preview items."""
         num_bots = len(self.bots)
         if num_bots >= PREDICTION_TEAM_MIN:
-            # Medium-large teams: unassigned bots prepick freely.
-            # Very large teams (16+): only force when active items are done.
             has_assignment = (
                 ctx.bid in self.bot_assignments
                 and bool(self.bot_assignments[ctx.bid])
             )
-            if num_bots <= 15:
-                force = not has_assignment and not ctx.has_active
-            else:
-                force = self.active_on_shelves == 0
+            force = not has_assignment and not ctx.has_active
         elif num_bots >= LARGE_TEAM_MIN:
             force = self.active_on_shelves == 0
         elif num_bots >= SMALL_TEAM_MAX:
@@ -268,24 +270,23 @@ class StepsMixin:
 
     def _step_idle_nonactive_deliver(self, ctx) -> bool:
         """Idle bot with non-active inventory -- deliver for points."""
-        if not (
-            ctx.inv
-            and not ctx.has_active
-            and len(ctx.inv) >= MIN_INV_FOR_NONACTIVE_DELIVERY
-        ):
+        num_bots = len(self.bots)
+        min_inv = 1 if num_bots >= PREDICTION_TEAM_MIN else MIN_INV_FOR_NONACTIVE_DELIVERY
+        if not (ctx.inv and not ctx.has_active and len(ctx.inv) >= min_inv):
             return False
-        # Non-active items are not deliverable. If this bot reaches the
-        # dropoff, let clear-dropoff/idle logic move it away instead.
-        if ctx.pos == self.drop_off:
+        if self._is_at_any_dropoff(ctx.pos):
             return False
-        if (
-            len(self.bots) >= MEDIUM_TEAM_MIN
-            and self._nonactive_delivering >= MAX_NONACTIVE_DELIVERERS
-        ):
+        max_na_del = (
+            max(MAX_NONACTIVE_DELIVERERS, num_bots // 5)
+            if num_bots >= PREDICTION_TEAM_MIN
+            else MAX_NONACTIVE_DELIVERERS
+        )
+        if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
             return False
         self._nonactive_delivering += 1
+        nd = self._nearest_dropoff(ctx.pos)
         self._emit_move_or_wait(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, self.drop_off, ctx.blocked
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked
         )
         return True
 

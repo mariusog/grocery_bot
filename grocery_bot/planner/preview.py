@@ -7,6 +7,7 @@ from grocery_bot.constants import (
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
     MEDIUM_TEAM_MIN,
+    PREDICTION_TEAM_MIN,
 )
 
 
@@ -28,7 +29,7 @@ class PreviewMixin:
         free = MAX_INVENTORY - len(inv)
         if free <= 0:
             return False
-        if not force_slots and self._spare_slots(inv) <= 0:
+        if not force_slots and self._spare_slots(inv, bid) <= 0:
             return False
 
         is_preview_bot = bid in self.preview_bot_ids
@@ -45,8 +46,11 @@ class PreviewMixin:
             if len(self.bots) < MEDIUM_TEAM_MIN and self.active_on_shelves > 0:
                 # Small teams: don't divert from active work
                 return False
-            max_preview_walkers = max(2, len(self.bots) // 2)
-            if self._preview_walkers >= max_preview_walkers:
+            if len(self.bots) >= PREDICTION_TEAM_MIN:
+                max_walkers = max(2, len(self.bots) - self.active_on_shelves - 2)
+            else:
+                max_walkers = max(2, len(self.bots) // 2)
+            if self._preview_walkers >= max_walkers:
                 return False
             self._preview_walkers += 1
 
@@ -77,7 +81,8 @@ class PreviewMixin:
         prefer_cascade: bool = False,
     ) -> tuple[Optional[dict[str, Any]], Optional[tuple[int, int]]]:
         """Find item worth detouring for on the way to drop-off."""
-        direct = self.gs.dist_static(pos, self.drop_off)
+        nd = self._nearest_dropoff(pos)
+        direct = self.gs.dist_static(pos, nd)
         best_item: Optional[dict[str, Any]] = None
         best_cell: Optional[tuple[int, int]] = None
         best_cost = float("inf")
@@ -89,7 +94,7 @@ class PreviewMixin:
             cell, d = self.gs.find_best_item_target(pos, it)
             if not cell:
                 continue
-            detour = d + self.gs.dist_static(cell, self.drop_off) - direct
+            detour = d + self.gs.dist_static(cell, self._nearest_dropoff(cell)) - direct
             if is_cascade and not best_cascade:
                 best_cost = detour
                 best_item, best_cell, best_cascade = it, cell, True

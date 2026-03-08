@@ -143,7 +143,7 @@ class MovementMixin:
                 target, _ = self._get_delivery_target(bid, pos)
 
             # Bots at dropoff with active items will drop off (stay put)
-            elif pos == self.drop_off and has_active:
+            elif self._is_at_any_dropoff(pos) and has_active:
                 self.predicted[bid] = pos
                 continue
 
@@ -188,10 +188,11 @@ class MovementMixin:
                 if other["id"] != bid
             }
 
-            if self.gs.dist_static(pos, self.drop_off) <= DROPOFF_CLEAR_RADIUS:
+            nearest_do = self._nearest_dropoff(pos)
+            if self.gs.dist_static(pos, nearest_do) <= DROPOFF_CLEAR_RADIUS:
                 bot_positions = [tuple(other["position"]) for other in self.bots]
-                if self.gs.is_dropoff_congested(self.drop_off, bot_positions):
-                    avoidance = self.gs.get_avoidance_target(pos, self.drop_off)
+                if self.gs.is_dropoff_congested(nearest_do, bot_positions):
+                    avoidance = self.gs.get_avoidance_target(pos, nearest_do)
                     if (
                         avoidance
                         and avoidance != pos

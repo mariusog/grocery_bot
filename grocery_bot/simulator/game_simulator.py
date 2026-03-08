@@ -46,6 +46,7 @@ class GameSimulator(PhysicsMixin):
             generate_store_layout(width, height, num_item_types)
         )
         self.drop_off = [1, height - 2]
+        self.drop_off_zones = [self.drop_off]
         self.spawn = [width - 2, height - 2]
 
         # Generate orders
@@ -112,6 +113,7 @@ class GameSimulator(PhysicsMixin):
             ],
             "orders": orders,
             "drop_off": list(self.drop_off),
+            "drop_off_zones": [list(z) for z in self.drop_off_zones],
             "score": self.score,
             "active_order_index": self.active_order_idx,
             "total_orders": len(self.orders),

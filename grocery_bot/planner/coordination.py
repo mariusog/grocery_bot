@@ -67,7 +67,7 @@ class CoordinationMixin:
                 should_queue = True
 
             if should_queue:
-                d_to_drop = self.gs.dist_static(pos, self.drop_off)
+                d_to_drop = self.gs.dist_static(pos, self._nearest_dropoff(pos))
                 n_active = sum(self.bot_carried_active.get(bid, {}).values())
                 new_candidates.append((d_to_drop, -n_active, bid))
 
@@ -193,9 +193,10 @@ class CoordinationMixin:
                     continue
 
             if role == "deliver":
+                pos = tuple(self.bots_by_id[bid]["position"])
                 gs.bot_tasks[bid] = {
                     "type": "deliver",
-                    "target": self.drop_off,
+                    "target": self._nearest_dropoff(pos),
                     "committed_until": self.current_round + TASK_COMMITMENT_ROUNDS,
                 }
             elif role == "pick":

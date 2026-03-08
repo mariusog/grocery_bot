@@ -59,6 +59,11 @@ IDLE_PREVIEW_STAGE_WEIGHT_5BOT = 0.5  # dropoff bias for 5-bot preview carriers
 IDLE_PREVIEW_STAGE_WEIGHT_10BOT = 0.4  # dropoff bias for 10-bot preview carriers
 
 # ---------------------------------------------------------------------------
+# Multi-drop-zone congestion weighting
+# ---------------------------------------------------------------------------
+ZONE_CONGESTION_WEIGHT = 1.0  # per-bot penalty when choosing nearest drop zone
+
+# ---------------------------------------------------------------------------
 # Zone-based assignment penalties
 # ---------------------------------------------------------------------------
 ZONE_CROSS_PENALTY = 3  # penalty per zone difference in assignment scoring

@@ -51,10 +51,10 @@ class IdleMixin:
             return None
 
         team_size = len(self.bots)
-        if team_size == 5:
-            return IDLE_PREVIEW_STAGE_WEIGHT_5BOT
-        if team_size == 10:
+        if team_size >= 10:
             return IDLE_PREVIEW_STAGE_WEIGHT_10BOT
+        if team_size >= 5:
+            return IDLE_PREVIEW_STAGE_WEIGHT_5BOT
         return None
 
     def _get_preview_stage_target(
@@ -86,7 +86,9 @@ class IdleMixin:
             d_from_bot = self.gs.dist_static(pos, cell)
             if d_from_bot == float("inf"):
                 continue
-            score = d_from_bot + weight * self.gs.dist_static(cell, self.drop_off)
+            score = d_from_bot + weight * self.gs.dist_static(
+                cell, self._nearest_dropoff(cell)
+            )
             if score < best_score:
                 best_score = score
                 best_target = cell
@@ -105,14 +107,15 @@ class IdleMixin:
 
         # T33: On large teams, use T30 congestion avoidance to route idle bots
         # away from the dropoff zone, giving deliverers more space.
+        nearest = self._nearest_dropoff(pos)
         if len(self.bots) >= PREDICTION_TEAM_MIN:
             bot_positions = [tuple(b["position"]) for b in self.bots]
-            if self.gs.is_dropoff_congested(self.drop_off, bot_positions):
-                avoidance = self.gs.get_avoidance_target(pos, self.drop_off)
+            if self.gs.is_dropoff_congested(nearest, bot_positions):
+                avoidance = self.gs.get_avoidance_target(pos, nearest)
                 if avoidance and avoidance != pos:
                     return self._emit_move(bid, bx, by, pos, avoidance, blocked)
 
-        dist_to_drop = self.gs.dist_static(pos, self.drop_off)
+        dist_to_drop = self.gs.dist_static(pos, nearest)
         if dist_to_drop > DROPOFF_CLEAR_RADIUS:
             return False
         best_away: Optional[tuple[int, int]] = None
@@ -121,7 +124,7 @@ class IdleMixin:
             npos = (bx + dx, by + dy)
             if npos in blocked:
                 continue
-            nd = self.gs.dist_static(npos, self.drop_off)
+            nd = self.gs.dist_static(npos, nearest)
             if nd > best_dist:
                 best_dist = nd
                 best_away = npos
@@ -235,8 +238,8 @@ class IdleMixin:
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
             s = 0.0
-            # Penalize being near dropoff
-            drop_dist = self.gs.dist_static(p, self.drop_off)
+            # Penalize being near any dropoff
+            drop_dist = self.gs.dist_static(p, self._nearest_dropoff(p))
             if drop_dist <= IDLE_DROPOFF_PENALTY_RADIUS:
                 s += (
                     IDLE_DROPOFF_PENALTY_RADIUS + 1 - drop_dist

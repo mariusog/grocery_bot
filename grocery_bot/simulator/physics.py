@@ -77,7 +77,7 @@ class PhysicsMixin:
         elif act == "pick_up":
             self._apply_pickup(b, action, bx, by)
         elif act == "drop_off":
-            if b["position"] != list(self.drop_off):
+            if not any(b["position"] == list(z) for z in self.drop_off_zones):
                 return
             if not b["inventory"]:
                 return

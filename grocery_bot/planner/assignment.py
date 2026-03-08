@@ -15,7 +15,7 @@ class AssignmentMixin:
             len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0
         ):
             return True
-        if has_ai and tuple(bot["position"]) == self.drop_off:
+        if has_ai and self._is_at_any_dropoff(tuple(bot["position"])):
             return True
         return False
 
@@ -36,7 +36,7 @@ class AssignmentMixin:
 
         active_item_positions: list[tuple[int, int]] = []
         for it, _ in self._iter_needed_items(self.net_active):
-            cell, _ = self.gs.find_best_item_target(self.drop_off, it)
+            cell, _ = self.gs.find_best_item_target(self.drop_off_zones[0], it)
             if cell:
                 active_item_positions.append(cell)
         if not active_item_positions:

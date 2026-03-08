@@ -8,10 +8,13 @@ from grocery_bot.constants import (
     BLACKLIST_EXPIRY_ROUNDS,
     BOT_HISTORY_MAXLEN,
     DELIVERY_QUEUE_TEAM_MIN,
+    DROPOFF_CLEAR_RADIUS,
     ENDGAME_ROUNDS_LEFT,
     MAX_INVENTORY,
     ORDER_NEARLY_COMPLETE_MAX,
     PICKUP_FAIL_BLACKLIST_THRESHOLD,
+    PREDICTION_TEAM_MIN,
+    ZONE_CONGESTION_WEIGHT,
 )
 
 from grocery_bot.planner.movement import MovementMixin
@@ -50,6 +53,10 @@ class RoundPlanner(
         self.items: list[dict[str, Any]] = state["items"]
         self.orders: list[dict[str, Any]] = state["orders"]
         self.drop_off: tuple[int, int] = tuple(state["drop_off"])
+        zones = state.get("drop_off_zones")
+        self.drop_off_zones: list[tuple[int, int]] = (
+            [tuple(z) for z in zones] if zones else [self.drop_off]
+        )
         self.current_round: int = state["round"]
         self.rounds_left: int = state["max_rounds"] - state["round"]
         self.endgame: bool = self.rounds_left <= ENDGAME_ROUNDS_LEFT
@@ -243,7 +250,8 @@ class RoundPlanner(
                 )
                 if useful_total <= 0:
                     continue
-                d_to_drop = self.gs.dist_static(tuple(bot["position"]), self.drop_off)
+                bpos = tuple(bot["position"])
+                d_to_drop = self.gs.dist_static(bpos, self._nearest_dropoff(bpos))
                 ranked.append(
                     (-useful_types, d_to_drop, -useful_total, bot["id"], bot)
                 )
@@ -363,8 +371,45 @@ class RoundPlanner(
                     best = it
         return best
 
-    def _spare_slots(self, inv: list[str]) -> int:
-        return (MAX_INVENTORY - len(inv)) - self.active_on_shelves
+    def _nearest_dropoff(self, pos: tuple[int, int]) -> tuple[int, int]:
+        """Return the best drop-off zone considering distance and congestion."""
+        if len(self.drop_off_zones) == 1:
+            return self.drop_off_zones[0]
+        best = self.drop_off_zones[0]
+        best_score = self.gs.dist_static(pos, best) + self._zone_congestion(best)
+        for zone in self.drop_off_zones[1:]:
+            score = self.gs.dist_static(pos, zone) + self._zone_congestion(zone)
+            if score < best_score:
+                best, best_score = zone, score
+        return best
+
+    def _zone_congestion(self, zone: tuple[int, int]) -> float:
+        """Estimate congestion penalty near a drop zone (idle bots nearby)."""
+        count = 0
+        for b in self.bots:
+            bpos = tuple(b["position"])
+            if bpos == zone:
+                continue
+            d = abs(bpos[0] - zone[0]) + abs(bpos[1] - zone[1])
+            if d <= DROPOFF_CLEAR_RADIUS:
+                count += 1
+        return count * ZONE_CONGESTION_WEIGHT
+
+    def _is_at_any_dropoff(self, pos: tuple[int, int]) -> bool:
+        """Return True if *pos* is any of the drop-off zones."""
+        return pos in self.drop_off_zones
+
+    def _spare_slots(self, inv: list[str], bid: int = -1) -> int:
+        if (
+            bid >= 0
+            and len(self.bots) >= PREDICTION_TEAM_MIN
+            and hasattr(self, 'bot_assignments')
+        ):
+            my_assigned = len(self.bot_assignments.get(bid, []))
+            reserve = min(self.active_on_shelves, my_assigned)
+        else:
+            reserve = self.active_on_shelves
+        return (MAX_INVENTORY - len(inv)) - reserve
 
     def _claim(self, item: dict[str, Any], needed_dict: dict[str, int]) -> None:
         self.claimed.add(item["id"])

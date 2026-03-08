@@ -89,7 +89,10 @@ def _validate_actions(actions, state):
     if blocked is None:
         return actions
 
-    drop_off = tuple(state["drop_off"])
+    zones = state.get("drop_off_zones")
+    drop_off_set = (
+        set(tuple(z) for z in zones) if zones else {tuple(state["drop_off"])}
+    )
     bot_positions = {b["id"]: tuple(b["position"]) for b in state["bots"]}
     occupied_cells = set(bot_positions.values())
     bot_inv_len = {b["id"]: len(b["inventory"]) for b in state["bots"]}
@@ -161,7 +164,7 @@ def _validate_actions(actions, state):
                         valid = False
 
         elif act == "drop_off":
-            if pos != drop_off or bot_inv_len.get(bid, 0) == 0:
+            if pos not in drop_off_set or bot_inv_len.get(bid, 0) == 0:
                 valid = False
 
         if valid:
@@ -272,9 +275,14 @@ async def play():
             if round_num == 0:
                 wall_set = set(tuple(w) for w in data["grid"]["walls"])
                 shelf_set = set((it["position"][0], it["position"][1]) for it in data["items"])
+                # Log ALL top-level keys to discover fields like drop_zones
+                state_keys = sorted(k for k in data.keys() if k not in ('grid', 'bots', 'items', 'orders'))
                 dbg(f"R0 INIT walls={len(wall_set)} shelves={len(shelf_set)} "
                     f"grid={data['grid']['width']}x{data['grid']['height']} "
                     f"drop_off={data['drop_off']} spawn={data['bots'][0]['position']}")
+                dbg(f"R0 ALL_KEYS: {list(data.keys())}")
+                for k in state_keys:
+                    dbg(f"R0 FIELD {k}={data[k]}")
 
             # Detect skipped rounds
             if last_round_seen >= 0 and round_num > last_round_seen + 1:
@@ -465,6 +473,7 @@ def _build_map_snapshot(data, timestamp):
         "source": "live",
         "grid": data["grid"],
         "drop_off": data["drop_off"],
+        "drop_off_zones": data.get("drop_off_zones"),
         "spawn": data["bots"][0]["position"],
         "num_bots": len(data["bots"]),
         "max_rounds": data["max_rounds"],

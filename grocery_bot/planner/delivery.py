@@ -14,7 +14,7 @@ class DeliveryMixin:
 
         pos = tuple(bot["position"])
         inv = bot["inventory"]
-        if pos == self.drop_off:
+        if self._is_at_any_dropoff(pos):
             return True
         if self.active_on_shelves == 0 or len(inv) >= MAX_INVENTORY:
             return True
@@ -23,7 +23,7 @@ class DeliveryMixin:
         if self._bot_delivery_completes_order(bot):
             return True
 
-        d_to_drop = self.gs.dist_static(pos, self.drop_off)
+        d_to_drop = self.gs.dist_static(pos, self._nearest_dropoff(pos))
         return len(inv) >= 2 and d_to_drop <= DELIVER_WHEN_CLOSE_DIST
 
     def _get_delivery_target(
@@ -43,11 +43,12 @@ class DeliveryMixin:
                 ob_pos = self.predicted.get(obid, tuple(bot["position"]))
             delivering_bots.append((obid, ob_pos))
 
+        nearest = self._nearest_dropoff(pos)
         if not delivering_bots:
-            return self.drop_off, False
+            return nearest, False
 
         target, should_wait = self.gs.get_dropoff_approach_target(
-            bid, pos, self.drop_off, delivering_bots
+            bid, pos, nearest, delivering_bots
         )
         if not should_wait:
             return target, False
@@ -55,11 +56,11 @@ class DeliveryMixin:
         wait_radius = 0
         if self.gs.dropoff_wait_cells:
             wait_radius = max(
-                self.gs.dist_static(cell, self.drop_off)
+                self.gs.dist_static(cell, nearest)
                 for cell in self.gs.dropoff_wait_cells
             )
-        if self.gs.dist_static(pos, self.drop_off) > wait_radius + 1:
-            return self.drop_off, False
+        if self.gs.dist_static(pos, nearest) > wait_radius + 1:
+            return nearest, False
 
         return target, True
 
@@ -93,7 +94,7 @@ class DeliveryMixin:
             if cell and d < float("inf"):
                 remaining.append((it, cell, d))
         if not remaining:
-            return self.gs.dist_static(pos, self.drop_off) + 1
+            return self.gs.dist_static(pos, self._nearest_dropoff(pos)) + 1
 
         remaining.sort(key=lambda c: c[2])
         total_dist: float = 0
@@ -105,11 +106,13 @@ class DeliveryMixin:
             current = cell
             picked += 1
             if picked + len(inv) >= MAX_INVENTORY:
-                total_dist += self.gs.dist_static(current, self.drop_off) + 1
-                current = self.drop_off
+                nd = self._nearest_dropoff(current)
+                total_dist += self.gs.dist_static(current, nd) + 1
+                current = nd
                 picked = 0
         if picked > 0 or inv:
-            total_dist += self.gs.dist_static(current, self.drop_off) + 1
+            nd = self._nearest_dropoff(current)
+            total_dist += self.gs.dist_static(current, nd) + 1
 
         # On multi-bot teams, items are picked in parallel.  Divide the
         # sequential cost by the number of available pickers (bots without
@@ -132,11 +135,12 @@ class DeliveryMixin:
 
         slots_left = MAX_INVENTORY - len(inv)
 
-        cost_deliver = self.gs.dist_static(pos, self.drop_off) + 1
+        nd = self._nearest_dropoff(pos)
+        cost_deliver = self.gs.dist_static(pos, nd) + 1
 
         remaining: list[tuple[dict, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
-            cell, d_from_drop = self.gs.find_best_item_target(self.drop_off, it)
+            cell, d_from_drop = self.gs.find_best_item_target(nd, it)
             if cell:
                 remaining.append((it, cell, d_from_drop))
 
@@ -145,18 +149,20 @@ class DeliveryMixin:
 
         remaining.sort(key=lambda c: c[2])
         cost_remaining: float = 0
-        cur = self.drop_off
+        cur = nd
         picked = 0
         for _, cell, _ in remaining:
             cost_remaining += self.gs.dist_static(cur, cell) + 1
             cur = cell
             picked += 1
             if picked >= MAX_INVENTORY:
-                cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
-                cur = self.drop_off
+                ndc = self._nearest_dropoff(cur)
+                cost_remaining += self.gs.dist_static(cur, ndc) + 1
+                cur = ndc
                 picked = 0
         if picked > 0:
-            cost_remaining += self.gs.dist_static(cur, self.drop_off) + 1
+            ndc = self._nearest_dropoff(cur)
+            cost_remaining += self.gs.dist_static(cur, ndc) + 1
 
         total_deliver_now = cost_deliver + cost_remaining
 
@@ -169,21 +175,24 @@ class DeliveryMixin:
         for _, cell, _ in fill_items:
             cost_fill += self.gs.dist_static(cur, cell) + 1
             cur = cell
-        cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+        ndc = self._nearest_dropoff(cur)
+        cost_fill += self.gs.dist_static(cur, ndc) + 1
 
         leftover = remaining[slots_left:]
-        cur = self.drop_off
+        cur = ndc
         picked = 0
         for _, cell, _ in leftover:
             cost_fill += self.gs.dist_static(cur, cell) + 1
             cur = cell
             picked += 1
             if picked >= MAX_INVENTORY:
-                cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
-                cur = self.drop_off
+                ndc = self._nearest_dropoff(cur)
+                cost_fill += self.gs.dist_static(cur, ndc) + 1
+                cur = ndc
                 picked = 0
         if picked > 0:
-            cost_fill += self.gs.dist_static(cur, self.drop_off) + 1
+            ndc = self._nearest_dropoff(cur)
+            cost_fill += self.gs.dist_static(cur, ndc) + 1
 
         return total_deliver_now < cost_fill - 2
 
@@ -202,7 +211,8 @@ class DeliveryMixin:
             nearest = self._find_nearest_active_item_pos(pos)
             if nearest:
                 d_to_item = self.gs.dist_static(pos, nearest)
-                d_item_to_drop = self.gs.dist_static(nearest, self.drop_off)
+                nd = self._nearest_dropoff(nearest)
+                d_item_to_drop = self.gs.dist_static(nearest, nd)
                 total_with_pickup = d_to_item + 1 + d_item_to_drop + 1
                 if total_with_pickup < self.rounds_left and len(inv) < MAX_INVENTORY:
                     return False
@@ -212,9 +222,10 @@ class DeliveryMixin:
 
         # Bots with preview-only inventory: deliver for +1/item during endgame
         if not has_active and len(inv) > 0:
-            d_to_drop = self.gs.dist_static(pos, self.drop_off)
+            nd = self._nearest_dropoff(pos)
+            d_to_drop = self.gs.dist_static(pos, nd)
             if d_to_drop + 1 < self.rounds_left:
-                self._emit_move_or_wait(bid, bx, by, pos, self.drop_off, blocked)
+                self._emit_move_or_wait(bid, bx, by, pos, nd, blocked)
                 return True
 
         return False

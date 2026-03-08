@@ -156,6 +156,7 @@ def _write_meta_json(
             for it in sim.items_on_map
         ],
         "drop_off": list(sim.drop_off),
+        "drop_off_zones": [list(z) for z in sim.drop_off_zones],
         "max_rounds": sim.max_rounds,
         "total_orders": len(sim.orders),
         "spawn": list(sim.spawn),

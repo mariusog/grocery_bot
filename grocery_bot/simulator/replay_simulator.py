@@ -84,6 +84,10 @@ class ReplaySimulator(GameSimulator):
 
         self.walls = [list(w) for w in recorded["grid"]["walls"]]
         self.drop_off = list(recorded["drop_off"])
+        zones = recorded.get("drop_off_zones")
+        self.drop_off_zones = (
+            [list(z) for z in zones] if zones else [self.drop_off]
+        )
         self.spawn = list(recorded["spawn"])
 
         # Build shelf_positions and item_shelves from recorded items
