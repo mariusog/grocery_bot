@@ -142,17 +142,64 @@ The lead-agent has cross-cutting authority — it may modify any file when a fix
 # Fast tests only (use this while iterating)
 python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
 
-# All tests including regression benchmarks
-python -m pytest tests/ -q --tb=line 2>&1 | tail -20
-
 # Only on failure — rerun with details for the failing test
 python -m pytest tests/ -q --tb=short -x 2>&1 | tail -40
-
-# Full benchmark across difficulties
-python benchmark.py
-
-# Quick single-seed benchmark
-python benchmark.py --quick
 ```
 
-**IMPORTANT for agents**: Always pipe pytest output through `tail` to avoid flooding your context with hundreds of lines. Use `-q --tb=line` by default, only switch to `--tb=short` when debugging a specific failure. Never use `-v` — it generates excessive output that wastes context memory.
+**IMPORTANT for agents**: Use `-q --tb=line` by default. Never use `-v`. Only switch to `--tb=short` when debugging a specific failure.
+
+## Running Benchmarks
+
+Benchmarks write results to `docs/benchmark_results.md`. Read the report file instead of parsing stdout — this saves tokens.
+
+```sh
+# Default: replay maps (fast, single run per map)
+python benchmark.py
+
+# Synthetic multi-seed (use for statistical comparison)
+python benchmark.py --synthetic --seeds 10 --diagnostics
+
+# Quick single-seed for one difficulty
+python benchmark.py --synthetic -d Nightmare --quick --diagnostics
+```
+
+**After running a benchmark**, read results from the generated files:
+- `docs/benchmark_results.md` — scores and summary tables
+- `logs/` — CSV+JSON log pairs for detailed analysis with `analyze_replay.py`
+
+**Do NOT** pipe benchmark stdout through `tail` to extract scores. Instead, read the report:
+```sh
+python benchmark.py --synthetic --seeds 10
+cat docs/benchmark_results.md
+```
+
+## Analyzing Game Runs
+
+Use `analyze_replay.py` to debug bot behavior. Logs are generated when running benchmarks with `--diagnostics`.
+
+```sh
+# List available logs
+python analyze_replay.py --list
+
+# Summary + auto-detected problems (always run this first)
+python analyze_replay.py <log>
+
+# ASCII grid at round N (inspect positions, congestion)
+python analyze_replay.py <log> --grid 50
+
+# Bot timeline (condensed action streaks)
+python analyze_replay.py <log> --bot 3
+
+# Round-by-round detail (drill into problem areas)
+python analyze_replay.py <log> --rounds 40-60
+
+# Only problems (idle ≥10, oscillation ≥5, scoring gaps ≥20)
+python analyze_replay.py <log> --problems
+```
+
+**After any optimization change**, agents MUST:
+1. Run the benchmark with `--diagnostics` to generate a log
+2. Read `docs/benchmark_results.md` for scores
+3. Run `python analyze_replay.py <log>` to verify problem count and idle% improved
+4. Use `--bot <id>` to check that previously-problematic bots improved
+5. Include before/after scores and problem counts in the task result notes

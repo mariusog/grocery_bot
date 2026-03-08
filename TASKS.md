@@ -11,20 +11,21 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | Difficulty | Bots | Avg | Min | Max | StdDev | Waste% | Rds/Ord | Idle% | AvgDel |
 |------------|------|-----|-----|-----|--------|--------|---------|-------|--------|
 | Easy       | 1    | 148.5 | 138 | 153 | 6.0 | 13.7% | 16.7 | 1.2% | 2.98 |
-| Medium     | 3    | 154.3 | 119 | 178 | 16.4 | 56.5% | 17.2 | 7.0% | 2.36 |
-| Hard       | 5    | 136.3 | 111 | 154 | 11.8 | 61.1% | 19.5 | 23.8% | 1.86 |
-| Expert     | 10   | 108.6 | 97 | 133 | 11.5 | 61.4% | 27.3 | 45.4% | 1.82 |
-| Nightmare  | 20   | 82.5 | 1 | 215 | 71.8 | 55.7% | 36.1 | 80.6% | 1.83 |
+| Medium     | 3    | 158.4 | 98 | 188 | 24.9 | 56.5% | 17.2 | 7.0% | 2.36 |
+| Hard       | 5    | 133.3 | 112 | 156 | 14.1 | 61.1% | 19.5 | 23.8% | 1.86 |
+| Expert     | 10   | 109.2 | 78 | 135 | 16.3 | 61.4% | 27.3 | 45.4% | 1.82 |
+| Nightmare  | 20   | 123.9 | 1 | 218 | 84.7 | 55.7% | 36.1 | 80.6% | 1.83 |
 
 **Replay benchmark** (`python benchmark.py`):
 
 | Map | Bots | Grid | Score |
 |-----|------|------|-------|
 | 12x10_1bot | 1 | 12x10 | 126 |
-| 16x12_3bot | 3 | 16x12 | 142 |
-| 22x14_5bot | 5 | 22x14 | 112 |
-| 28x18_10bot | 10 | 28x18 | 104 |
-| 30x18_20bot | 20 | 30x18 | 151 |
+| 16x12_3bot | 3 | 16x12 | 153 |
+| 22x14_5bot | 5 | 22x14 | 111 |
+| 28x18_10bot | 10 | 28x18 | 95 |
+| 30x18_20bot (Mar 7) | 20 | 30x18 | 119 |
+| 30x18_20bot (Mar 8) | 20 | 30x18 | 124 |
 
 **Per-bot util (Expert 10-seed):** B0:95% B1:87% B2:80% B3:67% B4:61% B5:50% B6:32% B7:32% B8:28% B9:15%
 **Per-bot util (Nightmare 10-seed):** Highly variable (StdDev=71.8). Best seeds use ~6 bots; worst seeds score 1 point.
@@ -33,9 +34,9 @@ Status: `open` | `in-progress` | `done` | `blocked`
 1. **Assignment system doesn't scale** — On Nightmare (20 bots), 12/20 bots never pick up a single item across 500 rounds. The planner assigns work to 5-6 nearest bots and leaves 14 permanently idle. See T34, T49.
 2. **Spawn gridlock** — All bots spawn at a single cell (28,16). With 20 bots, only 1-2 can move per round → 75 rounds wasted just dispersing. See T49.
 3. **Oscillation at scale** — Bot 0 (top performer, 93% util) oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496) carrying 2 items. The idle positioning logic bounces bots between adjacent cells when no clear assignment exists. See T50.
-4. **Bot processing order is arbitrary** — `round_planner.py:113` iterates in server order, not urgency. See T42.
-5. **`_spare_slots` blocks preview pickups globally** — reserves slots for active items across ALL bots. See T43.
-6. **80.8% idle on Nightmare, 30% on Expert** — most bots have nothing to do. See T34.
+4. **`_spare_slots` blocks preview pickups globally** — reserves slots for active items across ALL bots. See T43.
+5. **80.8% idle on Nightmare, 45% on Expert** — most bots have nothing to do. See T34.
+6. ~~Bot processing order is arbitrary~~ — T42 proved server order + soft yields is near-optimal cooperative scheduling.
 7. **Single-cell dropoff is the hard bottleneck** — T33 confirmed all planner changes that increase dropoff traffic hurt.
 8. ~~43-48% waste on Medium/Hard~~ — T31 confirmed waste% is misleading; preview pickup is optimal behavior.
 9. ~~MAX_CONCURRENT_DELIVERERS=1~~ — Fixed by T32 (scaled to max(2, bots//4)).
@@ -294,18 +295,12 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Expected gain**: +10-20 Nightmare (reclaiming 50+ wasted rounds).
 
 ### T50: Fix Oscillation in Idle Positioning
-- **Agent**: strategy-agent
-- **Status**: in-progress
+- **Agent**: strategy-agent → lead-agent (re-merged)
+- **Status**: done
 - **Priority**: 1
-- **Metric**: Bot 0 on Nightmare oscillates (4,15)↔(4,16) for 150+ rounds (R345-R496) carrying 2 items. Bot 0 also oscillated (1,12)↔(1,13) for 30 rounds (R90-R118). The oscillation detector in `analyze_replay.py` finds 112 problems.
-- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/movement.py`
-- **Root cause**: When a bot has inventory but no clear delivery or pickup target, `_try_idle_positioning` sends it toward a corridor position. But the next round, a different step (e.g., `_step_deliver_active` or `_step_preview_prepick`) sends it the opposite way. The two steps alternate control, causing the bot to bounce between two cells indefinitely.
-- **How to fix**:
-  1. **Oscillation detection in planner**: Track each bot's last 4 positions. If `pos[t] == pos[t-2]` for 3+ consecutive rounds, force the bot to commit to its current direction for 5 rounds (sticky decision).
-  2. **Idle positioning hysteresis**: In `_try_idle_positioning`, don't change target if the bot is already moving toward a valid idle position and hasn't arrived yet.
-  3. **Deliver-or-hold decision**: A bot carrying items with no active assignment should deliver immediately (even partial inventory) rather than oscillate. On Nightmare, Bot 0 holds `[juice;sugar]` for 150 rounds — delivering would score +2 and free it for new work.
-- **Risk**: Low — oscillation is pure waste. Any action beats bouncing.
-- **Expected gain**: +5-15 Nightmare, +2-5 Expert.
+- **Result**: Added `_is_stuck_oscillating()` in idle.py (A-B-A pattern detection) and `_step_break_oscillation()` in steps.py (bots with inv → deliver, empty → wait). Inserted after `_step_preview_prepick` in step chain. Live Nightmare map: **46→124** (+78). Replay benchmark Mar 8 map: delivery gap 293→49, oscillation 8492→7124.
+- **Files**: `grocery_bot/planner/idle.py`, `grocery_bot/planner/steps.py`, `grocery_bot/planner/round_planner.py`
+- **INCIDENT (2026-03-08)**: T50 was developed in a worktree and marked "done" in TASKS.md, but code was never merged to main. Live game scored 46 (vs expected ~120). Root cause: worktree branch `worktree-agent-af3896fc` contained the fix but was never merged. Manually cherry-picked the changes. **Mitigation**: Added `tests/test_replay_regression.py` with replay map minimum score thresholds + oscillation count bounds. These tests run fast (not marked slow) and would catch this immediately.
 
 ### T43: Fix `_spare_slots` Over-Conservatism (round_planner.py)
 - **Agent**: strategy-agent
@@ -416,6 +411,7 @@ python analyze_replay.py <log> --problems
 
 ## Notes
 
+- **PROCESS FIX (2026-03-08)**: Worktree-developed code must be verified as merged before marking tasks "done". T50 oscillation fix was lost in a worktree, causing live Nightmare to score 46 instead of 124. Added `tests/test_replay_regression.py` (fast, not slow-marked) to catch this. All agents MUST run `python -m pytest tests/test_replay_regression.py -q` after any merge.
 - **BUG (lead-agent)**: Uncommitted changes to `round_planner.py` use `self._active_delivering` and `PREDICTION_TEAM_MIN` without initializing/importing them. Tests fail with AttributeError/NameError. Pathfinding-agent restored the committed version to unblock testing.
 - Add new tasks at the bottom of "Open Tasks" with the next T-number
 - When completing a task, move it to "Completed Tasks" with a one-line result
