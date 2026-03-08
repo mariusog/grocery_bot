@@ -245,20 +245,22 @@ function render() {
     }
   }
 
-  // Drop-off
-  const [dx, dy] = meta.drop_off;
-  ctx.fillStyle = '#0f9';
-  ctx.globalAlpha = 0.3;
-  ctx.fillRect(dx*cs, dy*cs, cs, cs);
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = '#0f9';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(dx*cs, dy*cs, cs, cs);
-  if (cs >= 16) {
+  // Drop-off zones (fall back to single drop_off if drop_off_zones absent)
+  const dropZones = meta.drop_off_zones || [meta.drop_off];
+  for (const [dx, dy] of dropZones) {
     ctx.fillStyle = '#0f9';
-    ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText('D', dx*cs+cs/2, dy*cs+cs/2+4);
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(dx*cs, dy*cs, cs, cs);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#0f9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(dx*cs, dy*cs, cs, cs);
+    if (cs >= 16) {
+      ctx.fillStyle = '#0f9';
+      ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('D', dx*cs+cs/2, dy*cs+cs/2+4);
+    }
   }
 
   // Bots
