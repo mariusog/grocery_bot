@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260308_092200",
+  "recorded_at": "20260308_135947",
   "source": "live",
   "grid": {
     "width": 12,
@@ -220,6 +220,7 @@
     1,
     8
   ],
+  "drop_off_zones": null,
   "spawn": [
     10,
     8
@@ -377,6 +378,57 @@
       ]
     },
     {
+      "id": "order_10",
+      "items_required": [
+        "milk",
+        "yogurt",
+        "butter"
+      ]
+    },
+    {
+      "id": "order_11",
+      "items_required": [
+        "yogurt",
+        "yogurt",
+        "yogurt",
+        "butter"
+      ]
+    },
+    {
+      "id": "order_12",
+      "items_required": [
+        "yogurt",
+        "cheese",
+        "cheese"
+      ]
+    },
+    {
+      "id": "order_13",
+      "items_required": [
+        "cheese",
+        "milk",
+        "cheese"
+      ]
+    },
+    {
+      "id": "order_14",
+      "items_required": [
+        "butter",
+        "yogurt",
+        "yogurt",
+        "yogurt"
+      ]
+    },
+    {
+      "id": "order_15",
+      "items_required": [
+        "milk",
+        "yogurt",
+        "yogurt",
+        "milk"
+      ]
+    },
+    {
       "id": "order_2",
       "items_required": [
         "yogurt",
@@ -444,57 +496,6 @@
         "butter",
         "milk",
         "cheese"
-      ]
-    },
-    {
-      "id": "order_10",
-      "items_required": [
-        "milk",
-        "yogurt",
-        "butter"
-      ]
-    },
-    {
-      "id": "order_11",
-      "items_required": [
-        "yogurt",
-        "yogurt",
-        "yogurt",
-        "butter"
-      ]
-    },
-    {
-      "id": "order_12",
-      "items_required": [
-        "yogurt",
-        "cheese",
-        "cheese"
-      ]
-    },
-    {
-      "id": "order_13",
-      "items_required": [
-        "cheese",
-        "milk",
-        "cheese"
-      ]
-    },
-    {
-      "id": "order_14",
-      "items_required": [
-        "butter",
-        "yogurt",
-        "yogurt",
-        "yogurt"
-      ]
-    },
-    {
-      "id": "order_15",
-      "items_required": [
-        "milk",
-        "yogurt",
-        "yogurt",
-        "milk"
       ]
     }
   ]
