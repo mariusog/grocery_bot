@@ -42,6 +42,18 @@ class DiagnosticTracker:
         self.order_start_round = sim.round
         self.rounds_per_order = []
 
+        # Per-bot action breakdown
+        self.per_bot_moves: dict[int, int] = defaultdict(int)
+        self.per_bot_pickups: dict[int, int] = defaultdict(int)
+        self.per_bot_delivers: dict[int, int] = defaultdict(int)
+        self.per_bot_stuck: dict[int, int] = defaultdict(int)
+
+        # Delivery efficiency
+        self.delivery_sizes: list[int] = []
+
+        # Order completion timeline (absolute round numbers)
+        self.order_completion_rounds: list[int] = []
+
         # Pre-round snapshots (set in pre_round)
         self._pre_positions = {}
         self._pre_inv_sizes = {}
@@ -77,13 +89,15 @@ class DiagnosticTracker:
             cur_pos = tuple(b["position"])
             prev_pos = self._pre_positions[bid]
 
-            # Action counting
+            # Action counting (global + per-bot)
             if act.startswith("move_"):
                 self.moves += 1
+                self.per_bot_moves[bid] += 1
             elif act == "wait":
                 self.waits += 1
             elif act == "pick_up":
                 self.pickups += 1
+                self.per_bot_pickups[bid] += 1
                 item_id = action.get("item_id")
                 picked_type = self._items_snapshot.get(item_id)
                 if picked_type and picked_type in self._active_needed:
@@ -92,6 +106,10 @@ class DiagnosticTracker:
                     self.wasted_pickups += 1
             elif act == "drop_off":
                 self.delivers += 1
+                self.per_bot_delivers[bid] += 1
+                delivered = self._pre_inv_sizes[bid] - len(b["inventory"])
+                if delivered > 0:
+                    self.delivery_sizes.append(delivered)
 
             # Idle detection
             if act == "wait":
@@ -101,9 +119,10 @@ class DiagnosticTracker:
                 if self._pre_inv_sizes[bid] >= 3:
                     self.inv_full_waits += 1
 
-            # Stuck detection
+            # Stuck detection (global + per-bot)
             if cur_pos == prev_pos and act.startswith("move_"):
                 self.stuck_rounds += 1
+                self.per_bot_stuck[bid] += 1
 
             # Oscillation detection
             history = self.prev_positions[bid]
@@ -121,6 +140,7 @@ class DiagnosticTracker:
             new_completions = sim.orders_completed - self.prev_orders_completed
             for _ in range(new_completions):
                 self.rounds_per_order.append(sim.round - self.order_start_round)
+                self.order_completion_rounds.append(sim.round)
                 self.order_start_round = sim.round
             self.prev_orders_completed = sim.orders_completed
 
@@ -181,4 +201,23 @@ class DiagnosticTracker:
             "avg_rounds_per_order": avg_rounds_per_order,
             "pickup_delivery_ratio": pickup_delivery_ratio,
             "per_bot_idle": dict(self.per_bot_idle),
+            "per_bot_actions": {
+                bid: {
+                    "moves": self.per_bot_moves[bid],
+                    "pickups": self.per_bot_pickups[bid],
+                    "delivers": self.per_bot_delivers[bid],
+                    "stuck": self.per_bot_stuck[bid],
+                    "idle": self.per_bot_idle[bid],
+                }
+                for bid in range(self.num_bots)
+            },
+            "order_completion_rounds": self.order_completion_rounds,
+            "avg_delivery_size": (
+                statistics.mean(self.delivery_sizes)
+                if self.delivery_sizes
+                else 0.0
+            ),
+            "blocked_move_pct": (
+                self.stuck_rounds / max(1, self.moves) * 100
+            ),
         }
