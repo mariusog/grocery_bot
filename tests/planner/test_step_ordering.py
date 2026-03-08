@@ -30,8 +30,8 @@ class TestStepChainStructure:
     def test_idle_positioning_is_last(self):
         assert RoundPlanner._STEP_CHAIN[-1].__name__ == "_step_idle_positioning"
 
-    def test_chain_has_15_steps(self):
-        assert len(RoundPlanner._STEP_CHAIN) == 15
+    def test_chain_has_16_steps(self):
+        assert len(RoundPlanner._STEP_CHAIN) == 16
 
     def test_all_expected_steps_present(self):
         expected = {
@@ -41,8 +41,15 @@ class TestStepChainStructure:
             "_step_zero_cost_delivery", "_step_endgame",
             "_step_active_pickup", "_step_deliver_active",
             "_step_clear_nonactive_inventory", "_step_preview_prepick",
+            "_step_break_oscillation",
             "_step_clear_dropoff", "_step_idle_nonactive_deliver",
             "_step_idle_positioning",
         }
         actual = {s.__name__ for s in RoundPlanner._STEP_CHAIN}
         assert actual == expected
+
+    def test_break_oscillation_before_idle(self):
+        chain = RoundPlanner._STEP_CHAIN
+        osc = next(i for i, s in enumerate(chain) if s.__name__ == "_step_break_oscillation")
+        idle = next(i for i, s in enumerate(chain) if s.__name__ == "_step_idle_positioning")
+        assert osc < idle

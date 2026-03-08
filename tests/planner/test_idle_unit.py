@@ -1,4 +1,6 @@
-"""Unit tests for IdleMixin — idle positioning logic."""
+"""Unit tests for IdleMixin — idle positioning and oscillation detection."""
+
+from collections import deque
 
 from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
@@ -177,3 +179,101 @@ class TestTryIdlePositioning:
         assert planner.gs.dist_static(next_pos, target) < planner.gs.dist_static(
             (24, 9), target
         )
+
+
+class TestOscillationDetection:
+    """Tests for _is_stuck_oscillating A-B-A detection."""
+
+    def _planner_with_history(self, bid: int, positions: list[tuple[int, int]]):
+        """Create a planner with pre-populated bot history."""
+        planner = make_planner(
+            bots=[
+                {"id": bid, "position": list(positions[-1]), "inventory": []},
+                {"id": 99, "position": [8, 4], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.gs.bot_history[bid] = deque(positions, maxlen=3)
+        return planner
+
+    def test_detects_aba_pattern(self):
+        """A-B-A bounce should be detected as oscillation."""
+        planner = self._planner_with_history(0, [(5, 4), (5, 5), (5, 4)])
+        assert planner._is_stuck_oscillating(0) is True
+
+    def test_no_oscillation_on_straight_path(self):
+        """A-B-C movement is not oscillation."""
+        planner = self._planner_with_history(0, [(5, 4), (5, 5), (5, 6)])
+        assert planner._is_stuck_oscillating(0) is False
+
+    def test_no_oscillation_when_staying_put(self):
+        """A-A-A (stationary) is not oscillation."""
+        planner = self._planner_with_history(0, [(5, 4), (5, 4), (5, 4)])
+        assert planner._is_stuck_oscillating(0) is False
+
+    def test_no_oscillation_with_short_history(self):
+        """Less than 3 positions — not enough data to detect."""
+        planner = self._planner_with_history(0, [(5, 4), (5, 5)])
+        # Only 2 positions in history
+        planner.gs.bot_history[0] = deque([(5, 4), (5, 5)], maxlen=3)
+        assert planner._is_stuck_oscillating(0) is False
+
+    def test_no_oscillation_for_unknown_bot(self):
+        """Bot with no history should not trigger."""
+        planner = self._planner_with_history(0, [(5, 4), (5, 5), (5, 4)])
+        assert planner._is_stuck_oscillating(42) is False
+
+
+class TestBreakOscillation:
+    """Tests for _step_break_oscillation step chain behavior."""
+
+    def _planner_oscillating_with_inv(
+        self, inv: list[str], positions: list[tuple[int, int]]
+    ):
+        """Create a planner where bot 0 is oscillating with given inventory."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": list(positions[-1]), "inventory": inv},
+                {"id": 1, "position": [8, 4], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        planner.gs.bot_history[0] = deque(positions, maxlen=3)
+        planner.actions = []
+        return planner
+
+    def test_oscillating_with_inventory_delivers(self):
+        """Oscillating bot with items should head to dropoff."""
+        planner = self._planner_oscillating_with_inv(
+            ["milk"], [(5, 4), (5, 5), (5, 4)]
+        )
+        ctx = planner._build_bot_context(planner.bots[0])
+        result = planner._step_break_oscillation(ctx)
+        assert result is True
+        assert len(planner.actions) == 1
+        # Should be moving, not waiting
+        assert planner.actions[0]["action"] != "wait"
+
+    def test_oscillating_empty_waits(self):
+        """Oscillating bot with no items should wait."""
+        planner = self._planner_oscillating_with_inv(
+            [], [(5, 4), (5, 5), (5, 4)]
+        )
+        ctx = planner._build_bot_context(planner.bots[0])
+        result = planner._step_break_oscillation(ctx)
+        assert result is True
+        assert len(planner.actions) == 1
+        assert planner.actions[0]["action"] == "wait"
+
+    def test_not_oscillating_skips(self):
+        """Non-oscillating bot should not trigger the step."""
+        planner = self._planner_oscillating_with_inv(
+            ["milk"], [(5, 4), (5, 5), (5, 6)]
+        )
+        ctx = planner._build_bot_context(planner.bots[0])
+        result = planner._step_break_oscillation(ctx)
+        assert result is False
+        assert len(planner.actions) == 0
