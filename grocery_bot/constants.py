@@ -92,7 +92,7 @@ CORRIDOR_HEIGHT_THRESHOLD = 10  # grid heights > this get a second corridor row
 # ---------------------------------------------------------------------------
 # Hungarian algorithm threshold
 # ---------------------------------------------------------------------------
-HUNGARIAN_MAX_PAIRS = 100  # n_bots * n_items <= this uses Hungarian; else greedy
+HUNGARIAN_MAX_PAIRS = 200  # n_bots * n_items <= this uses Hungarian; else greedy
 
 # ---------------------------------------------------------------------------
 # Minimum inventory for non-active delivery
