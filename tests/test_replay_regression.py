@@ -98,6 +98,75 @@ class TestReplayMinimumScores:
             )
 
 
+# ---------------------------------------------------------------------------
+# Performance threshold ceilings (T61)
+# ---------------------------------------------------------------------------
+# Generous starting thresholds (~20% above current baselines).
+# Tighten as T59/T60/T43 land improvements.
+#
+# Current baselines (2026-03-08):
+#   1-bot:  rds/order ~20,  inv_full 0
+#   3-bot:  rds/order ~19,  inv_full 8
+#   5-bot:  rds/order ~23,  inv_full 80
+#   10-bot: rds/order ~30,  inv_full 258
+#   20-bot: rds/order ~15,  inv_full ~200
+MAX_ROUNDS_PER_ORDER = {
+    1: 28,     # Easy:      current ~20
+    3: 24,     # Medium:    current ~19
+    5: 30,     # Hard:      current ~23
+    10: 40,    # Expert:    current ~30
+    20: 25,    # Nightmare: current ~15
+}
+
+MAX_INV_FULL_WAITS = {
+    1: 10,     # Easy:      current ~0
+    3: 40,     # Medium:    current ~8
+    5: 120,    # Hard:      current ~80
+    10: 350,   # Expert:    current ~258
+    20: 600,   # Nightmare: current ~200
+}
+
+
+class TestReplayPerformanceThresholds:
+    """Performance ceiling tests — catch regressions in order speed and waste."""
+
+    @pytest.fixture(scope="class")
+    def replay_results(self) -> dict[str, dict]:
+        """Run all replay maps once, shared across test methods."""
+        results = {}
+        for map_path in _all_maps():
+            results[map_path.name] = _replay_score(str(map_path))
+        return results
+
+    def test_rounds_per_order_bounded(self, replay_results):
+        """Avg rounds-per-order must stay below per-difficulty ceilings."""
+        for name, result in replay_results.items():
+            sim = ReplaySimulator(str(MAPS_DIR / name))
+            num_bots = sim.num_bots
+            ceiling = MAX_ROUNDS_PER_ORDER.get(num_bots, 50)
+            diag = result["diagnostics"]
+            avg_rpo = diag["avg_rounds_per_order"]
+            assert avg_rpo <= ceiling, (
+                f"Replay {name}: avg_rounds_per_order={avg_rpo:.1f} "
+                f"exceeds ceiling {ceiling} for {num_bots} bots. "
+                f"Order completion speed regressed."
+            )
+
+    def test_inv_full_waits_bounded(self, replay_results):
+        """Inventory-full waits must stay below per-difficulty ceilings."""
+        for name, result in replay_results.items():
+            sim = ReplaySimulator(str(MAPS_DIR / name))
+            num_bots = sim.num_bots
+            ceiling = MAX_INV_FULL_WAITS.get(num_bots, 1000)
+            diag = result["diagnostics"]
+            inv_full = diag["inv_full_waits"]
+            assert inv_full <= ceiling, (
+                f"Replay {name}: inv_full_waits={inv_full} "
+                f"exceeds ceiling {ceiling} for {num_bots} bots. "
+                f"Inventory clearing regressed."
+            )
+
+
 class TestReplayNoDeadlock:
     """Replay maps must complete orders — not deadlock at 0 score."""
 
