@@ -166,8 +166,10 @@ class TestSpeculativePickup:
             height=18,
             drop_off=[1, 16],
         )
-        # Force limit to 2
-        planner._speculative_pickers = 5  # already at max (10 // 2)
+        # Set pickers to max limit — should block further speculative pickup
+        num_bots = len(planner.bots)
+        max_spec = max(num_bots // 2, 4)
+        planner._speculative_pickers = max_spec
         planner.actions = []
         ctx = planner._build_bot_context(planner.bots[9])
         result = planner._step_speculative_pickup(ctx)
