@@ -32,6 +32,38 @@ def _planner(bots, items, orders, **kw):
     return p
 
 
+class TestInitStaticPassesDropoff:
+    """Regression: init_static must receive drop_off so zones are precomputed."""
+
+    def test_planner_precomputes_dropoff_zones(self):
+        """After plan(), GameState must have dropoff zones populated."""
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 4], "inventory": []}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        bot.reset_state()
+        bot.decide_actions(state)
+        gs = bot._gs
+        assert gs.dropoff_adjacents, "dropoff_adjacents not precomputed"
+        assert gs.dropoff_approach_cells, "dropoff_approach_cells not precomputed"
+        assert gs.drop_off_pos == (1, 8)
+
+    def test_planner_precomputes_wait_cells(self):
+        """Wait cells must be populated for congestion management."""
+        state = make_state(
+            bots=[{"id": 0, "position": [5, 4], "inventory": []}],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        bot.reset_state()
+        bot.decide_actions(state)
+        gs = bot._gs
+        assert gs.dropoff_wait_cells, "dropoff_wait_cells not precomputed"
+
+
 class TestDeliverAtDropoff:
     def test_active_at_dropoff_delivers(self):
         p = _planner(
