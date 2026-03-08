@@ -199,7 +199,7 @@ class TestLargeTeamStayBias:
             drop_off=[1, 8],
         )
         # Verify bot 0 is NOT at an idle spot
-        idle_set = set(planner.gs.idle_spots) if planner.gs.idle_spots else set()
+        set(planner.gs.idle_spots) if planner.gs.idle_spots else set()
         pos = (5, 3)
         # The stay bias should still apply on large teams even at non-idle spots
         planner.actions = []

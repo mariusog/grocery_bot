@@ -9,7 +9,7 @@ a snake. The fix: assign each bot a unique dispersal target based on
 map geometry so they spread vertically across item rows.
 """
 
-from tests.conftest import make_state, get_action
+from tests.conftest import make_state
 import bot
 
 
@@ -35,8 +35,6 @@ def _spawn_state(num_bots, spawn, items, order_items, **kw):
 
 def _run_rounds(state, n_rounds):
     """Run n_rounds and return (final_positions, all_actions_per_round)."""
-    from grocery_bot.simulator.game_simulator import GameSimulator
-    from grocery_bot.simulator.replay_simulator import ReplaySimulator
 
     bot.reset_state()
     rounds = []

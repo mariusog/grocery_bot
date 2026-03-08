@@ -92,6 +92,39 @@ class TestDeliverAtDropoff:
         assert p._step_deliver_at_dropoff(ctx) is False
 
 
+class TestFullNonactiveAtDropoff:
+    """Bots at dropoff with full non-active inventory must NOT stay forever.
+
+    Emitting drop_off for non-active items traps the bot at the dropoff
+    doing no-op drop_offs indefinitely, blocking the dropoff for other bots.
+    """
+
+    def test_full_nonactive_at_dropoff_does_not_deliver(self):
+        """Full non-active inventory at dropoff should NOT trigger step 2.
+
+        drop_off with non-matching items is a no-op that traps the bot.
+        """
+        p = _planner(
+            [{"id": 0, "position": [1, 8], "inventory": ["bread", "jam", "butter"]},
+             {"id": 1, "position": [5, 4], "inventory": []}],
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])], drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        assert p._step_deliver_at_dropoff(ctx) is False
+
+    def test_partial_nonactive_at_dropoff_skips(self):
+        """Bot with <3 non-active items at dropoff should NOT drop_off."""
+        p = _planner(
+            [{"id": 0, "position": [1, 8], "inventory": ["bread"]},
+             {"id": 1, "position": [5, 4], "inventory": []}],
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])], drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        assert p._step_deliver_at_dropoff(ctx) is False
+
+
 class TestClearDropoff:
     def test_idle_near_dropoff_clears(self):
         p = _planner(

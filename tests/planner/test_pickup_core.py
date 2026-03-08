@@ -2,9 +2,58 @@
 
 from tests.conftest import make_planner, make_state, get_action
 import bot
+from grocery_bot.planner.round_planner import RoundPlanner
 from tests.planner.conftest import _active_order, _preview_order
 
 
+def _planner_no_plan(bots, items, orders, **kw):
+    """Build a RoundPlanner with state initialized but plan() NOT called."""
+    state = make_state(bots=bots, items=items, orders=orders, **kw)
+    bot.reset_state()
+    bot.decide_actions(state)
+    gs = bot._gs
+    p = RoundPlanner(gs, state, full_state=state)
+    p._detect_pickup_failures()
+    p.active = next(
+        (o for o in p.orders if o.get("status") == "active" and not o["complete"]),
+        None,
+    )
+    p.preview = next((o for o in p.orders if o.get("status") == "preview"), None)
+    if p.active:
+        p._check_order_transition()
+        p._compute_needs()
+        p._compute_bot_assignments()
+        p.bot_roles = {b["id"]: "pick" for b in p.bots}
+        p._pre_predict()
+        p._decided = set()
+    return p
+
+
+class TestClaimPersistsOnBlockedMove:
+    """Claims persist as soft reservations when a bot's move is blocked.
+
+    This prevents other bots from wastefully competing for the same items.
+    The blocked bot will retry next round when the path clears.
+    """
+
+    def test_greedy_route_keeps_claim_when_blocked(self):
+        """Items stay claimed even when bot can't move (soft reservation)."""
+        p = _planner_no_plan(
+            bots=[
+                {"id": 0, "position": [3, 4], "inventory": []},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        p.actions = []
+        # Block ALL neighbors of bot 0 so it can't take any step
+        blocked = {(2, 4), (4, 4), (3, 3), (3, 5)}
+
+        result = p._try_active_pickup(0, 3, 4, (3, 4), [], blocked)
+        assert result is False, "move should fail when bot is fully blocked"
+        # Claims persist as soft reservation for next round
+        assert "i0" in p.claimed
 
 
 class TestTryActivePickup:
