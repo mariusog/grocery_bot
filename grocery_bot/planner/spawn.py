@@ -1,18 +1,21 @@
-"""Spawn-phase dispersal for very large teams."""
+"""Spawn-phase dispersal for all team sizes.
+
+When bots start stacked at spawn, they all BFS toward the same nearest
+items and convoy in a single file.  This mixin assigns each bot a
+unique dispersal target in a different vertical zone of the item grid
+so they spread across the map after exiting spawn.
+
+The dispersal only overrides idle/unassigned bots — assigned bots
+follow their normal pickup routes.
+"""
 
 from typing import Optional
 
-from grocery_bot.pathfinding import DIRECTIONS, direction_to
-from grocery_bot.constants import (
-    SPAWN_CLUSTER_DIVISOR,
-    SPAWN_CLUSTER_MIN_BOTS,
-    SPAWN_DISPERSAL_MAX_ROUNDS,
-    SPAWN_DISPERSAL_TEAM_MIN,
-)
+from grocery_bot.constants import SPAWN_DISPERSAL_MAX_ROUNDS
 
 
 class SpawnMixin:
-    """Mixin providing opening-round spawn dispersal priority."""
+    """Mixin providing opening-round dispersal for all team sizes."""
 
     def _infer_spawn_origin(self) -> Optional[tuple[int, int]]:
         """Persist the clustered spawn cell inferred from bot positions."""
@@ -20,130 +23,130 @@ class SpawnMixin:
             return self.gs.spawn_origin
 
         counts: dict[tuple[int, int], int] = {}
-        for bot in self.bots:
-            pos = tuple(bot["position"])
+        for b in self.bots:
+            pos = tuple(b["position"])
             counts[pos] = counts.get(pos, 0) + 1
         if not counts:
             return None
 
         spawn, count = max(counts.items(), key=lambda entry: entry[1])
-        clustered_min = max(SPAWN_CLUSTER_MIN_BOTS, len(self.bots) // SPAWN_CLUSTER_DIVISOR)
-        if count >= clustered_min:
+        if count >= 2:
             self.gs.spawn_origin = spawn
             return spawn
         return None
 
-    def _spawn_target_hint(self, bid: int, spawn: tuple[int, int]) -> tuple[int, int]:
-        """Return the best known productive target for a queued spawn bot."""
-        if self.bot_has_active.get(bid, False):
-            return self._nearest_dropoff(spawn)
+    def _compute_dispersal_targets(self) -> None:
+        """Assign each bot a dispersal target in a unique vertical zone."""
+        if self.gs.spawn_dispersal_targets is not None:
+            return
 
-        assigned = self.bot_assignments.get(bid)
-        if assigned:
-            cell, _ = self.gs.find_best_item_target(spawn, assigned[0])
-            if cell is not None:
-                return cell
+        num_bots = len(self.bots)
+        if num_bots <= 1:
+            self.gs.spawn_dispersal_targets = {}
+            return
 
-        if bid in self.preview_bot_ids and self.preview and self.net_preview:
-            best_cell: Optional[tuple[int, int]] = None
-            best_dist = float("inf")
-            for item, _ in self._iter_needed_items(self.net_preview):
-                cell, dist = self.gs.find_best_item_target(spawn, item)
-                if cell is not None and dist < best_dist:
-                    best_cell = cell
-                    best_dist = dist
-            if best_cell is not None:
-                return best_cell
+        item_ys = sorted({tuple(it["position"])[1] for it in self.items})
+        if not item_ys:
+            self.gs.spawn_dispersal_targets = {}
+            return
 
-        return self._nearest_dropoff(spawn)
+        spawn_pos = self._get_spawn_pos()
+        zones = self._split_into_zones(item_ys, num_bots)
+        targets = self._assign_zone_targets(zones, spawn_pos)
+        self.gs.spawn_dispersal_targets = targets
 
-    def _spawn_priority_key(
-        self, bid: int, exit_cell: tuple[int, int], spawn: tuple[int, int]
-    ) -> tuple[int, int, float, int]:
-        """Rank waiting spawn bots by productivity for a given exit."""
-        if self.bot_has_active.get(bid, False):
-            priority = 0
-        elif self.bot_assignments.get(bid):
-            priority = 1
-        elif bid in self.preview_bot_ids:
-            priority = 2
-        else:
-            priority = 3
+    def _split_into_zones(
+        self, item_ys: list[int], num_bots: int,
+    ) -> list[list[int]]:
+        """Split item Y-rows into num_bots vertical zones."""
+        n_zones = min(num_bots, len(item_ys))
+        if n_zones <= 1:
+            return [item_ys]
 
-        dx = exit_cell[0] - spawn[0]
-        dy = exit_cell[1] - spawn[1]
-        if dy < 0:
-            spread_rank = bid
-        elif dx < 0:
-            spread_rank = -bid
-        elif dy > 0:
-            spread_rank = -bid
-        else:
-            spread_rank = bid
+        zones: list[list[int]] = [[] for _ in range(n_zones)]
+        for i, y in enumerate(item_ys):
+            zone_idx = i * n_zones // len(item_ys)
+            zones[zone_idx].append(y)
+        return [z for z in zones if z]
 
-        target = self._spawn_target_hint(bid, spawn)
-        dist = self.gs.dist_static(exit_cell, target)
-        return (priority, spread_rank, dist, bid)
-
-    def _select_spawn_exit_bots(
-        self, spawn: tuple[int, int]
+    def _assign_zone_targets(
+        self,
+        zones: list[list[int]],
+        spawn_pos: tuple[int, int],
     ) -> dict[int, tuple[int, int]]:
-        """Assign the currently-open spawn exits to the best waiting bots."""
-        waiting = [
-            bot["id"]
-            for bot in self.bots
-            if tuple(bot["position"]) == spawn
-            and not bot["inventory"]
-            and (
-                self.bot_has_active.get(bot["id"], False)
-                or self.bot_assignments.get(bot["id"])
-            )
-        ]
-        if not waiting:
-            return {}
+        """Assign each bot a walkable target cell near its zone's items."""
+        num_bots = len(self.bots)
+        targets: dict[int, tuple[int, int]] = {}
+        if not zones:
+            return targets
 
-        exits = [
-            (spawn[0] + dx, spawn[1] + dy)
-            for dx, dy in DIRECTIONS
-            if (spawn[0] + dx, spawn[1] + dy) not in self.gs.blocked_static
-        ]
-        assignments: dict[int, tuple[int, int]] = {}
-        used: set[int] = set()
-        for exit_cell in exits:
-            available = [bid for bid in waiting if bid not in used]
-            if not available:
-                continue
-            chosen = min(
-                available,
-                key=lambda bid: self._spawn_priority_key(bid, exit_cell, spawn),
-            )
-            assignments[chosen] = exit_cell
-            used.add(chosen)
-        return assignments
+        row_cells: dict[int, list[tuple[int, int]]] = {}
+        for it in self.items:
+            ipos = tuple(it["position"])
+            for cell in self.gs.adj_cache.get(ipos, []):
+                row_cells.setdefault(cell[1], []).append(cell)
+
+        for bid in range(num_bots):
+            zone_idx = bid % len(zones)
+            zone_ys = zones[zone_idx]
+            best = self._find_zone_target(zone_ys, row_cells, spawn_pos)
+            if best is not None:
+                targets[bid] = best
+        return targets
+
+    def _get_spawn_pos(self) -> tuple[int, int]:
+        """Get spawn position from bots or stored origin."""
+        if self.gs.spawn_origin is not None:
+            return self.gs.spawn_origin
+        return tuple(self.bots[0]["position"])
+
+    def _find_zone_target(
+        self,
+        zone_ys: list[int],
+        row_cells: dict[int, list[tuple[int, int]]],
+        spawn_pos: tuple[int, int],
+    ) -> Optional[tuple[int, int]]:
+        """Find the best walkable cell in a vertical zone."""
+        mid_y = zone_ys[len(zone_ys) // 2]
+        candidates: list[tuple[int, int]] = []
+        for y in zone_ys:
+            candidates.extend(row_cells.get(y, []))
+        if not candidates:
+            return None
+
+        return min(
+            candidates,
+            key=lambda c: (
+                abs(c[1] - mid_y),
+                self.gs.dist_static(spawn_pos, c),
+            ),
+        )
 
     def _step_spawn_dispersal(self, ctx) -> bool:
-        """Reserve early spawn exits for the most productive waiting bots."""
-        if len(self.bots) < SPAWN_DISPERSAL_TEAM_MIN:
+        """Route unassigned bots toward diverse zones during opening."""
+        num_bots = len(self.bots)
+        if num_bots < 10:
             return False
-        if self.current_round >= SPAWN_DISPERSAL_MAX_ROUNDS or ctx.inv:
+        if self.current_round >= SPAWN_DISPERSAL_MAX_ROUNDS:
+            return False
+        if ctx.inv or ctx.has_active:
             return False
 
-        spawn = self._infer_spawn_origin()
-        if spawn is None or ctx.pos != spawn:
+        # Skip bots that have active pickup assignments
+        if self.bot_assignments.get(ctx.bid):
             return False
 
-        selected = self._select_spawn_exit_bots(spawn)
-        if not selected:
-            return False
-        target = selected.get(ctx.bid)
-        if target is None:
-            self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "wait"})
-            return True
+        self._infer_spawn_origin()
+        self._compute_dispersal_targets()
 
-        self._emit(
-            ctx.bid,
-            ctx.bx,
-            ctx.by,
-            {"bot": ctx.bid, "action": direction_to(ctx.bx, ctx.by, target[0], target[1])},
+        targets = self.gs.spawn_dispersal_targets
+        if not targets or ctx.bid not in targets:
+            return False
+
+        target = targets[ctx.bid]
+        if ctx.pos == target:
+            return False
+
+        return self._emit_move(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, target, ctx.blocked,
         )
-        return True
