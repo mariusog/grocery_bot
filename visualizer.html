@@ -54,8 +54,18 @@ canvas { border: 2px solid #334; border-radius: 4px; }
     <input type="file" id="csv-file" accept=".csv">
   </div>
   <div>
-    <label>Or load from server logs:</label>
-    <select id="log-select"><option value="">-- select --</option></select>
+    <label>Filter logs:</label>
+    <select id="log-filter" style="margin-bottom:4px">
+      <option value="">All</option>
+      <option value="local_easy">Easy (local)</option>
+      <option value="local_medium">Medium (local)</option>
+      <option value="local_hard">Hard (local)</option>
+      <option value="local_expert">Expert (local)</option>
+      <option value="local_nightmare">Nightmare (local)</option>
+      <option value="local_custom">Custom (local)</option>
+      <option value="game_">Live games</option>
+    </select>
+    <select id="log-select"><option value="">-- select log --</option></select>
     <button id="load-btn" style="margin-top:4px;width:100%">Load Selected</button>
   </div>
 
@@ -429,19 +439,42 @@ document.addEventListener('keydown', e => {
 });
 
 // ---- Auto-discover logs (if served from project root) ----
-// Try to fetch log list from a simple endpoint
+
+let allLogs = [];
+
+function formatLogLabel(name) {
+  // "local_expert_28x18_10bot_20260308_105109" → "Expert 28x18 10bot 10:51:09"
+  const m = name.match(/^(local|game)_(\w+?)_(\d+x\d+)_(\d+bot)_(\d{8})_(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    const src = m[1] === 'game' ? 'LIVE' : 'local';
+    const diff = m[2].charAt(0).toUpperCase() + m[2].slice(1);
+    return `[${src}] ${diff} ${m[3]} ${m[4]} ${m[6]}:${m[7]}:${m[8]}`;
+  }
+  return name;
+}
+
+function populateLogSelect(filter) {
+  const sel = document.getElementById('log-select');
+  sel.innerHTML = '<option value="">-- select log --</option>';
+  const filtered = filter ? allLogs.filter(l => l.includes(filter)) : allLogs;
+  for (const log of filtered) {
+    const opt = document.createElement('option');
+    opt.value = log;
+    opt.textContent = formatLogLabel(log);
+    sel.appendChild(opt);
+  }
+}
+
+document.getElementById('log-filter').addEventListener('change', e => {
+  populateLogSelect(e.target.value);
+});
+
 async function tryLoadLogList() {
   try {
     const resp = await fetch('/api/logs');
     if (resp.ok) {
-      const logs = await resp.json();
-      const sel = document.getElementById('log-select');
-      for (const log of logs) {
-        const opt = document.createElement('option');
-        opt.value = log;
-        opt.textContent = log;
-        sel.appendChild(opt);
-      }
+      allLogs = await resp.json();
+      populateLogSelect('');
     }
   } catch(e) { /* no server, use file inputs */ }
 }
