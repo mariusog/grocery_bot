@@ -24,6 +24,7 @@ from grocery_bot.planner.preview import PreviewMixin
 from grocery_bot.planner.delivery import DeliveryMixin
 from grocery_bot.planner.idle import IdleMixin
 from grocery_bot.planner.speculative import SpeculativeMixin
+from grocery_bot.planner.spawn import SpawnMixin
 from grocery_bot.planner.coordination import CoordinationMixin
 from grocery_bot.planner.steps import StepsMixin
 
@@ -33,7 +34,7 @@ BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active 
 
 class RoundPlanner(
     MovementMixin, AssignmentMixin, PickupMixin, PreviewMixin, DeliveryMixin,
-    IdleMixin, SpeculativeMixin, CoordinationMixin, StepsMixin,
+    IdleMixin, SpeculativeMixin, SpawnMixin, CoordinationMixin, StepsMixin,
 ):
     """Plans actions for all bots in a single round."""
 
@@ -429,6 +430,7 @@ class RoundPlanner(
 
 # Populate the step chain after class definition.
 RoundPlanner._STEP_CHAIN = [
+    RoundPlanner._step_spawn_dispersal,
     RoundPlanner._step_preview_bot,
     RoundPlanner._step_deliver_at_dropoff,
     RoundPlanner._step_deliver_completes_order,

@@ -144,3 +144,11 @@ DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING
 # Speculative pickup (planner/speculative.py)
 # ---------------------------------------------------------------------------
 SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots
+
+# ---------------------------------------------------------------------------
+# Spawn dispersal (planner/spawn.py)
+# ---------------------------------------------------------------------------
+SPAWN_DISPERSAL_TEAM_MIN = 16  # len(bots) >= this enables spawn-priority logic
+SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
+SPAWN_CLUSTER_DIVISOR = 4  # clustered bots threshold = len(bots) // this
+SPAWN_CLUSTER_MIN_BOTS = 6  # minimum clustered bots before spawn logic applies

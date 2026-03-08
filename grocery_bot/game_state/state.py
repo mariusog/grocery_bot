@@ -82,6 +82,7 @@ class GameState(
         # Bot history (oscillation detection)
         self.bot_history: dict[int, Any] = {}
         self._history_gen: Optional[int] = None
+        self.spawn_origin: Optional[tuple[int, int]] = None
 
     def reset(self) -> None:
         """Reset all state for a new game."""
@@ -116,6 +117,7 @@ class GameState(
         self.last_active_order_id = None
         self.bot_history = {}
         self._history_gen = None
+        self.spawn_origin = None
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
