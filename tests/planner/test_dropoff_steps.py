@@ -143,7 +143,8 @@ class TestIdleNonactiveDeliver:
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_idle_nonactive_deliver(ctx) is True
 
-    def test_at_dropoff_does_not_spam_dropoff(self):
+    def test_at_dropoff_does_not_move_to_dropoff(self):
+        """Bot already at dropoff should not be told to move to dropoff again."""
         p = _planner(
             [{"id": 0, "position": [1, 8], "inventory": ["bread", "butter"]},
              {"id": 1, "position": [7, 4], "inventory": []}],
@@ -151,6 +152,7 @@ class TestIdleNonactiveDeliver:
             [_order(["cheese"])], drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
+        # Should be False because _step_deliver_at_dropoff handles this case now
         assert p._step_idle_nonactive_deliver(ctx) is False
 
     def test_skips_with_active_items(self):
@@ -162,6 +164,42 @@ class TestIdleNonactiveDeliver:
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_idle_nonactive_deliver(ctx) is False
+
+
+class TestClearRadiusScalesWithBots:
+    """Dropoff clear radius should grow with team size."""
+
+    def test_10bot_clears_at_dist_5(self):
+        """On 10-bot team, bot at dist 5 from dropoff should still clear."""
+        bots = [{"id": i, "position": [5 + i, 4], "inventory": []}
+                for i in range(10)]
+        # Place bot 0 at dist 5 from dropoff (1,8): position (2,4) → d=3+4=..
+        # Actually (5,7) → d=4+1=5
+        bots[0] = {"id": 0, "position": [5, 7], "inventory": []}
+        p = _planner(
+            bots,
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        # dist from (5,7) to (1,8) = 4+1 = 5; should clear with scaled radius
+        assert p._step_clear_dropoff(ctx) is True
+
+    def test_2bot_does_not_clear_at_dist_5(self):
+        """On 2-bot team, bot at dist 5 should NOT clear (small radius)."""
+        bots = [
+            {"id": 0, "position": [4, 5], "inventory": []},
+            {"id": 1, "position": [7, 4], "inventory": []},
+        ]
+        p = _planner(
+            bots,
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        assert p._step_clear_dropoff(ctx) is False
 
 
 class TestInventoryFullDeliver:
