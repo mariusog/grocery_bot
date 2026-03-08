@@ -228,6 +228,50 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Risk**: Low — urgency is already computed, just unused for ordering. The `_yield_to` set becomes redundant but harmless.
 - **Expected gain**: +3-8 on Hard/Expert (reduces round waste from path conflicts).
 
+### T44: Split movement.py (417 lines → ≤300)
+- **Agent**: strategy-agent
+- **Status**: open
+- **Priority**: 0 (quality gate)
+- **Root cause**: `MovementMixin` is 399 lines with three 30+ line methods (`_pre_predict` at 104 lines, `_bfs_smart` at 63, `_emit` at 36). The class has collision avoidance, BFS dispatch, and move emission — at least two responsibilities.
+- **How to fix**: Extract collision/prediction logic (`_pre_predict`, `_yield_to_positions`, path planning) into `collision.py`. Keep BFS dispatch and move emission in `movement.py`.
+- **Files**: `grocery_bot/planner/movement.py`
+
+### T45: Split round_planner.py (395 lines → ≤300)
+- **Agent**: strategy-agent
+- **Status**: open
+- **Priority**: 0 (quality gate)
+- **Root cause**: `RoundPlanner` is 346 lines with `plan()` at 51 lines, `_allocate_carried_need` at 47, `_compute_needs` at 36. The class mixes orchestration with need computation.
+- **How to fix**: Extract `_allocate_carried_need`, `_compute_needs`, `_iter_needed_items`, and `_spare_slots` into a `needs.py` mixin. Keep `plan()` and `_decide_bot()` in `round_planner.py`.
+- **Files**: `grocery_bot/planner/round_planner.py`
+
+### T46: Split bot.py (618 lines → ≤300)
+- **Agent**: lead-agent
+- **Status**: open
+- **Priority**: 0 (quality gate)
+- **Root cause**: `bot.py` has 618 lines with `play()` at 224 lines. It mixes WebSocket loop, action validation, game logging, map recording, and API functions.
+- **How to fix**: Extract `_validate_actions`, `_update_expected_positions`, `_update_expected_inventories` into `validation.py`. Extract `_build_map_snapshot`, `_save_recorded_map`, `_build_game_meta`, `_log_round`, `_log_game_over` into `logging_utils.py`. Keep `play()` and the API functions in `bot.py`.
+- **Files**: `bot.py`
+
+### T47: Centralize Module-Level Constants into constants.py
+- **Agent**: lead-agent
+- **Status**: open
+- **Priority**: 1 (quality)
+- **Root cause**: Constants scattered across modules instead of centralized in `constants.py`:
+  - `dropoff.py`: `DROPOFF_CONGESTION_RADIUS=3`, `DROPOFF_WAIT_DISTANCE=4`, `MAX_APPROACH_SLOTS=2`
+  - `distance.py`: `DIST_CACHE_MAX=512`
+  - `path_cache.py`: `PATH_RECHECK_INTERVAL=5`
+  - `pathfinding.py`: `4000` temporal BFS max cells (unnamed)
+  - `steps.py`/`coordination.py`: `max(2, num_bots // 4)` duplicated deliverer scaling
+  - `runner.py`: diagnostic thresholds `50, 30, 10, 40, 20` (unnamed)
+- **Files**: `grocery_bot/constants.py` and all affected modules
+
+### T48: Add Type Annotations to bot.py and simulator/
+- **Agent**: qa-agent (simulator/), lead-agent (bot.py)
+- **Status**: open
+- **Priority**: 2 (quality)
+- **Root cause**: ~40 functions missing param and/or return type annotations, concentrated in `bot.py` (19 functions) and `grocery_bot/simulator/` (10+ functions). Also `planner/steps.py` has 15 step methods with untyped `ctx` parameter.
+- **Files**: `bot.py`, `grocery_bot/simulator/*.py`, `grocery_bot/planner/steps.py`
+
 ### T43: Fix `_spare_slots` Over-Conservatism (round_planner.py)
 - **Agent**: strategy-agent
 - **Status**: open
@@ -285,6 +329,8 @@ Status: `open` | `in-progress` | `done` | `blocked`
 | T20: Package structure | `grocery_bot/` package with `planner/` subpackage. Matching test dirs. |
 | T23: Unit test coverage audit | Added 97 tests across all modules (230 -> 327). Every public method now has 2+ tests. |
 | T18: Benchmark Phase 2 Changes | Easy 148, Medium 109, Hard 82, Expert 60. Thresholds updated to 80-85% of avg. Timing <2ms/round. All 345 tests pass. |
+| T41-cov: Test coverage gap audit (2026-03-08) | Added 58 tests across 5 new files: path_cache (14), diagnostics (20), map_generator (16), coordination (6), distance (2). 544 total tests, all passing. |
+| T41-audit: SOLID/quality audit (2026-03-08) | Full audit: 19 magic numbers, 10 LoD violations, ~40 missing type annotations, 35 long methods, 9 large classes, 3 oversized files. Filed T44-T48 for fixes. |
 
 ### Phase 3
 | Task | Result |
