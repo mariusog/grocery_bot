@@ -8,7 +8,6 @@ Thresholds are set at ~60% of current scores to catch catastrophic regressions
 without being overly brittle to small optimisation changes.
 """
 
-import glob
 from pathlib import Path
 
 import pytest

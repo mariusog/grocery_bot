@@ -8,16 +8,11 @@ import bot
 
 from grocery_bot.simulator.map_generator import generate_store_layout, generate_orders
 from grocery_bot.simulator.diagnostics import DiagnosticTracker
-from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 from grocery_bot.simulator.physics import PhysicsMixin
 from grocery_bot.simulator.sim_logging import (
     compute_timing_stats,
     log_round,
     save_local_log,
-    # Re-export so existing `import game_simulator as gs_mod` keeps working
-    _LOG_DIR,
-    _MAX_LOCAL_LOGS,
-    infer_difficulty_slug as _infer_difficulty_slug,
 )
 
 
