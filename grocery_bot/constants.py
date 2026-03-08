@@ -49,11 +49,12 @@ DROPOFF_CLEAR_RADIUS = 3  # idle bots clear dropoff within this distance
 # ---------------------------------------------------------------------------
 # Idle positioning scoring weights
 # ---------------------------------------------------------------------------
-IDLE_DROPOFF_PENALTY_RADIUS = 3  # penalize idle bots within this dist of dropoff
+IDLE_DROPOFF_PENALTY_RADIUS = 2  # penalize idle bots within this dist of dropoff
 IDLE_DROPOFF_PENALTY_FACTOR = 3  # weight: (radius+1 - dist) * factor
 IDLE_BOT_PROXIMITY_RADIUS = 2  # penalize idle bots within this dist of each other
 IDLE_BOT_PROXIMITY_FACTOR = 2  # weight: (radius+1 - dist) * factor
 IDLE_TARGET_DISTANCE_WEIGHT = 0.5  # reward proximity to target position
+IDLE_NO_TARGET_ATTRACT_MIN = 10  # disable target attraction for teams this large
 IDLE_STAY_IMPROVEMENT_THRESHOLD = 0.5  # only move from idle spot if improvement >= this
 IDLE_CORRIDOR_PENALTY = 4  # penalty for idle bots sitting in main corridor rows (large teams)
 IDLE_PREVIEW_STAGE_WEIGHT_5BOT = 0.5  # dropoff bias for 5-bot preview carriers

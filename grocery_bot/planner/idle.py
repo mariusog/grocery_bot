@@ -13,6 +13,7 @@ from grocery_bot.constants import (
     IDLE_DROPOFF_PENALTY_RADIUS,
     IDLE_PREVIEW_STAGE_WEIGHT_10BOT,
     IDLE_PREVIEW_STAGE_WEIGHT_5BOT,
+    IDLE_NO_TARGET_ATTRACT_MIN,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
     IDLE_TARGET_DISTANCE_WEIGHT,
     PREDICTION_TEAM_MIN,
@@ -244,6 +245,11 @@ class IdleMixin:
             IDLE_DROPOFF_PENALTY_RADIUS, bots_per_zone // 2,
         )
 
+        target_weight = (
+            0.0 if len(self.bots) >= IDLE_NO_TARGET_ATTRACT_MIN
+            else IDLE_TARGET_DISTANCE_WEIGHT
+        )
+
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
             s = 0.0
@@ -263,10 +269,10 @@ class IdleMixin:
             # Penalize corridor rows on large teams (keep corridors clear)
             if is_large_team and corridor_ys and p[1] in corridor_ys:
                 s += IDLE_CORRIDOR_PENALTY
-            # Reward being near target
-            if item_target:
+            # Reward being near target (disabled for very large teams)
+            if item_target and target_weight > 0:
                 item_dist = abs(p[0] - item_target[0]) + abs(p[1] - item_target[1])
-                s += item_dist * IDLE_TARGET_DISTANCE_WEIGHT
+                s += item_dist * target_weight
             return s
 
         stay_score = _score(pos)
