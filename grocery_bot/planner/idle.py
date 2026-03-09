@@ -11,13 +11,7 @@ from grocery_bot.constants import (
     IDLE_CORRIDOR_PENALTY,
     IDLE_DROPOFF_PENALTY_FACTOR,
     IDLE_DROPOFF_PENALTY_RADIUS,
-    IDLE_PREVIEW_STAGE_WEIGHT_10BOT,
-    IDLE_PREVIEW_STAGE_WEIGHT_5BOT,
-    IDLE_NO_TARGET_ATTRACT_MIN,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
-    IDLE_TARGET_DISTANCE_WEIGHT,
-    PREDICTION_TEAM_MIN,
-    SMALL_TEAM_MAX,
 )
 
 # Minimum history length to detect A-B-A oscillation.
@@ -51,12 +45,8 @@ class IdleMixin:
         if not inv:
             return None
 
-        team_size = len(self.bots)
-        if team_size >= 10:
-            return IDLE_PREVIEW_STAGE_WEIGHT_10BOT
-        if team_size >= 5:
-            return IDLE_PREVIEW_STAGE_WEIGHT_5BOT
-        return None
+        w = self.cfg.preview_stage_weight
+        return w if w > 0 else None
 
     def _get_preview_stage_target(
         self,
@@ -103,13 +93,13 @@ class IdleMixin:
         pos: tuple[int, int],
         blocked: set[tuple[int, int]],
     ) -> bool:
-        if len(self.bots) <= 1:
+        if not self.cfg.multi_bot:
             return False
 
         # T33: On large teams, use T30 congestion avoidance to route idle bots
         # away from the dropoff zone, giving deliverers more space.
         nearest = self._nearest_dropoff(pos)
-        if len(self.bots) >= PREDICTION_TEAM_MIN:
+        if self.cfg.use_predictions:
             bot_positions = [tuple(b["position"]) for b in self.bots]
             if self.gs.is_dropoff_congested(nearest, bot_positions):
                 avoidance = self.gs.get_avoidance_target(pos, nearest)
@@ -161,7 +151,7 @@ class IdleMixin:
         active bots for better crowd avoidance, and biases toward staying
         still when already at an idle spot to reduce oscillation.
         """
-        if len(self.bots) <= 1:
+        if not self.cfg.multi_bot:
             return False
 
         preview_stage_target = self._get_preview_stage_target(bid, pos, blocked)
@@ -172,7 +162,7 @@ class IdleMixin:
         # (assigned or delivering) to better anticipate where they'll be.
         # For smaller teams, stick with current positions (predictions
         # can hurt when there are few bots and corridors are narrow).
-        use_predictions = len(self.bots) >= PREDICTION_TEAM_MIN
+        use_predictions = self.cfg.use_predictions
         other_bot_positions: list[tuple[int, int]] = []
         for b in self.bots:
             if b["id"] == bid:
@@ -197,7 +187,7 @@ class IdleMixin:
         at_idle_spot = pos in idle_set
 
         # Detect stale idle: bot has been at the same position for too long
-        is_large_team = len(self.bots) >= PREDICTION_TEAM_MIN
+        is_large_team = self.cfg.use_idle_spots
         is_stale = False
         if is_large_team:
             history = self.gs.bot_history.get(bid)
@@ -226,7 +216,7 @@ class IdleMixin:
             spot_idx = (rank * len(preferred)) // n_bots
             item_target = preferred[spot_idx]
 
-        if item_target is None and len(self.bots) >= SMALL_TEAM_MAX and self.items:
+        if item_target is None and self.cfg.num_bots >= 3 and self.items:
             # Smaller teams or fallback: original shelf-column targeting
             item_positions = [tuple(it["position"]) for it in self.items]
             if item_positions:
@@ -245,10 +235,7 @@ class IdleMixin:
             IDLE_DROPOFF_PENALTY_RADIUS, bots_per_zone // 2,
         )
 
-        target_weight = (
-            0.0 if len(self.bots) >= IDLE_NO_TARGET_ATTRACT_MIN
-            else IDLE_TARGET_DISTANCE_WEIGHT
-        )
+        target_weight = self.cfg.target_attraction_weight
 
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""

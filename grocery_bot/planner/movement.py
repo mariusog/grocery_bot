@@ -10,12 +10,7 @@ from grocery_bot.pathfinding import (
     _predict_pos,
 )
 from grocery_bot.constants import (
-    BLOCKING_RADIUS_EXPERT,
-    BLOCKING_RADIUS_HUGE_TEAM,
-    BLOCKING_RADIUS_LARGE_TEAM,
     DROPOFF_CLEAR_RADIUS,
-    MEDIUM_TEAM_MIN,
-    PREDICTION_TEAM_MIN,
 )
 
 
@@ -128,7 +123,7 @@ class MovementMixin:
         and predicts they will yield (move perpendicular), so active bots'
         BFS can path through without detours.
         """
-        if len(self.bots) <= 1:
+        if not self.cfg.multi_bot:
             return
 
         # Phase 1: compute targets and initial predictions
@@ -294,7 +289,7 @@ class MovementMixin:
 
         # Cached path unavailable or blocked — fall back to live BFS
         result: Optional[tuple[int, int]] = None
-        if len(self.bots) > 1:
+        if self.cfg.use_temporal_bfs:
             obstacles = self._build_moving_obstacles(bid)
             result = bfs_temporal(pos, target, self.gs.blocked_static, obstacles)
             if result and result in blocked:
@@ -403,15 +398,7 @@ class MovementMixin:
     def _build_blocked(self, bid: int) -> set[tuple[int, int]]:
         """Build blocked set for a specific bot (static + nearby other bots)."""
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
-        num_bots = len(self.bots)
-        if num_bots < MEDIUM_TEAM_MIN:
-            max_dist: float = float("inf")
-        elif PREDICTION_TEAM_MIN <= num_bots < 15:
-            max_dist = BLOCKING_RADIUS_EXPERT
-        elif num_bots >= 15:
-            max_dist = BLOCKING_RADIUS_HUGE_TEAM
-        else:
-            max_dist = BLOCKING_RADIUS_LARGE_TEAM
+        max_dist: float = self.cfg.blocking_radius
         other: set[tuple[int, int]] = set()
         for b in self.bots:
             if b["id"] == bid:

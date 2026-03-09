@@ -10,8 +10,6 @@ from typing import Any, Optional
 from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     MAX_INVENTORY,
-    MEDIUM_TEAM_MIN,
-    PREDICTION_TEAM_MIN,
     SPEC_MAX_TEAM_COPIES,
 )
 
@@ -28,7 +26,7 @@ class SpeculativeMixin:
         self.spec_assignments: dict[int, dict[str, Any]] = {}
         if not self.preview or not self.net_preview:
             return
-        if len(self.bots) < PREDICTION_TEAM_MIN:
+        if not self.cfg.enable_spec_assignment:
             return
 
         # Identify idle bots: no active assignment, no active items, has space
@@ -87,14 +85,14 @@ class SpeculativeMixin:
     def _is_preferred_spec_type(self, item_type: str) -> bool:
         """Prefer preview-needed types for speculative pickup when available."""
         return bool(
-            len(self.bots) < PREDICTION_TEAM_MIN * 2
+            self.cfg.num_bots < 16
             and self.preview
             and self.net_preview.get(item_type, 0) > 0
         )
 
     def _step_speculative_pickup(self, ctx) -> bool:
         """Speculatively pick up items when idle (large teams)."""
-        if len(self.bots) < MEDIUM_TEAM_MIN:
+        if not self.cfg.enable_speculative:
             return False
         if ctx.has_active or len(ctx.inv) >= MAX_INVENTORY:
             return False
@@ -149,8 +147,7 @@ class SpeculativeMixin:
         blocked: set[tuple[int, int]],
     ) -> bool:
         """Pick up items speculatively for future orders."""
-        num_bots = len(self.bots)
-        max_spec = max(num_bots // 2, 4)
+        max_spec = self.cfg.max_spec_pickers()
         if self._speculative_pickers >= max_spec:
             return False
 

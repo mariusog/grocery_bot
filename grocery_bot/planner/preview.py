@@ -6,8 +6,6 @@ from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
-    MEDIUM_TEAM_MIN,
-    PREDICTION_TEAM_MIN,
 )
 
 
@@ -43,13 +41,10 @@ class PreviewMixin:
 
         # Pass 2: walk to distant preview items
         if not is_preview_bot:
-            if len(self.bots) <= MEDIUM_TEAM_MIN and self.active_on_shelves > 0:
+            if self.cfg.num_bots <= 5 and self.active_on_shelves > 0:
                 # Small/medium teams (≤5): don't divert from active work
                 return False
-            if len(self.bots) >= PREDICTION_TEAM_MIN:
-                max_walkers = max(2, len(self.bots) - self.active_on_shelves - 2)
-            else:
-                max_walkers = max(2, len(self.bots) // 2)
+            max_walkers = self.cfg.max_walkers(self.active_on_shelves)
             if self._preview_walkers >= max_walkers:
                 return False
             self._preview_walkers += 1

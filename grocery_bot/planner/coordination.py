@@ -3,10 +3,7 @@
 import math
 
 from grocery_bot.constants import (
-    MAX_CONCURRENT_DELIVERERS,
     MAX_INVENTORY,
-    MEDIUM_TEAM_MIN,
-    PREDICTION_TEAM_MIN,
     TASK_COMMITMENT_ROUNDS,
 )
 
@@ -80,7 +77,7 @@ class CoordinationMixin:
         gs = self.gs
         num_bots = len(self.bots)
 
-        if num_bots >= PREDICTION_TEAM_MIN:
+        if self.cfg.use_predictions:
             active_picker_count = min(self.active_on_shelves, num_bots - 1)
         else:
             active_picker_count = math.ceil(self.active_on_shelves / MAX_INVENTORY)
@@ -88,12 +85,7 @@ class CoordinationMixin:
                 min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
             )
 
-        if num_bots >= PREDICTION_TEAM_MIN:
-            max_deliverers = max(2, num_bots // 4)
-        elif num_bots >= MEDIUM_TEAM_MIN:
-            max_deliverers = 2
-        else:
-            max_deliverers = MAX_CONCURRENT_DELIVERERS
+        max_deliverers = self.cfg.max_concurrent_deliverers
 
         delivering_count = 0
         for bid in gs.delivery_queue:
@@ -133,7 +125,7 @@ class CoordinationMixin:
             for bid in self.preview_bot_ids:
                 if bid not in self.bot_roles:
                     self.bot_roles[bid] = "preview"
-            if num_bots >= 8:
+            if self.cfg.extra_preview_roles:
                 extra_preview = 0
                 max_extra = max(0, min(2, num_bots) - len(self.preview_bot_ids))
                 for bot in self.bots:

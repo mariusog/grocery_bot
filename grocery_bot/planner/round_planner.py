@@ -7,7 +7,6 @@ from grocery_bot.orders import get_needed_items
 from grocery_bot.constants import (
     BLACKLIST_EXPIRY_ROUNDS,
     BOT_HISTORY_MAXLEN,
-    DELIVERY_QUEUE_TEAM_MIN,
     DROPOFF_CLEAR_RADIUS,
     ENDGAME_ROUNDS_LEFT,
     MAX_INVENTORY,
@@ -15,6 +14,7 @@ from grocery_bot.constants import (
     PICKUP_FAIL_BLACKLIST_THRESHOLD,
     ZONE_CONGESTION_WEIGHT,
 )
+from grocery_bot.team_config import TeamConfig, get_team_config
 
 from grocery_bot.planner.movement import MovementMixin
 from grocery_bot.planner.assignment import AssignmentMixin
@@ -62,6 +62,7 @@ class RoundPlanner(
         self.rounds_left: int = state["max_rounds"] - state["round"]
         self.endgame: bool = self.rounds_left <= ENDGAME_ROUNDS_LEFT
 
+        self.cfg: TeamConfig = get_team_config(len(self.bots))
         self.bots_by_id: dict[int, dict[str, Any]] = {b["id"]: b for b in self.bots}
         self.items_at_pos: dict[tuple[int, int], list[dict[str, Any]]] = {}
         for it in self.items:
@@ -115,7 +116,7 @@ class RoundPlanner(
         )
 
         self.bot_roles: dict[int, str] = {}
-        self._use_coordination = len(self.bots) >= DELIVERY_QUEUE_TEAM_MIN
+        self._use_coordination = self.cfg.use_coordination
         if self._use_coordination:
             self._update_delivery_queue()
             self._assign_roles()

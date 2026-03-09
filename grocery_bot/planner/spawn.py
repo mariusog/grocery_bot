@@ -124,8 +124,7 @@ class SpawnMixin:
 
     def _step_spawn_dispersal(self, ctx) -> bool:
         """Route unassigned bots toward diverse zones during opening."""
-        num_bots = len(self.bots)
-        if num_bots < 10:
+        if self.cfg.num_bots < 10:
             return False
         if self.current_round >= SPAWN_DISPERSAL_MAX_ROUNDS:
             return False

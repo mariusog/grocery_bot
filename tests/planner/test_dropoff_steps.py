@@ -125,6 +125,40 @@ class TestFullNonactiveAtDropoff:
         assert p._step_deliver_at_dropoff(ctx) is False
 
 
+class TestDropoffRequiresActiveItems:
+    """Game mechanic: drop_off only removes items matching the active order.
+
+    Non-active items CANNOT be delivered — they stay in the bot's inventory.
+    Emitting drop_off with only non-active items is a wasted round that traps
+    the bot at the dropoff doing no-op actions indefinitely.
+    """
+
+    def test_only_nonactive_at_dropoff_must_not_deliver(self):
+        """Bot at dropoff with only non-active items must NOT emit drop_off."""
+        p = _planner(
+            [{"id": 0, "position": [1, 8], "inventory": ["bread", "jam"]},
+             {"id": 1, "position": [5, 4], "inventory": []}],
+            [{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            [_order(["cheese"])], drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        assert ctx.has_active is False, "bread/jam are not active items"
+        assert p._step_deliver_at_dropoff(ctx) is False, (
+            "drop_off with non-active items is a no-op — game only removes "
+            "items matching the active order"
+        )
+
+    def test_mixed_inventory_at_dropoff_delivers(self):
+        """Bot with active + non-active items at dropoff SHOULD deliver."""
+        p = _planner(
+            [{"id": 0, "position": [1, 8], "inventory": ["cheese", "bread"]}],
+            [], [_order(["cheese"])], drop_off=[1, 8],
+        )
+        ctx = p._build_bot_context(p.bots_by_id[0])
+        assert ctx.has_active is True
+        assert p._step_deliver_at_dropoff(ctx) is True
+
+
 class TestClearDropoff:
     def test_idle_near_dropoff_clears(self):
         p = _planner(

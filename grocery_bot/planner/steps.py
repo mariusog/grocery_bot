@@ -5,15 +5,8 @@ from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     DELIVER_WHEN_CLOSE_DIST,
-    DELIVERY_QUEUE_TEAM_MIN,
-    LARGE_TEAM_MIN,
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
-    MAX_NONACTIVE_DELIVERERS,
-    MEDIUM_TEAM_MIN,
-    MIN_INV_FOR_NONACTIVE_DELIVERY,
-    PREDICTION_TEAM_MIN,
-    SMALL_TEAM_MAX,
 )
 
 
@@ -81,9 +74,9 @@ class StepsMixin:
             return False
 
         is_queue_front = True
-        if len(self.bots) >= PREDICTION_TEAM_MIN and self._use_coordination:
+        if self.cfg.use_predictions and self._use_coordination:
             gs = self.gs
-            max_deliverers = max(2, len(self.bots) // 4)
+            max_deliverers = self.cfg.rush_max_deliverers()
             queue_front = set(gs.delivery_queue[:max_deliverers])
             is_queue_front = ctx.bid in queue_front
 
@@ -123,11 +116,11 @@ class StepsMixin:
         if not (
             self.preview
             and self._spare_slots(ctx.inv, ctx.bid) > 0
-            and not (len(self.bots) == 1 and self.active_on_shelves > 0)
+            and not (not self.cfg.multi_bot and self.active_on_shelves > 0)
         ):
             return False
         if (
-            len(self.bots) < SMALL_TEAM_MAX
+            self.cfg.num_bots < 3
             and self.bot_assignments.get(ctx.bid)
         ):
             return False
@@ -250,27 +243,17 @@ class StepsMixin:
         """Bot has non-active items clogging inventory."""
         if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
             return False
-        num_bots = len(self.bots)
-        if num_bots >= PREDICTION_TEAM_MIN:
-            has_assignment = (
-                ctx.bid in self.bot_assignments
-                and bool(self.bot_assignments[ctx.bid])
-            )
-            min_inv = 1 if has_assignment else 2
-        elif num_bots <= SMALL_TEAM_MAX:
-            min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY
-        else:
-            min_inv = MAX_INVENTORY
+        has_assignment = (
+            ctx.bid in self.bot_assignments
+            and bool(self.bot_assignments[ctx.bid])
+        )
+        min_inv = self.cfg.nonactive_clear_min_inv(has_assignment)
         if len(ctx.inv) < min_inv:
             return False
         if self._is_at_any_dropoff(ctx.pos):
             return False
-        max_na_del = (
-            max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
-            if num_bots >= PREDICTION_TEAM_MIN
-            else MAX_NONACTIVE_DELIVERERS
-        )
-        if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
+        max_na_del = self.cfg.max_nonactive_deliverers
+        if self.cfg.num_bots >= 5 and self._nonactive_delivering >= max_na_del:
             return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
@@ -281,19 +264,13 @@ class StepsMixin:
 
     def _step_preview_prepick(self, ctx) -> bool:
         """Pre-pick preview items."""
-        num_bots = len(self.bots)
-        if num_bots >= PREDICTION_TEAM_MIN:
-            has_assignment = (
-                ctx.bid in self.bot_assignments
-                and bool(self.bot_assignments[ctx.bid])
-            )
-            force = not has_assignment and not ctx.has_active
-        elif num_bots >= LARGE_TEAM_MIN:
-            force = self.active_on_shelves == 0
-        elif num_bots >= SMALL_TEAM_MAX:
-            force = self.active_on_shelves <= 1
-        else:
-            force = False
+        has_assignment = (
+            ctx.bid in self.bot_assignments
+            and bool(self.bot_assignments[ctx.bid])
+        )
+        force = self.cfg.preview_prepick_force(
+            has_assignment, ctx.has_active, self.active_on_shelves
+        )
         return self._try_preview_prepick(
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=force
         )
@@ -304,8 +281,7 @@ class StepsMixin:
 
     def _step_idle_nonactive_deliver(self, ctx) -> bool:
         """Idle bot with non-active inventory -- deliver for points."""
-        num_bots = len(self.bots)
-        min_inv = 1 if num_bots >= PREDICTION_TEAM_MIN else MIN_INV_FOR_NONACTIVE_DELIVERY
+        min_inv = self.cfg.min_inv_nonactive_idle
         if not (ctx.inv and not ctx.has_active and len(ctx.inv) >= min_inv):
             return False
         if self._is_at_any_dropoff(ctx.pos):
@@ -316,16 +292,12 @@ class StepsMixin:
         # avoid the stuck-idle problem and throttling prevents congestion.
         carries_matching = (
             self.active_on_shelves == 0
-            and num_bots < PREDICTION_TEAM_MIN
+            and not self.cfg.use_predictions
             and any(item in self.active_needed for item in ctx.inv)
         )
         if not carries_matching:
-            max_na_del = (
-                max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
-                if num_bots >= PREDICTION_TEAM_MIN
-                else MAX_NONACTIVE_DELIVERERS
-            )
-            if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
+            max_na_del = self.cfg.max_nonactive_deliverers
+            if self.cfg.num_bots >= 5 and self._nonactive_delivering >= max_na_del:
                 return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
@@ -336,7 +308,7 @@ class StepsMixin:
 
     def _step_idle_positioning(self, ctx) -> bool:
         """Idle bot positioning -- spread out from other bots."""
-        if len(self.bots) > 1:
+        if self.cfg.multi_bot:
             return self._try_idle_positioning(
                 ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked
             )

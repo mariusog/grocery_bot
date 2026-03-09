@@ -5,10 +5,6 @@ from typing import Any, Optional
 from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
     MAX_INVENTORY,
-    MAX_PREVIEW_BOTS,
-    MEDIUM_TEAM_MIN,
-    PREDICTION_TEAM_MIN,
-    SMALL_TEAM_MAX,
     ZONE_CROSS_PENALTY,
 )
 
@@ -56,7 +52,7 @@ class AssignmentMixin:
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = max(1, surplus - 1) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
+        max_preview = max(1, surplus - 1) if self.cfg.num_bots >= 5 else 1
 
         candidates: list[tuple[float, int]] = []
         for bot in idle_for_active:
@@ -91,7 +87,7 @@ class AssignmentMixin:
     def _compute_bot_assignments(self) -> None:
         """Pre-assign active items to bots (multi-bot optimization)."""
         self.bot_assignments: dict[int, list[dict[str, Any]]] = {}
-        if len(self.bots) <= 1 or not self.net_active:
+        if not self.cfg.multi_bot or not self.net_active:
             return
 
         candidates: list[dict[str, Any]] = []
@@ -122,17 +118,12 @@ class AssignmentMixin:
         # 8+ bots: enough zones to avoid convergence (at least 2)
         # 5-7 bots: moderate zones
         # <5 bots: no zones needed
-        if len(self.bots) >= 8:
-            num_zones = max(2, len(assignable) // 3)
-        else:
-            num_zones = (
-                max(1, len(assignable) // 2) if len(self.bots) >= MEDIUM_TEAM_MIN else 1
-            )
+        num_zones = self.cfg.num_zones(len(assignable))
         zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
 
         drop_off = (
             self._nearest_dropoff(assignable[0][1])
-            if len(self.bots) > SMALL_TEAM_MAX
+            if self.cfg.use_dropoff_weight
             else None
         )
         max_slots = max(s for _, _, s in assignable)

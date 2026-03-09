@@ -7,11 +7,7 @@ from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     CLUSTER_DISTANCE_WEIGHT,
     MAX_INVENTORY,
-    PREDICTION_TEAM_MIN,
 )
-
-# Teams >= this size skip best_pickup in greedy routing to avoid convergence.
-MEDIUM_TEAM_MIN_PICKUP = PREDICTION_TEAM_MIN
 
 
 class PickupMixin:
@@ -93,11 +89,11 @@ class PickupMixin:
         self, pos: tuple[int, int], inv: list[str]
     ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
         # Single-bot: use optimized item selection
-        if len(self.bots) <= 1:
+        if not self.cfg.multi_bot:
             return self._build_single_bot_route(pos, inv)
 
         # For large teams (8+), best_pickup causes convergence on same cells.
-        use_best_pickup = len(self.bots) < MEDIUM_TEAM_MIN_PICKUP and self.gs.best_pickup
+        use_best_pickup = self.cfg.use_best_pickup and self.gs.best_pickup
 
         candidates: list[tuple[Any, tuple[int, int], float]] = []
         for it, _ in self._iter_needed_items(self.net_active):
