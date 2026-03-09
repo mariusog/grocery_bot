@@ -96,6 +96,11 @@ class SpeculativeMixin:
             return False
         if ctx.has_active or len(ctx.inv) >= MAX_INVENTORY:
             return False
+        # Don't fill last slot with speculative when active items need picking.
+        # Keeps 1 slot free so the bot can pick active items next round.
+        free = MAX_INVENTORY - len(ctx.inv)
+        if free <= 1 and self.active_on_shelves > 0 and self.cfg.num_bots >= 15:
+            return False
         has_assignment = (
             ctx.bid in self.bot_assignments
             and bool(self.bot_assignments[ctx.bid])

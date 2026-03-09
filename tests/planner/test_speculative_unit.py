@@ -99,6 +99,78 @@ class TestSpeculativePickup:
         result = planner._step_speculative_pickup(ctx)
         assert result is False
 
+    def test_skipped_when_last_slot_and_active_on_shelves(self):
+        """Don't fill last slot with speculative on huge teams (15+)."""
+        bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(20)]
+        # Bot 0 has 2 non-active items — 1 slot left
+        bots[0]["inventory"] = ["bread", "butter"]
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [3, 4]},  # adjacent to bot 0
+            ],
+            orders=[_active_order(["cheese"])],
+            width=30,
+            height=18,
+            drop_off=[1, 16],
+        )
+        planner.actions = []
+        ctx = planner._build_bot_context(planner.bots[0])
+        # Bot carries no active items, has 1 free slot, active items on shelves
+        assert ctx.has_active is False
+        assert planner.active_on_shelves > 0
+        result = planner._step_speculative_pickup(ctx)
+        assert result is False, "Should not fill last slot with speculative"
+
+    def test_last_slot_guard_skipped_for_small_teams(self):
+        """Teams < 15 should still speculate even on last slot."""
+        bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
+        bots[0]["inventory"] = ["bread", "butter"]  # 2/3, 1 free
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [3, 4]},  # adjacent to bot 0
+            ],
+            orders=[_active_order(["cheese"])],
+            width=30,
+            height=18,
+            drop_off=[1, 16],
+        )
+        planner.actions = []
+        planner._speculative_pickers = 0
+        planner._spec_types_claimed = set()
+        ctx = planner._build_bot_context(planner.bots[0])
+        result = planner._step_speculative_pickup(ctx)
+        # 10-bot team should NOT be blocked by the 15+ guard
+        assert result is True
+
+    def test_speculative_allowed_with_two_free_slots(self):
+        """Allow speculative pickup when bot has 2+ free slots on huge teams."""
+        bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(20)]
+        bots[0]["inventory"] = ["bread"]  # 1 item, 2 free slots
+        planner = make_planner(
+            bots=bots,
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [3, 4]},  # adjacent to bot 0
+            ],
+            orders=[_active_order(["cheese"])],
+            width=30,
+            height=18,
+            drop_off=[1, 16],
+        )
+        planner.actions = []
+        planner._speculative_pickers = 0
+        planner._spec_types_claimed = set()
+        ctx = planner._build_bot_context(planner.bots[0])
+        assert ctx.has_active is False
+        assert planner.active_on_shelves > 0
+        result = planner._step_speculative_pickup(ctx)
+        # Should be allowed — bot still has 2 slots, can pick spec + active later
+        assert result is True
+
     def test_activates_for_idle_bot_on_large_team(self):
         """Idle bot on 10-bot team should speculate when active items covered."""
         bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
