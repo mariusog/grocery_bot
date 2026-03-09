@@ -5,6 +5,7 @@ from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     DELIVER_WHEN_CLOSE_DIST,
+    DELIVERY_QUEUE_TEAM_MIN,
     LARGE_TEAM_MIN,
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
@@ -177,6 +178,15 @@ class StepsMixin:
                 return True
         return False
 
+    def _step_early_delivery(self, ctx) -> bool:
+        """Deliver partial inventory when it's cheaper than filling up.
+
+        Currently disabled — regresses Hard by -12. The _should_deliver_early
+        cost model over-triggers for 4-7 bot teams. Needs better heuristics
+        (e.g., only when bot is already adjacent to dropoff).
+        """
+        return False
+
     def _step_endgame(self, ctx) -> bool:
         """Improved end-game strategy."""
         if not (self.endgame and ctx.inv):
@@ -300,13 +310,23 @@ class StepsMixin:
             return False
         if self._is_at_any_dropoff(ctx.pos):
             return False
-        max_na_del = (
-            max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
-            if num_bots >= PREDICTION_TEAM_MIN
-            else MAX_NONACTIVE_DELIVERERS
+        # Skip throttle for bots carrying active-matching items when
+        # all active items are already picked — they'd otherwise wait idle.
+        # Only for small/medium teams; large teams have enough bots to
+        # avoid the stuck-idle problem and throttling prevents congestion.
+        carries_matching = (
+            self.active_on_shelves == 0
+            and num_bots < PREDICTION_TEAM_MIN
+            and any(item in self.active_needed for item in ctx.inv)
         )
-        if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
-            return False
+        if not carries_matching:
+            max_na_del = (
+                max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
+                if num_bots >= PREDICTION_TEAM_MIN
+                else MAX_NONACTIVE_DELIVERERS
+            )
+            if num_bots >= MEDIUM_TEAM_MIN and self._nonactive_delivering >= max_na_del:
+                return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
         self._emit_move_or_wait(

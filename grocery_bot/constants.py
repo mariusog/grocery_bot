@@ -153,3 +153,8 @@ SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots
 # Spawn dispersal (planner/spawn.py)
 # ---------------------------------------------------------------------------
 SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
+
+# ---------------------------------------------------------------------------
+# Preview bot cap (large teams)
+# ---------------------------------------------------------------------------
+MAX_PREVIEW_BOTS = 3  # max bots designated as preview pickers on large teams

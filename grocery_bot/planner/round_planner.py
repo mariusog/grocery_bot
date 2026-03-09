@@ -433,6 +433,7 @@ RoundPlanner._STEP_CHAIN = [
     RoundPlanner._step_opportunistic_preview,
     RoundPlanner._step_inventory_full_deliver,
     RoundPlanner._step_zero_cost_delivery,
+    RoundPlanner._step_early_delivery,
     RoundPlanner._step_endgame,
     RoundPlanner._step_active_pickup,
     RoundPlanner._step_deliver_active,

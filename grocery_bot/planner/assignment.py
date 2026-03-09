@@ -5,7 +5,9 @@ from typing import Any, Optional
 from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
     MAX_INVENTORY,
+    MAX_PREVIEW_BOTS,
     MEDIUM_TEAM_MIN,
+    PREDICTION_TEAM_MIN,
     SMALL_TEAM_MAX,
     ZONE_CROSS_PENALTY,
 )

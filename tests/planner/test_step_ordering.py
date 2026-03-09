@@ -30,8 +30,8 @@ class TestStepChainStructure:
     def test_idle_positioning_is_last(self):
         assert RoundPlanner._STEP_CHAIN[-1].__name__ == "_step_idle_positioning"
 
-    def test_chain_has_18_steps(self):
-        assert len(RoundPlanner._STEP_CHAIN) == 18
+    def test_chain_has_19_steps(self):
+        assert len(RoundPlanner._STEP_CHAIN) == 19
 
     def test_all_expected_steps_present(self):
         expected = {
@@ -39,7 +39,8 @@ class TestStepChainStructure:
             "_step_preview_bot", "_step_deliver_at_dropoff",
             "_step_deliver_completes_order", "_step_rush_deliver",
             "_step_opportunistic_preview", "_step_inventory_full_deliver",
-            "_step_zero_cost_delivery", "_step_endgame",
+            "_step_zero_cost_delivery", "_step_early_delivery",
+            "_step_endgame",
             "_step_active_pickup", "_step_deliver_active",
             "_step_clear_nonactive_inventory", "_step_preview_prepick",
             "_step_speculative_pickup",

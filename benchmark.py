@@ -140,14 +140,21 @@ def run_benchmark(difficulties=None, seeds=None, verbose=False, diagnose=False):
 
 
 def _default_replay_map_files(map_dir: str = DEFAULT_MAP_DIR) -> list[str]:
-    """Return the default replay map set, if present."""
+    """Return replay maps from the latest day only."""
     if not os.path.isdir(map_dir):
         return []
-    return sorted(
-        os.path.join(map_dir, name)
-        for name in os.listdir(map_dir)
-        if name.endswith(".json")
+    json_files = sorted(
+        name for name in os.listdir(map_dir) if name.endswith(".json")
     )
+    if not json_files:
+        return []
+    # Extract latest date prefix (filenames start with YYYY-MM-DD)
+    latest_date = json_files[-1][:10]
+    return [
+        os.path.join(map_dir, name)
+        for name in json_files
+        if name.startswith(latest_date)
+    ]
 
 
 def _replay_map_files_for_difficulties(

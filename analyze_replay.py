@@ -160,6 +160,54 @@ def print_summary(meta: dict, rounds_data: dict[int, list[dict]]) -> None:
         suffix = f" +{len(ocr) - 12} more" if len(ocr) > 12 else ""
         print(f"\n  Orders: {' -> '.join(parts)}{suffix}")
 
+        # Order throughput: orders per 50-round window
+        _print_order_throughput(ocr, total_rounds)
+
+
+def _print_order_throughput(
+    ocr: list[int], total_rounds: int, window: int = 50,
+) -> None:
+    """Print orders-per-window and rounds-per-order breakdown."""
+    if not ocr:
+        return
+
+    # Rounds per order (time between consecutive completions)
+    rpo: list[int] = [ocr[0]]
+    for i in range(1, len(ocr)):
+        rpo.append(ocr[i] - ocr[i - 1])
+
+    # Per-window order counts
+    n_windows = (total_rounds + window - 1) // window
+    buckets: list[int] = [0] * n_windows
+    for r in ocr:
+        buckets[min(r // window, n_windows - 1)] += 1
+
+    # Print window breakdown
+    header = "  Throughput (orders per " + str(window) + " rounds):"
+    print(header)
+    parts = []
+    for i, count in enumerate(buckets):
+        start = i * window
+        end = min(start + window - 1, total_rounds - 1)
+        bar = "#" * count
+        parts.append(f"    R{start:>3}-{end:<3}: {count:>2} {bar}")
+    print("\n".join(parts))
+
+    # Print rounds-per-order stats
+    slow = [(i + 1, r) for i, r in enumerate(rpo) if r >= 25]
+    if slow:
+        print(f"  Slow orders (>=25 rds): ", end="")
+        print(", ".join(f"O{o}={r}rds" for o, r in slow[:10]))
+    fast = [(i + 1, r) for i, r in enumerate(rpo) if r <= 5]
+    if fast:
+        print(f"  Fast orders (<=5 rds):  ", end="")
+        print(", ".join(f"O{o}={r}rds" for o, r in fast[:10]))
+
+    avg_rpo = sum(rpo) / len(rpo)
+    print(f"  Avg: {avg_rpo:.1f} rds/order | "
+          f"Min: {min(rpo)} | Max: {max(rpo)} | "
+          f"Median: {sorted(rpo)[len(rpo)//2]}")
+
 
 def _inv_count(row: dict) -> int:
     """Extract inventory count, handling missing items_carried field."""
