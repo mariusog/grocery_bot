@@ -77,6 +77,7 @@ class RoundPlanner(
         self._preview_walkers: int = 0
         self._speculative_pickers: int = 0
         self._spec_types_claimed: set[str] = set()
+        self.spec_assignments: dict[int, dict[str, Any]] = {}
 
     def plan(self) -> list[dict[str, Any]]:
         """Main entry: return list of action dicts for all bots."""
@@ -107,6 +108,7 @@ class RoundPlanner(
         self._check_order_transition()
         self._compute_needs()
         self._compute_bot_assignments()
+        self._assign_speculative_targets()
         self.gs.update_round_positions(
             {b["id"]: tuple(b["position"]) for b in self.bots},
             self.drop_off,

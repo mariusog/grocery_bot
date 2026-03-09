@@ -19,6 +19,71 @@ from grocery_bot.constants import (
 class SpeculativeMixin:
     """Mixin providing speculative item pickup for idle bots."""
 
+    def _assign_speculative_targets(self) -> None:
+        """Centralized assignment of idle bots to preview items.
+
+        Uses map intelligence: items far from dropoff are assigned first
+        (expensive to pick later). Each bot gets a unique target.
+        """
+        self.spec_assignments: dict[int, dict[str, Any]] = {}
+        if not self.preview or not self.net_preview:
+            return
+        if len(self.bots) < PREDICTION_TEAM_MIN:
+            return
+
+        # Identify idle bots: no active assignment, no active items, has space
+        idle_bids: list[int] = []
+        for b in self.bots:
+            bid = b["id"]
+            if self.bot_has_active.get(bid, False):
+                continue
+            if self.bot_assignments.get(bid):
+                continue
+            if len(b["inventory"]) >= MAX_INVENTORY:
+                continue
+            idle_bids.append(bid)
+        if not idle_bids:
+            return
+
+        # Collect preview items on shelves, ranked by dropoff distance DESC
+        preview_items: list[tuple[float, dict[str, Any]]] = []
+        seen_types: set[str] = set()
+        for item_type, count in self.net_preview.items():
+            if count <= 0:
+                continue
+            for it in self.items_by_type.get(item_type, []):
+                if not self._is_available(it):
+                    continue
+                if it["type"] in seen_types:
+                    continue
+                ipos = tuple(it["position"])
+                nd = self._nearest_dropoff(ipos)
+                d_drop = self.gs.dist_static(ipos, nd)
+                preview_items.append((d_drop, it))
+                seen_types.add(it["type"])
+
+        # Sort far items first (highest dropoff distance)
+        preview_items.sort(key=lambda x: -x[0])
+
+        # Greedy match: for each item, assign the nearest idle bot
+        assigned_bids: set[int] = set()
+        for _d_drop, item in preview_items:
+            if not idle_bids:
+                break
+            best_bid: Optional[int] = None
+            best_dist = float("inf")
+            for bid in idle_bids:
+                if bid in assigned_bids:
+                    continue
+                bpos = tuple(self.bots_by_id[bid]["position"])
+                cell, d = self.gs.find_best_item_target(bpos, item)
+                if cell is not None and d < best_dist:
+                    best_dist = d
+                    best_bid = bid
+            if best_bid is not None:
+                self.spec_assignments[best_bid] = item
+                assigned_bids.add(best_bid)
+
     def _is_preferred_spec_type(self, item_type: str) -> bool:
         """Prefer preview-needed types for speculative pickup when available."""
         return bool(
@@ -39,9 +104,40 @@ class SpeculativeMixin:
         )
         if has_assignment:
             return False
+        # Use centralized spec assignment if available
+        spec_item = self.spec_assignments.get(ctx.bid)
+        if spec_item and self._is_available(spec_item):
+            return self._act_on_spec_assignment(
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, spec_item, ctx.blocked
+            )
         return self._try_speculative_pickup(
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked
         )
+
+    def _act_on_spec_assignment(
+        self,
+        bid: int,
+        bx: int,
+        by: int,
+        pos: tuple[int, int],
+        item: dict[str, Any],
+        blocked: set[tuple[int, int]],
+    ) -> bool:
+        """Act on a centralized speculative assignment."""
+        ipos = tuple(item["position"])
+        # Adjacent — pick it up
+        if abs(bx - ipos[0]) + abs(by - ipos[1]) == 1:
+            self.claimed.add(item["id"])
+            self._speculative_pickers += 1
+            self._emit(bid, bx, by, self._pickup(bid, item))
+            return True
+        # Walk toward it
+        cell, _d = self.gs.find_best_item_target(pos, item)
+        if cell:
+            self.claimed.add(item["id"])
+            self._speculative_pickers += 1
+            return self._emit_move(bid, bx, by, pos, cell, blocked)
+        return False
 
     def _try_speculative_pickup(
         self,
