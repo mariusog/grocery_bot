@@ -62,13 +62,13 @@ class TestLargeTeam:
 class TestHugeTeam:
     def test_20bot(self):
         cfg = get_team_config(20)
-        assert cfg.blocking_radius == 3.0
+        assert cfg.blocking_radius == 5.0
         assert cfg.max_concurrent_deliverers == max(2, 20 // 4)
         assert cfg.max_nonactive_deliverers == max(1, 20 // 3)
 
     def test_15bot_blocking_radius(self):
         cfg = get_team_config(15)
-        assert cfg.blocking_radius == 3.0
+        assert cfg.blocking_radius == 5.0
 
 
 class TestMethods:
@@ -156,4 +156,4 @@ class TestBoundaries:
         assert get_team_config(5).blocking_radius == 4.0
         assert get_team_config(8).blocking_radius == 5.0
         assert get_team_config(14).blocking_radius == 5.0
-        assert get_team_config(15).blocking_radius == 3.0
+        assert get_team_config(15).blocking_radius == 5.0

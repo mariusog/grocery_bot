@@ -39,7 +39,7 @@ PREDICTION_TEAM_MIN = 8  # len(bots) >= this to use predicted positions
 # ---------------------------------------------------------------------------
 BLOCKING_RADIUS_LARGE_TEAM = 4  # default Manhattan blocking radius for 5+ bots
 BLOCKING_RADIUS_EXPERT = 5  # Manhattan blocking radius for 8-14 bot teams
-BLOCKING_RADIUS_HUGE_TEAM = 3  # tighter radius for 15+ bot teams
+BLOCKING_RADIUS_HUGE_TEAM = 5  # radius for 15+ bot teams (replay-sweep validated)
 
 # ---------------------------------------------------------------------------
 # Delivery / dropoff proximity
