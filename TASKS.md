@@ -39,14 +39,19 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ## Priority Tasks (path to 1000 points)
 
-### T62: Wave mode for Expert (W2 proportional batch split required first)
+### T62: Wave mode for Expert (requires per-bot preview item cap)
 - **Status**: open
 - **Priority**: 1 (largest single gap: +100-200 Expert)
 - **Difficulty**: Hard (4-6 hours)
 - **Files**: `grocery_bot/planner/assignment.py`, `grocery_bot/planner/steps.py`, `grocery_bot/constants.py`
-- **Root cause**: `WAVE_MODE_MIN_BOTS = 15` so 10-bot Expert has no batch B. Code review confirmed that lowering to 10 REGRESSES (inv_full_waits: 430/451 vs ceiling 400) because batch B bots fill 3 preview items then sit idle while active_on_shelves > 0.
-- **What's needed**: Implement proper W2 proportional split: `n_a = round(n_bots * active_count / wave_count)` bots for active, rest for preview. This limits batch B to the right number of bots so they don't over-fill. Only then lower `WAVE_MODE_MIN_BOTS` to 10.
-- **Key insight**: Test guard in `test_inv_full_waits_bounded` at 400 will tell us when this is fixed.
+- **Root cause**: `WAVE_MODE_MIN_BOTS = 15` so 10-bot Expert has no batch B. Lowering to 10 tried twice:
+  1. Without proportional split: inv_full_waits 430→451. `_step_batch_b_preview` with `force_slots=True` lets one bot greedily fill all 3 slots with different preview items, then stalls waiting for wave.
+  2. With proportional split (closest bots → batch A, rest → batch B): Nightmare stalls. Bots that are closest to active items but didn't get an assignment become batch B and walk away from active items.
+- **What's needed**:
+  1. Per-bot preview item cap in `_step_batch_b_preview`: each batch B bot should pick at most `ceil(net_preview_total / len(batch_b_bots))` items, not greedily fill 3 slots.
+  2. OR: make W3 protection unconditional for batch B but track "holding state" separately from stall detection.
+  3. Only then lower `WAVE_MODE_MIN_BOTS` to 10.
+- **Guard test**: `test_inv_full_waits_bounded` ceiling 400 for 10 bots must pass.
 - **Expected gain**: +50-150 Expert, +20-50 Hard.
 
 ### T61: Rounds-Per-Order Threshold Integration Tests
