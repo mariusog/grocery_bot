@@ -5,6 +5,7 @@ from typing import Any, Optional
 from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
     MAX_INVENTORY,
+    MAX_PREVIEW_BOTS,
     ZONE_CROSS_PENALTY,
 )
 
@@ -52,7 +53,10 @@ class AssignmentMixin:
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = max(1, surplus - 1) if self.cfg.num_bots >= 5 else 1
+        max_preview = (
+            min(MAX_PREVIEW_BOTS, max(1, surplus - 1))
+            if self.cfg.num_bots >= 5 else 1
+        )
 
         candidates: list[tuple[float, int]] = []
         for bot in idle_for_active:

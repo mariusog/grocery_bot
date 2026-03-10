@@ -120,7 +120,7 @@ class StepsMixin:
         ):
             return False
         if (
-            self.cfg.num_bots < 3
+            self.active_on_shelves > 0
             and self.bot_assignments.get(ctx.bid)
         ):
             return False
@@ -172,13 +172,16 @@ class StepsMixin:
         return False
 
     def _step_early_delivery(self, ctx) -> bool:
-        """Deliver partial inventory when it's cheaper than filling up.
-
-        Currently disabled — regresses Hard by -12. The _should_deliver_early
-        cost model over-triggers for 4-7 bot teams. Needs better heuristics
-        (e.g., only when bot is already adjacent to dropoff).
-        """
-        return False
+        """Deliver partial inventory when cheaper than filling up (medium teams 4-7)."""
+        num_bots = self.cfg.num_bots
+        if num_bots < 4 or num_bots >= 8:
+            return False
+        if not (ctx.has_active and self.active_on_shelves > 0):
+            return False
+        if not self._should_deliver_early(ctx.pos, ctx.inv):
+            return False
+        self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
+        return True
 
     def _step_endgame(self, ctx) -> bool:
         """Improved end-game strategy."""
