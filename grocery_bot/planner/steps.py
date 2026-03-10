@@ -192,10 +192,18 @@ class StepsMixin(PlannerBase):
 
         Routes batch B bots to preview order items as primary mission.
         Falls through to _step_active_pickup if no preview item is reachable.
+        Each bot is capped at ceil(preview_order_total / n_batch_b) preview items
+        to prevent a single bot from filling all slots and stalling.
         """
         if not (self.wave_mode and ctx.bid in self.batch_b_bots):
             return False
         if len(ctx.inv) >= MAX_INVENTORY or not self.net_preview:
+            return False
+        # Per-bot cap: prevent any single bot from monopolising all preview slots.
+        n_b = max(1, len(self.batch_b_bots))
+        cap = max(1, (self.preview_order_total + n_b - 1) // n_b)
+        preview_in_inv = sum(1 for t in ctx.inv if t in self.preview_types)
+        if preview_in_inv >= cap:
             return False
         return self._try_preview_prepick(
             ctx.bid,

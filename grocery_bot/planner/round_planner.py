@@ -156,6 +156,8 @@ class RoundPlanner(
         assert self.active is not None, "_compute_needs called with no active order"
         self.active_needed: dict[str, int] = get_needed_items(self.active)
         preview_needed = get_needed_items(self.preview) if self.preview else {}
+        self.preview_types: set[str] = set(preview_needed.keys())
+        self.preview_order_total: int = sum(preview_needed.values())
         self.items_by_type: dict[str, list[dict[str, Any]]] = {}
         for it in self.items:
             self.items_by_type.setdefault(it["type"], []).append(it)
