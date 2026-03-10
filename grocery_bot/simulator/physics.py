@@ -2,8 +2,10 @@
 
 from typing import Any
 
+from grocery_bot.simulator._base import SimulatorBase
 
-class PhysicsMixin:
+
+class PhysicsMixin(SimulatorBase):
     """Mixin providing game physics for GameSimulator.
 
     Methods here handle bot movement validation, action application,
@@ -23,8 +25,10 @@ class PhysicsMixin:
 
         # Pass 1: compute intended positions for movers
         move_deltas = {
-            "move_up": (0, -1), "move_down": (0, 1),
-            "move_left": (-1, 0), "move_right": (1, 0),
+            "move_up": (0, -1),
+            "move_down": (0, 1),
+            "move_left": (-1, 0),
+            "move_right": (1, 0),
         }
         intended: dict[int, tuple[int, int]] = {}  # bot_id -> (nx, ny)
         for b in self.bots:
@@ -62,10 +66,7 @@ class PhysicsMixin:
             return True
         if [x, y] in self.walls:
             return True
-        for b in self.bots:
-            if b["id"] != exclude_bot_id and b["position"] == [x, y]:
-                return True
-        return False
+        return any(b["id"] != exclude_bot_id and b["position"] == [x, y] for b in self.bots)
 
     def _apply_action(self, b: dict, action: dict) -> None:
         """Apply a single bot's action to the game state."""
@@ -116,11 +117,13 @@ class PhysicsMixin:
         b["inventory"].append(item["type"])
         self.items_on_map.remove(item)
         self._next_item_id += 1
-        self.items_on_map.append({
-            "id": f"item_{self._next_item_id}",
-            "type": item["type"],
-            "position": list(item["position"]),
-        })
+        self.items_on_map.append(
+            {
+                "id": f"item_{self._next_item_id}",
+                "type": item["type"],
+                "position": list(item["position"]),
+            }
+        )
 
     def _do_dropoff(self, b: dict) -> None:
         """Handle dropoff with cascade delivery across order transitions."""
