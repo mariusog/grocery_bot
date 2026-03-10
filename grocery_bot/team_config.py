@@ -72,7 +72,7 @@ class TeamConfig:
             return 1 if has_assignment else 2
         if self.num_bots <= 3:
             return MIN_INV_FOR_NONACTIVE_DELIVERY
-        return MAX_INVENTORY  # medium teams: require full
+        return MAX_INVENTORY  # medium teams (4-7): require full inventory to clear
 
     def preview_prepick_force(
         self,

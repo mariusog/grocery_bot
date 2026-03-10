@@ -93,7 +93,7 @@ class TestSmallTeamClears:
 
 
 class TestMediumTeamFullOnly:
-    """Medium teams (4-7 bots) require full inventory to clear."""
+    """Medium teams (4-7 bots) require full inventory to clear non-active items."""
 
     def test_partial_skips(self):
         """5-bot team should NOT clear at 2 items (needs full=3)."""
