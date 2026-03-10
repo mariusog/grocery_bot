@@ -10,6 +10,7 @@ from grocery_bot.constants import (
     IDLE_DROPOFF_PENALTY_FACTOR,
     IDLE_DROPOFF_PENALTY_RADIUS,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
+    IDLE_STAY_TEAM_SCALE,
 )
 from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.planner._base import PlannerBase
@@ -279,15 +280,15 @@ class IdleMixin(PlannerBase):
                 best = npos
 
         if best:
-            # Bias toward staying still when improvement is marginal.
-            # For large teams, apply at ALL positions (not just idle spots)
-            # because proximity penalties shift every round as other bots move,
-            # causing persistent oscillation from near-tied scores.
             should_bias = at_idle_spot or is_large_team
+            stay_threshold = (
+                IDLE_STAY_IMPROVEMENT_THRESHOLD
+                + IDLE_STAY_TEAM_SCALE * max(0, self.cfg.num_bots - 3)
+            )
             if (
                 should_bias
                 and not is_stale
-                and (stay_score - best_score) < IDLE_STAY_IMPROVEMENT_THRESHOLD
+                and (stay_score - best_score) < stay_threshold
             ):
                 return False
             self._emit(
