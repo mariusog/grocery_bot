@@ -22,6 +22,7 @@ class PreviewMixin(PlannerBase):
         inv: list[str],
         blocked: set[tuple[int, int]],
         force_slots: bool = False,
+        force_walkers: bool = False,
     ) -> bool:
         if not self.preview:
             return False
@@ -41,7 +42,7 @@ class PreviewMixin(PlannerBase):
             return True
 
         # Pass 2: walk to distant preview items
-        if not is_preview_bot:
+        if not is_preview_bot and not force_walkers:
             if self.cfg.num_bots <= 5 and self.active_on_shelves > 0:
                 # Small/medium teams (≤5): don't divert from active work
                 return False
@@ -99,17 +100,13 @@ class PreviewMixin(PlannerBase):
                 best_item, best_cell = it, cell
 
         effective_max = (
-            (CASCADE_DETOUR_STEPS if best_cascade else max_detour)
-            if prefer_cascade
-            else max_detour
+            (CASCADE_DETOUR_STEPS if best_cascade else max_detour) if prefer_cascade else max_detour
         )
         if best_item and best_cost <= effective_max:
             return best_item, best_cell
         return None, None
 
-    def _find_nearest_active_item_pos(
-        self, pos: tuple[int, int]
-    ) -> tuple[int, int] | None:
+    def _find_nearest_active_item_pos(self, pos: tuple[int, int]) -> tuple[int, int] | None:
         """Find the position of the nearest reachable active item on shelves."""
         best_cell: tuple[int, int] | None = None
         best_d = float("inf")

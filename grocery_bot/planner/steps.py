@@ -199,7 +199,14 @@ class StepsMixin(PlannerBase):
         if len(ctx.inv) >= MAX_INVENTORY or not self.net_preview:
             return False
         return self._try_preview_prepick(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=True
+            ctx.bid,
+            ctx.bx,
+            ctx.by,
+            ctx.pos,
+            ctx.inv,
+            ctx.blocked,
+            force_slots=True,
+            force_walkers=True,
         )
 
     def _step_active_pickup(self, ctx: Any) -> bool:
@@ -236,7 +243,8 @@ class StepsMixin(PlannerBase):
             return False
         # W3: hold preview items when wave is nearly ready to fire.
         if (
-            self.wave_mode and ctx.bid in self.batch_b_bots
+            self.wave_mode
+            and ctx.bid in self.batch_b_bots
             and 0 < self.wave_on_shelves <= WAVE_SYNC_THRESHOLD
         ):
             return False
@@ -277,7 +285,8 @@ class StepsMixin(PlannerBase):
             return False
         # W3: hold preview items when wave is nearly ready to fire.
         if (
-            self.wave_mode and ctx.bid in self.batch_b_bots
+            self.wave_mode
+            and ctx.bid in self.batch_b_bots
             and 0 < self.wave_on_shelves <= WAVE_SYNC_THRESHOLD
         ):
             return False

@@ -123,9 +123,7 @@ class PlannerBase:
     def _claim(self, item: dict[str, Any], needed_dict: dict[str, int]) -> None:
         raise NotImplementedError
 
-    def _iter_needed_items(
-        self, needed: dict[str, int]
-    ) -> Iterator[tuple[dict[str, Any], bool]]:
+    def _iter_needed_items(self, needed: dict[str, int]) -> Iterator[tuple[dict[str, Any], bool]]:
         raise NotImplementedError
         yield  # make mypy treat this as a generator
 
@@ -146,9 +144,7 @@ class PlannerBase:
         raise NotImplementedError
 
     # -- MovementMixin (movement.py) --
-    def _emit(
-        self, bid: int, bx: int, by: int, action_dict: dict[str, Any]
-    ) -> None:
+    def _emit(self, bid: int, bx: int, by: int, action_dict: dict[str, Any]) -> None:
         raise NotImplementedError
 
     def _emit_move(
@@ -197,14 +193,10 @@ class PlannerBase:
     ) -> None:
         raise NotImplementedError
 
-    def _should_deliver_early(
-        self, pos: tuple[int, int], inv: list[str]
-    ) -> bool:
+    def _should_deliver_early(self, pos: tuple[int, int], inv: list[str]) -> bool:
         raise NotImplementedError
 
-    def _estimate_rounds_to_complete(
-        self, pos: tuple[int, int], inv: list[str]
-    ) -> float:
+    def _estimate_rounds_to_complete(self, pos: tuple[int, int], inv: list[str]) -> float:
         raise NotImplementedError
 
     def _try_maximize_items(
@@ -250,6 +242,7 @@ class PlannerBase:
         inv: list[str],
         blocked: set[tuple[int, int]],
         force_slots: bool = False,
+        force_walkers: bool = False,
     ) -> bool:
         raise NotImplementedError
 
@@ -262,9 +255,7 @@ class PlannerBase:
     ) -> tuple[dict[str, Any] | None, tuple[int, int] | None]:
         raise NotImplementedError
 
-    def _find_nearest_active_item_pos(
-        self, pos: tuple[int, int]
-    ) -> tuple[int, int] | None:
+    def _find_nearest_active_item_pos(self, pos: tuple[int, int]) -> tuple[int, int] | None:
         raise NotImplementedError
 
     # -- IdleMixin (idle.py) --
