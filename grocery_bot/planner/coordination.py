@@ -83,7 +83,11 @@ class CoordinationMixin(PlannerBase):
                 min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
             )
 
-        max_deliverers = self.cfg.max_concurrent_deliverers
+        # W5: when the full wave is ready, admit all bots to deliver simultaneously.
+        if self.wave_mode and self.wave_on_shelves == 0:
+            max_deliverers = len(self.bots)
+        else:
+            max_deliverers = self.cfg.max_concurrent_deliverers
 
         for delivering_count, bid in enumerate(gs.delivery_queue):
             if delivering_count >= max_deliverers:

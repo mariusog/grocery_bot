@@ -11,7 +11,6 @@ follow their normal pickup routes.
 
 from typing import Any
 
-from grocery_bot.constants import SPAWN_DISPERSAL_MAX_ROUNDS
 from grocery_bot.planner._base import PlannerBase
 
 
@@ -127,7 +126,7 @@ class SpawnMixin(PlannerBase):
         """Route unassigned bots toward diverse zones during opening."""
         if self.cfg.num_bots < 10:
             return False
-        if self.current_round >= SPAWN_DISPERSAL_MAX_ROUNDS:
+        if self.current_round >= self.cfg.spawn_dispersal_max_rounds():
             return False
         if ctx.inv or ctx.has_active:
             return False
@@ -135,6 +134,13 @@ class SpawnMixin(PlannerBase):
         # Skip bots that have active pickup assignments
         if self.bot_assignments.get(ctx.bid):
             return False
+
+        # Stop dispersing when an active item is adjacent -- pick it instead.
+        from grocery_bot.pathfinding import DIRECTIONS
+        for dx, dy in DIRECTIONS:
+            for it in self.items_at_pos.get((ctx.bx + dx, ctx.by + dy), []):
+                if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
+                    return False
 
         self._infer_spawn_origin()
         self._compute_dispersal_targets()

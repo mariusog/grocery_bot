@@ -7,6 +7,7 @@ from grocery_bot.constants import (
     DELIVER_WHEN_CLOSE_DIST,
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
+    WAVE_SYNC_THRESHOLD,
 )
 from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.planner._base import PlannerBase
@@ -88,6 +89,15 @@ class StepsMixin(PlannerBase):
                 self._claim(item, self.net_preview)
                 if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
                     return True
+        self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
+        return True
+
+    def _step_wave_rush_deliver(self, ctx: Any) -> bool:
+        """Wave mode: all wave items picked -> Batch B rushes to deliver."""
+        if not (self.wave_mode and ctx.bid in self.batch_b_bots and ctx.inv):
+            return False
+        if self.wave_on_shelves > 0:
+            return False
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
@@ -178,6 +188,20 @@ class StepsMixin(PlannerBase):
                 return True
         return False
 
+    def _step_batch_b_preview(self, ctx: Any) -> bool:
+        """Wave mode Batch B: pick preview items before active items.
+
+        Routes batch B bots to preview order items as primary mission.
+        Falls through to _step_active_pickup if no preview item is reachable.
+        """
+        if not (self.wave_mode and ctx.bid in self.batch_b_bots):
+            return False
+        if len(ctx.inv) >= MAX_INVENTORY or not self.net_preview:
+            return False
+        return self._try_preview_prepick(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=True
+        )
+
     def _step_active_pickup(self, ctx: Any) -> bool:
         """Pick up active items (adjacent first, then TSP route)."""
         return self._try_active_pickup(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked)
@@ -209,6 +233,12 @@ class StepsMixin(PlannerBase):
     def _step_clear_nonactive_inventory(self, ctx: Any) -> bool:
         """Bot has non-active items clogging inventory."""
         if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
+            return False
+        # W3: hold preview items when wave is nearly ready to fire.
+        if (
+            self.wave_mode and ctx.bid in self.batch_b_bots
+            and 0 < self.wave_on_shelves <= WAVE_SYNC_THRESHOLD
+        ):
             return False
         has_assignment = ctx.bid in self.bot_assignments and bool(self.bot_assignments[ctx.bid])
         min_inv = self.cfg.nonactive_clear_min_inv(has_assignment)
@@ -244,6 +274,12 @@ class StepsMixin(PlannerBase):
         if not (ctx.inv and not ctx.has_active and len(ctx.inv) >= min_inv):
             return False
         if self._is_at_any_dropoff(ctx.pos):
+            return False
+        # W3: hold preview items when wave is nearly ready to fire.
+        if (
+            self.wave_mode and ctx.bid in self.batch_b_bots
+            and 0 < self.wave_on_shelves <= WAVE_SYNC_THRESHOLD
+        ):
             return False
         # Skip throttle for bots carrying active-matching items when
         # all active items are already picked — they'd otherwise wait idle.

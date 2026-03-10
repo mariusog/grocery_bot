@@ -164,3 +164,4 @@ MAX_PREVIEW_BOTS = 3  # max bots designated as preview pickers on large teams
 # Wave delivery mode (Phase 2)
 # ---------------------------------------------------------------------------
 WAVE_MODE_MIN_BOTS = 15  # minimum team size to enable wave delivery
+WAVE_SYNC_THRESHOLD = 3  # hold preview items when ≤ this many wave items remain

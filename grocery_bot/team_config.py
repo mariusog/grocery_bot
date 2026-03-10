@@ -109,6 +109,13 @@ class TeamConfig:
             return max(1, n_assignable // 2)
         return 1
 
+    def spawn_dispersal_max_rounds(self) -> int:
+        if self.num_bots >= 15:
+            return 12
+        if self.num_bots >= 8:
+            return 20
+        return 12
+
 
 def get_team_config(num_bots: int) -> TeamConfig:
     """Select the right TeamConfig for a given team size."""
