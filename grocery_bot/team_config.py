@@ -24,7 +24,22 @@ from grocery_bot.constants import (
 
 @dataclass(frozen=True)
 class TeamConfig:
-    """All team-size-dependent parameters in a single immutable object."""
+    """All team-size-dependent parameters in a single immutable object.
+
+    Numeric fields (e.g. ``num_bots``, ``max_claim``) expose raw counts.
+    Boolean flags encode team-size behavioral decisions so planner code
+    reads intent rather than inline ``num_bots`` comparisons:
+
+    - ``multi_bot`` — more than one bot on the team
+    - ``enable_early_delivery`` — deliver early when cost favors it (4–7 bots)
+    - ``apply_nonactive_throttle`` — limit simultaneous non-active deliveries
+    - ``allow_preview_walk_when_active`` — walk to preview items while active remain
+    - ``use_spawn_dispersal`` — fan bots out from spawn in opening rounds
+    - ``use_idle_shelf_targeting`` — target shelf columns when idle
+    - ``prefer_preview_spec`` — prefer preview-needed types in speculative pickup
+    - ``reserve_last_slot_for_spec`` — keep one inventory slot free for active items
+    - ``use_multi_preview_bots`` — allow more than one preview-only bot
+    """
 
     num_bots: int
 

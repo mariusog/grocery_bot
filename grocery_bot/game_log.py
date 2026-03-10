@@ -1,4 +1,14 @@
-"""Game loop logging and recording helpers for bot.py."""
+"""Game loop logging and recording helpers for bot.py.
+
+Public functions:
+- ``update_expected_positions`` — predict bot positions after issued actions
+- ``update_expected_inventories`` — predict inventories after issued actions
+- ``build_map_snapshot`` — capture a JSON-serialisable map snapshot
+- ``save_recorded_map`` — write a recorded map to disk
+- ``build_game_meta`` — build game-level metadata dict for logging
+- ``log_round`` — append one round's data to the CSV/JSON log files
+- ``log_game_over`` — write final summary row and close the game log
+"""
 
 import csv
 import json

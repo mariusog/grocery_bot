@@ -47,7 +47,7 @@ Our current architecture processes one order at a time — preview is only "spar
 - **Impact**: +10 Hard, +5 Medium
 
 ### P1.3 — Per-bot `_spare_slots` awareness (+23 pts)
-- **File**: `grocery_bot/planner/pickup.py`
+- **File**: `grocery_bot/planner/round_planner.py`
 - `_spare_slots` reserves globally — unassigned bots can't preview-pick when other bots cover all active items
 - Fix: `reserve = min(active_on_shelves, my_assigned_count)` per bot
 - **Impact**: +8 Medium, +5 Hard, +10 Expert

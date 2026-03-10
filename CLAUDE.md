@@ -88,8 +88,10 @@ For new features, use `/tdd-cycle` (write tests first, then implement).
 grocery_bot/                    # Main package
 ├── __init__.py                 # Re-exports: GameState, RoundPlanner
 ├── constants.py                # Named constants (tuning parameters)
+├── team_config.py              # TeamConfig dataclass + get_team_config()
 ├── orders.py                   # Order helpers (get_needed_items)
 ├── pathfinding.py              # BFS variants, direction helpers
+├── game_log.py                 # Game loop logging and map recording helpers
 ├── game_state/                 # GameState package: caches, routing, assignment
 │   ├── __init__.py             # Re-exports: GameState
 │   ├── state.py                # GameState class: init, reset, static setup
@@ -110,6 +112,7 @@ grocery_bot/                    # Main package
 │   └── log_replay.py           # Log replay: verify live scores via physics
 └── planner/                    # Per-round decision subpackage
     ├── __init__.py             # Re-exports: RoundPlanner
+    ├── _base.py                # PlannerBase: shared attribute stubs for mypy
     ├── round_planner.py        # RoundPlanner: step-chain orchestration
     ├── steps.py                # StepsMixin: all _step_* decision methods
     ├── coordination.py         # CoordinationMixin: delivery queue, roles, tasks
@@ -117,7 +120,12 @@ grocery_bot/                    # Main package
     ├── assignment.py           # AssignmentMixin: bot-to-item assignment
     ├── pickup.py               # PickupMixin: active/preview pickup, TSP routes
     ├── delivery.py             # DeliveryMixin: delivery timing, end-game
-    └── idle.py                 # IdleMixin: dropoff clearing, idle positioning
+    ├── idle.py                 # IdleMixin: dropoff clearing, idle positioning
+    ├── preview.py              # PreviewMixin: preview-order pickup routing
+    ├── speculative.py          # SpeculativeMixin: idle-bot speculative pickup
+    ├── spawn.py                # SpawnMixin: opening-round dispersal
+    ├── inventory.py            # InventoryMixin: inventory counting and allocation
+    └── blacklist.py            # BlacklistMixin: pickup failure detection and expiry
 
 bot.py                          # Entry point: WebSocket loop, decide_actions()
 benchmark.py                    # CLI benchmark runner
@@ -136,19 +144,38 @@ tests/
 │   ├── test_game_state.py
 │   └── test_game_state_unit.py
 └── planner/                    # Matches grocery_bot/planner/
-    ├── test_round_planner_unit.py
-    ├── test_movement_unit.py
+    ├── conftest.py             # Planner-specific fixtures
+    ├── test_round_planner_lifecycle.py
+    ├── test_round_planner_helpers.py
+    ├── test_movement_core.py
+    ├── test_movement_advanced.py
+    ├── test_movement_predict.py
+    ├── test_corridor_yield.py
+    ├── test_assignment_core.py
     ├── test_assignment_unit.py
-    ├── test_pickup_unit.py
+    ├── test_assignment_advanced.py
+    ├── test_pickup_core.py
+    ├── test_pickup_routing.py
     ├── test_delivery_unit.py
     ├── test_idle_unit.py
+    ├── test_idle_dropoff.py
     ├── test_role_assignment.py
+    ├── test_coordination_unit.py
+    ├── test_preview_guard.py
+    ├── test_preview_walkers.py
+    ├── test_speculative_unit.py
+    ├── test_smart_speculative.py
+    ├── test_spawn_dispersal.py
     ├── test_step_ordering.py
     ├── test_dropoff_steps.py
     ├── test_rush_endgame.py
     ├── test_plan_integrity.py
     ├── test_spare_slots.py
-    └── test_nonactive_clearing.py
+    ├── test_nonactive_clearing.py
+    ├── test_active_priority.py
+    ├── test_active_saturation.py
+    ├── test_duplicate_active.py
+    └── test_phase1_boosts.py
 ```
 
 ## Code Quality Standards

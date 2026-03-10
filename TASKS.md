@@ -4,22 +4,20 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-08)
+## Current Performance (2026-03-10)
 
-**Replay benchmark** (`python benchmark.py --quick`, total=1621):
+**Replay benchmark** (`python benchmark.py`, total=820 single-map):
 
-| Difficulty | Map(s) | Bots | Replay Score | Live Score | Bitflip #1 | Gap |
-|------------|--------|------|-------------|------------|------------|-----|
-| Easy | 12x10 (x2) | 1 | 126, 116 | 122 | 132 | -10 |
-| Medium | 16x12 (x2) | 3 | 153, 132 | 150 | 214 | -64 |
-| Hard | 22x14 (x2) | 5 | 120, 128 | 140 | 252 | -112 |
-| Expert | 28x18 (x2) | 10 | 113, 98 | 119 | 303 | -184 |
-| Nightmare | 30x18 (x2) | 20 | 285, 350 | 318 | 1026 | -708 |
-| **Total** | | | **1621** | **849** | **1927** | **-1078** |
+| Map | Bots | Grid | Score |
+|-----|------|------|-------|
+| Easy | 1 | 12x10 | 125 |
+| Medium | 3 | 16x12 | 159 |
+| Hard | 5 | 22x14 | 113 |
+| Expert | 10 | 28x18 | 106 |
+| Nightmare | 20 | 30x18 | 317 |
+| **Total** | | | **820** |
 
-**Target: 1000 live total (+151 needed)**
-
-**Replay benchmark progression**: 1378 → 1503 → 1521 → 1538 → 1562 → 1589 → 1603 → 1621
+**Target: 1000 live total**
 
 ### Diagnostics Summary (from local replay logs)
 
@@ -65,13 +63,13 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Difficulty**: Easy (1-2 hours)
 - **Files**: `grocery_bot/planner/steps.py`
 - **Root cause**: `_should_deliver_early()` in `delivery.py` is dead code. On 3-5 bot teams, bots with 1 active item walk to far items when delivering immediately would be cheaper. This inflates rounds-per-order.
-- **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add early delivery for teams < PREDICTION_TEAM_MIN (8):
+- **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add early delivery gated on `self.cfg.enable_early_delivery`:
   ```python
-  if len(self.bots) < PREDICTION_TEAM_MIN and self._should_deliver_early(ctx.pos, ctx.inv):
+  if self.cfg.enable_early_delivery and self._should_deliver_early(ctx.pos, ctx.inv):
       self._emit_delivery_move_or_wait(...)
       return True
   ```
-- **Gate**: Only for teams < 8 (T33 showed it regresses Expert).
+- **Gate**: `cfg.enable_early_delivery` is True for 4 ≤ num_bots < 8 (T33 showed it regresses Expert).
 - **Expected gain**: +5-10 Medium, +5-10 Hard.
 - **TDD**: Write test that verifies early delivery triggers for 3-bot team when cost comparison favors it. Tighten T61 rounds-per-order thresholds for 3-bot and 5-bot maps.
 
@@ -79,14 +77,12 @@ Status: `open` | `in-progress` | `done` | `blocked`
 - **Status**: open
 - **Priority**: 1 (directly addresses Hard InvFull)
 - **Difficulty**: Easy (1 hour)
-- **Files**: `grocery_bot/planner/steps.py`, `grocery_bot/constants.py`
-- **Root cause**: `_step_clear_nonactive_inventory` requires `min_inv = MAX_INVENTORY (3)` for 4-7 bot teams. Bot 4 on Hard held 2 non-active items for 41 rounds waiting for a 3rd. The 3-item threshold was designed to prevent premature clearing but is too conservative.
-- **How to fix**: Change medium team threshold from `MAX_INVENTORY` to `MIN_INV_FOR_NONACTIVE_DELIVERY` (2):
+- **Files**: `grocery_bot/team_config.py`, `grocery_bot/planner/steps.py`
+- **Root cause**: `nonactive_clear_min_inv()` returns `MAX_INVENTORY (3)` for 4-7 bot teams. Bot 4 on Hard held 2 non-active items for 41 rounds waiting for a 3rd. The 3-item threshold is too conservative.
+- **How to fix**: In `get_team_config()`, add a `nonactive_clear_threshold` flag and lower it to `MIN_INV_FOR_NONACTIVE_DELIVERY` (2) for medium teams:
   ```python
-  elif num_bots <= SMALL_TEAM_MAX:
-      min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY  # 2 (unchanged)
-  else:  # 4-7 bots (medium teams)
-      min_inv = MIN_INV_FOR_NONACTIVE_DELIVERY  # was MAX_INVENTORY (3)
+  # In team_config.py get_team_config():
+  nonactive_clear_threshold = MIN_INV_FOR_NONACTIVE_DELIVERY if num_bots >= 4 else MAX_INVENTORY
   ```
 - **Expected gain**: +5-10 Hard, +2-5 Medium.
 - **TDD**: Write test for 5-bot team clearing at 2 items instead of 3. Tighten T61 InvFull threshold for 5-bot maps.
@@ -142,19 +138,16 @@ Status: `open` | `in-progress` | `done` | `blocked`
 ## Quality Tasks (lower priority)
 
 ### T44: Split movement.py (417 lines -> ≤300)
-- **Status**: open
-- **Priority**: 0 (quality gate)
+- **Status**: done — `_pre_predict` split into 3 methods; 386 lines
 - **Files**: `grocery_bot/planner/movement.py`
 
 ### T45: Split round_planner.py (395 lines -> ≤300)
-- **Status**: open
-- **Priority**: 0 (quality gate)
+- **Status**: done — `InventoryMixin` and `BlacklistMixin` extracted; 318 lines
 - **Files**: `grocery_bot/planner/round_planner.py`
 
 ### T46: Split bot.py (618 lines -> ≤300)
-- **Status**: open
-- **Priority**: 0 (quality gate)
-- **Files**: `bot.py`
+- **Status**: done — `game_log.py` extracted with logging helpers; 449 lines
+- **Files**: `bot.py`, `grocery_bot/game_log.py`
 
 ### T48: Add Type Annotations
 - **Status**: open
