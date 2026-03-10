@@ -193,12 +193,12 @@ async def play() -> None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = f"logs/game_{timestamp}.csv"
     meta_path = f"logs/game_{timestamp}.json"
-    log_rows = []
-    game_meta = {}
+    log_rows: list[dict] = []
+    game_meta: dict = {}
 
     # Map recording state
-    map_snapshot = {}
-    recorded_orders = []
+    map_snapshot: dict = {}
+    recorded_orders: list[dict] = []
     seen_order_ids = set()
     msg_count = 0
 
@@ -212,9 +212,9 @@ async def play() -> None:
         debug_lines.append(line)
 
     # Desync detection: track expected positions and inventories
-    expected_positions = {}  # bot_id -> (x, y)
-    expected_inventories = {}  # bot_id -> list[str]
-    last_actions_sent = {}  # bot_id -> action_dict (what we ACTUALLY sent)
+    expected_positions: dict[int, tuple[int, int]] = {}  # bot_id -> (x, y)
+    expected_inventories: dict[int, list[str]] = {}  # bot_id -> list[str]
+    last_actions_sent: dict[int, dict] = {}  # bot_id -> action_dict (what we ACTUALLY sent)
     desync_count = 0
     last_round_seen = -1
     prev_action_json = ""  # exact JSON we sent last round
@@ -223,8 +223,8 @@ async def play() -> None:
     async with websockets.connect(ws_url) as ws:
         print("Connected!")
         prev_send_time = None
-        wall_set = None  # server's wall set for validation
-        shelf_set = None  # item positions for validation
+        wall_set: set[tuple[int, int]] = set()  # server's wall set for validation
+        shelf_set: set[tuple[int, int]] = set()  # item positions for validation
         drained_count = 0  # total stale messages drained
         while True:
             pre_recv = time.perf_counter()
@@ -543,7 +543,7 @@ def _save_recorded_map(map_snapshot: dict, recorded_orders: list, timestamp: str
     print(f"  Map saved: {map_path} ({len(map_snapshot['orders'])} orders)")
 
 
-def _build_game_meta(data, timestamp):
+def _build_game_meta(data: dict, timestamp: str) -> dict:
     grid = data["grid"]
     return {
         "timestamp": timestamp,
@@ -567,7 +567,7 @@ def _build_game_meta(data, timestamp):
     }
 
 
-def _log_round(data, actions, log_rows):
+def _log_round(data: dict, actions: list, log_rows: list) -> None:
     active_o = next(
         (o for o in data["orders"] if o.get("status") == "active" and not o["complete"]),
         None,
@@ -600,7 +600,9 @@ def _log_round(data, actions, log_rows):
         )
 
 
-def _log_game_over(data, game_meta, log_rows, log_path, meta_path):
+def _log_game_over(
+    data: dict, game_meta: dict, log_rows: list, log_path: str, meta_path: str
+) -> None:
     print("\nGame Over!")
     print(f"  Score: {data['score']}")
     print(f"  Rounds: {data['rounds_used']}")

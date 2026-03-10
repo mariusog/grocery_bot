@@ -13,10 +13,10 @@ from dataclasses import replace
 from typing import Any
 
 import bot
-from grocery_bot.simulator import ReplaySimulator
-from grocery_bot.team_config import TeamConfig, get_team_config
-import grocery_bot.team_config as tc_module
 import grocery_bot.planner.round_planner as rp_module
+import grocery_bot.team_config as tc_module
+from grocery_bot.simulator import ReplaySimulator
+from grocery_bot.team_config import TeamConfig
 
 
 def _find_maps(num_bots: int) -> list[str]:
@@ -72,7 +72,7 @@ def sweep_param(
         avg = sum(scores) / len(scores) if scores else 0
         delta = avg - baseline_avg
         marker = " ***" if delta > 2.0 else ""
-        print(f"    {str(val):>8} -> {scores}  avg={avg:.1f}  ({delta:+.1f}){marker}")
+        print(f"    {val!s:>8} -> {scores}  avg={avg:.1f}  ({delta:+.1f}){marker}")
 
 
 # Bot-count to sweep params mapping

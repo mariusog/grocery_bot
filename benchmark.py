@@ -15,14 +15,14 @@ import os
 import statistics
 import time
 
-from grocery_bot.simulator import GameSimulator, DIFFICULTY_PRESETS
 from benchmark_reporting import (
-    print_summary_table,
-    print_diagnostics_table,
     generate_markdown_report,
     generate_replay_markdown_report,
+    print_diagnostics_table,
+    print_summary_table,
     run_replay_benchmark,
 )
+from grocery_bot.simulator import DIFFICULTY_PRESETS, GameSimulator
 
 # Number of seeds for averaging
 DEFAULT_SEEDS = list(range(1, 21))

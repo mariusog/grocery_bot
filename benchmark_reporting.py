@@ -122,9 +122,14 @@ def _print_per_bot_actions(all_results: dict) -> None:
         num_bots = diag_results[0]["num_bots"]
         total_rounds = statistics.mean([r["rounds_used"] for r in diag_results])
         print(f"  {diff} ({num_bots} bots, {total_rounds:.0f} rounds):")
-        print(f"    {'Bot':>5} {'Moves':>6} {'Picks':>5} {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}")
+        cols = (
+            f"{'Bot':>5} {'Moves':>6} {'Picks':>5}"
+            f" {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}"
+        )
+        print(f"    {cols}")
+        pba0 = diag_results[0]["diagnostics"]["per_bot_actions"]
         for bid in range(num_bots):
-            bkey = str(bid) if str(bid) in diag_results[0]["diagnostics"]["per_bot_actions"] else bid
+            bkey = str(bid) if str(bid) in pba0 else bid
             vals = [r["diagnostics"]["per_bot_actions"].get(bkey, {}) for r in diag_results]
             moves = statistics.mean([v.get("moves", 0) for v in vals])
             picks = statistics.mean([v.get("pickups", 0) for v in vals])
@@ -132,7 +137,11 @@ def _print_per_bot_actions(all_results: dict) -> None:
             idle = statistics.mean([v.get("idle", 0) for v in vals])
             stuck = statistics.mean([v.get("stuck", 0) for v in vals])
             util = (moves + picks + deliv) / max(1, total_rounds) * 100
-            print(f"    B{bid:<4} {moves:>6.0f} {picks:>5.0f} {deliv:>5.0f} {idle:>5.0f} {stuck:>5.0f} {util:>4.0f}%")
+            row = (
+                f"    B{bid:<4} {moves:>6.0f} {picks:>5.0f} {deliv:>5.0f}"
+                f" {idle:>5.0f} {stuck:>5.0f} {util:>4.0f}%"
+            )
+            print(row)
 
 
 def _print_order_timeline(all_results: dict) -> None:

@@ -146,7 +146,11 @@ def print_summary(meta: dict, rounds_data: dict[int, list[dict]]) -> None:
     )
     pba = diag.get("per_bot_actions", {})
     if pba:
-        print(f"\n  {'Bot':>5} {'Moves':>6} {'Picks':>5} {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}")
+        cols = (
+            f"{'Bot':>5} {'Moves':>6} {'Picks':>5}"
+            f" {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}"
+        )
+        print(f"\n  {cols}")
         for bid in sorted(pba, key=lambda x: int(x)):
             v = pba[bid]
             util = (v["moves"] + v["pickups"] + v["delivers"]) / max(1, total_rounds) * 100
@@ -196,11 +200,11 @@ def _print_order_throughput(
     # Print rounds-per-order stats
     slow = [(i + 1, r) for i, r in enumerate(rpo) if r >= 25]
     if slow:
-        print(f"  Slow orders (>=25 rds): ", end="")
+        print("  Slow orders (>=25 rds): ", end="")
         print(", ".join(f"O{o}={r}rds" for o, r in slow[:10]))
     fast = [(i + 1, r) for i, r in enumerate(rpo) if r <= 5]
     if fast:
-        print(f"  Fast orders (<=5 rds):  ", end="")
+        print("  Fast orders (<=5 rds):  ", end="")
         print(", ".join(f"O{o}={r}rds" for o, r in fast[:10]))
 
     avg_rpo = sum(rpo) / len(rpo)
@@ -238,7 +242,8 @@ def detect_problems(rounds_data: dict[int, list[dict]], meta: dict) -> None:
             last_score_rnd = rnd
         prev_score = score
     if total - last_score_rnd >= 20:
-        problems.append((total - last_score_rnd, f"No scoring in final {total - last_score_rnd} rounds"))
+        gap = total - last_score_rnd
+        problems.append((gap, f"No scoring in final {gap} rounds"))
 
     for bid in sorted(bot_acts):
         acts = bot_acts[bid]
@@ -251,7 +256,9 @@ def detect_problems(rounds_data: dict[int, list[dict]], meta: dict) -> None:
                 streak += 1
             else:
                 if streak >= 10:
-                    problems.append((streak, f"Bot {bid} idle {streak} rounds (R{streak_start}-R{streak_start + streak - 1})"))
+                    end = streak_start + streak - 1
+                    msg = f"Bot {bid} idle {streak} rounds (R{streak_start}-R{end})"
+                    problems.append((streak, msg))
                 streak = 0
         if streak >= 10:
             problems.append((streak, f"Bot {bid} idle {streak} rounds (R{streak_start}-end)"))
@@ -271,7 +278,7 @@ def detect_problems(rounds_data: dict[int, list[dict]], meta: dict) -> None:
         # Full-inv waits and zero-pickup bots
         full_waits = sum(1 for _, a, _, ic in acts if a == "wait" and ic >= 3)
         if full_waits >= 5:
-            problems.append((full_waits, f"Bot {bid} waited {full_waits} rounds with full inventory"))
+            problems.append((full_waits, f"Bot {bid} waited {full_waits} rounds with full inv"))
         picks = sum(1 for _, a, _, _ in acts if a == "pick_up")
         if picks == 0 and len(acts) > 50:
             problems.append((len(acts), f"Bot {bid} never picked up anything ({len(acts)} rounds)"))
@@ -298,13 +305,15 @@ def print_rounds(
         if not rows:
             continue
         needed = rows[0].get("active_needed", "")
-        print(f"R{rnd:>3} score={rows[0]['score']} order={rows[0].get('order_idx', '?')} needed=[{needed}]")
+        order_idx = rows[0].get("order_idx", "?")
+        print(f"R{rnd:>3} score={rows[0]['score']} order={order_idx} needed=[{needed}]")
         for r in rows:
             act = r["action"]
             if r.get("item_id"):
                 act += f"({r['item_id']})"
             dist = r.get("dist_to_dropoff", "?")
-            print(f"  B{r['bot_id']} @{r['bot_pos']} inv=[{r.get('inventory', '')}] d={dist} -> {act}")
+            inv = r.get("inventory", "")
+            print(f"  B{r['bot_id']} @{r['bot_pos']} inv=[{inv}] d={dist} -> {act}")
 
 
 def print_bot_timeline(rounds_data: dict[int, list[dict]], bot_id: int) -> None:
@@ -321,7 +330,8 @@ def print_bot_timeline(rounds_data: dict[int, list[dict]], bot_id: int) -> None:
                 if prev_act and streak > 1:
                     print(f"  R{streak_start}-R{rnd - 1}: {prev_act} x{streak}")
                 detail = row.get("item_id", "") if act == "pick_up" else ""
-                print(f"  R{rnd}: {act}({detail}) @{row['bot_pos']} inv=[{row.get('inventory', '')}]")
+                inv = row.get("inventory", "")
+                print(f"  R{rnd}: {act}({detail}) @{row['bot_pos']} inv=[{inv}]")
                 prev_act = None
                 streak = 0
             elif act != prev_act:
