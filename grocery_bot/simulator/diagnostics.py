@@ -157,9 +157,7 @@ class DiagnosticTracker:
 
     def get_results(self) -> dict:
         """Return diagnostics summary dict."""
-        total_bot_rounds = (self.last_delivery_round or 1) + sum(
-            1 for _ in self.idle_per_round
-        ) - 1
+        total_bot_rounds = (self.last_delivery_round or 1) + sum(1 for _ in self.idle_per_round) - 1
         # More accurate: total_bot_rounds = rounds_used * num_bots
         total_bot_rounds = len(self.idle_per_round) * self.num_bots
 
@@ -169,25 +167,17 @@ class DiagnosticTracker:
 
         total_pickups = self.useful_pickups + self.wasted_pickups
         avg_rounds_per_order = (
-            statistics.mean(self.rounds_per_order)
-            if self.rounds_per_order
-            else 0.0
+            statistics.mean(self.rounds_per_order) if self.rounds_per_order else 0.0
         )
         items_delivered = self.prev_score  # approximate
-        pickup_delivery_ratio = (
-            total_pickups / max(1, items_delivered)
-        )
+        pickup_delivery_ratio = total_pickups / max(1, items_delivered)
 
         return {
             "idle_rounds": self.idle_rounds,
             "stuck_rounds": self.stuck_rounds,
             "max_delivery_gap": self.max_delivery_gap,
             "oscillation_count": self.oscillation_count,
-            "avg_bots_idle": (
-                statistics.mean(self.idle_per_round)
-                if self.idle_per_round
-                else 0.0
-            ),
+            "avg_bots_idle": (statistics.mean(self.idle_per_round) if self.idle_per_round else 0.0),
             "total_bot_rounds": total_bot_rounds,
             "moves": self.moves,
             "waits": self.waits,
@@ -196,9 +186,7 @@ class DiagnosticTracker:
             "useful_pickups": self.useful_pickups,
             "wasted_pickups": self.wasted_pickups,
             "pickup_waste_pct": (
-                self.wasted_pickups / total_pickups * 100
-                if total_pickups > 0
-                else 0.0
+                self.wasted_pickups / total_pickups * 100 if total_pickups > 0 else 0.0
             ),
             "inv_full_waits": self.inv_full_waits,
             "avg_rounds_per_order": avg_rounds_per_order,
@@ -216,11 +204,7 @@ class DiagnosticTracker:
             },
             "order_completion_rounds": self.order_completion_rounds,
             "avg_delivery_size": (
-                statistics.mean(self.delivery_sizes)
-                if self.delivery_sizes
-                else 0.0
+                statistics.mean(self.delivery_sizes) if self.delivery_sizes else 0.0
             ),
-            "blocked_move_pct": (
-                self.stuck_rounds / max(1, self.moves) * 100
-            ),
+            "blocked_move_pct": (self.stuck_rounds / max(1, self.moves) * 100),
         }

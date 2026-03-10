@@ -161,22 +161,27 @@ def _build_sim_from_meta(meta: dict[str, Any]) -> "GameSimulator":
         pos = (it["position"][0], it["position"][1])
         sim.shelf_positions.add(pos)
         sim.item_shelves.append((pos[0], pos[1], it["type"]))
-        sim.items_on_map.append({
-            "id": f"item_{i}", "type": it["type"],
-            "position": list(it["position"]),
-        })
+        sim.items_on_map.append(
+            {
+                "id": f"item_{i}",
+                "type": it["type"],
+                "position": list(it["position"]),
+            }
+        )
     sim._next_item_id = len(sim.items_on_map)
     sim.item_type_names = sorted(meta.get("item_types", []))
 
     # Orders
     sim.orders = []
     for order in meta.get("orders", []):
-        sim.orders.append({
-            "id": order["id"],
-            "items_required": list(order["items_required"]),
-            "items_delivered": [],
-            "complete": False,
-        })
+        sim.orders.append(
+            {
+                "id": order["id"],
+                "items_required": list(order["items_required"]),
+                "items_delivered": [],
+                "complete": False,
+            }
+        )
 
     # Game state
     sim.round = 0
@@ -188,17 +193,20 @@ def _build_sim_from_meta(meta: dict[str, Any]) -> "GameSimulator":
     # Bots at spawn
     sim.bots = []
     for i in range(sim.num_bots):
-        sim.bots.append({
-            "id": i,
-            "position": list(sim.spawn),
-            "inventory": [],
-        })
+        sim.bots.append(
+            {
+                "id": i,
+                "position": list(sim.spawn),
+                "inventory": [],
+            }
+        )
 
     return sim
 
 
 def _remap_actions(
-    actions: list[dict[str, Any]], sim: Any,
+    actions: list[dict[str, Any]],
+    sim: Any,
 ) -> list[dict[str, Any]]:
     """Remap pick_up item_ids from live IDs to current sim IDs.
 
@@ -241,7 +249,9 @@ def _remap_actions(
 
 
 def replay_log(
-    csv_path: str, json_path: str | None = None, verbose: bool = False,
+    csv_path: str,
+    json_path: str | None = None,
+    verbose: bool = False,
 ) -> dict[str, Any]:
     """Replay a live game log through simulator physics, comparing scores."""
     if json_path is None:

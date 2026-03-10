@@ -63,27 +63,32 @@ class GameSimulator(PhysicsMixin):
         """Place bots at spawn."""
         self.bots = []
         for i in range(self.num_bots):
-            self.bots.append({
-                "id": i,
-                "position": list(self.spawn),
-                "inventory": [],
-            })
+            self.bots.append(
+                {
+                    "id": i,
+                    "position": list(self.spawn),
+                    "inventory": [],
+                }
+            )
 
     def _init_items(self) -> None:
         """Populate items on the map from shelf data."""
         self.items_on_map = []
         for i, (x, y, itype) in enumerate(self.item_shelves):
-            self.items_on_map.append({
-                "id": f"item_{i}",
-                "type": itype,
-                "position": [x, y],
-            })
+            self.items_on_map.append(
+                {
+                    "id": f"item_{i}",
+                    "type": itype,
+                    "position": [x, y],
+                }
+            )
         self._next_item_id = len(self.item_shelves)
 
     def get_state(self) -> dict:
         """Build game state dict matching the server format."""
         orders = _build_visible_orders(
-            self.orders, self.active_order_idx,
+            self.orders,
+            self.active_order_idx,
         )
         return {
             "type": "game_state",

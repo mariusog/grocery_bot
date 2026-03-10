@@ -68,9 +68,7 @@ class MovementMixin(PlannerBase):
                         continue
                     other_pred = self.predicted.get(b["id"])
                     if other_pred == my_pos:
-                        action_dict = self._find_yield_alternative(
-                            bid, bx, by, predicted
-                        )
+                        action_dict = self._find_yield_alternative(bid, bx, by, predicted)
                         break
 
         self.actions.append(action_dict)
@@ -94,9 +92,7 @@ class MovementMixin(PlannerBase):
         blocked_target: tuple[int, int],
     ) -> dict[str, Any]:
         occupied: set[tuple[int, int]] = {
-            self.predicted.get(b["id"], tuple(b["position"]))
-            for b in self.bots
-            if b["id"] != bid
+            self.predicted.get(b["id"], tuple(b["position"])) for b in self.bots if b["id"] != bid
         }
         # Prefer non-oscillating alternatives, but fall back to any unblocked
         fallback: dict[str, Any] | None = None
@@ -119,34 +115,30 @@ class MovementMixin(PlannerBase):
         Gives temporal BFS better information about undecided bots.
         Predictions are stored in self.predicted and get overwritten
         by actual decisions during _decide_bot.
-
-        Phase 2 detects idle bots sitting on active bots' optimal paths
-        and predicts they will yield (move perpendicular), so active bots'
-        BFS can path through without detours.
         """
         if not self.cfg.multi_bot:
             return
+        active_paths = self._pre_predict_phase1()
+        if active_paths:
+            self._pre_predict_phase2(active_paths)
 
-        # Phase 1: compute targets and initial predictions
+    def _pre_predict_phase1(self) -> list[list[tuple[int, int]]]:
+        """Phase 1: compute targets and store initial position predictions.
+
+        Returns paths of active/delivering bots for use in phase 2.
+        """
         active_paths: list[list[tuple[int, int]]] = []
-
         for b in self.bots:
             bid: int = b["id"]
             pos: tuple[int, int] = tuple(b["position"])
             has_active: bool = self.bot_has_active.get(bid, False)
-
             target: tuple[int, int] | None = None
 
-            # Delivering bots predict toward the congestion-aware dropoff target.
             if has_active and self._should_head_to_dropoff(b):
                 target, _ = self._get_delivery_target(bid, pos)
-
-            # Bots at dropoff with active items will drop off (stay put)
             elif self._is_at_any_dropoff(pos) and has_active:
                 self.predicted[bid] = pos
                 continue
-
-            # Bots with assigned items move toward first assigned item
             elif self.bot_assignments.get(bid):
                 first_item = self.bot_assignments[bid][0]
                 cell, _ = self.gs.find_best_item_target(pos, first_item)
@@ -160,26 +152,23 @@ class MovementMixin(PlannerBase):
                     self.predicted[bid] = path[1]
                     continue
 
-            # Default: stay in place
             self.predicted[bid] = pos
+        return active_paths
 
-        # Phase 2: predict yields for idle bots blocking active bots' paths
-        if not active_paths:
-            return
+    def _pre_predict_phase2(self, active_paths: list[list[tuple[int, int]]]) -> None:
+        """Phase 2: predict yields for idle bots blocking active bots' paths.
 
+        Idle bots on an active bot's path are predicted to step perpendicular,
+        so active bots' BFS can path through without detours.
+        """
         for b in self.bots:
             bid = b["id"]
-            pos = tuple(b["position"])
+            pos: tuple[int, int] = tuple(b["position"])
 
-            # Only idle bots yield (no active items, no assignment)
-            if self.bot_has_active.get(bid, False):
-                continue
-            if self.bot_assignments.get(bid):
+            if self.bot_has_active.get(bid, False) or self.bot_assignments.get(bid):
                 continue
             occupied: set[tuple[int, int]] = {
-                tuple(other["position"])
-                for other in self.bots
-                if other["id"] != bid
+                tuple(other["position"]) for other in self.bots if other["id"] != bid
             }
             occupied |= {
                 self.predicted.get(other["id"], tuple(other["position"]))
@@ -192,47 +181,36 @@ class MovementMixin(PlannerBase):
                 bot_positions = [tuple(other["position"]) for other in self.bots]
                 if self.gs.is_dropoff_congested(nearest_do, bot_positions):
                     avoidance = self.gs.get_avoidance_target(pos, nearest_do)
-                    if (
-                        avoidance
-                        and avoidance != pos
-                        and avoidance not in occupied
-                    ):
+                    if avoidance and avoidance != pos and avoidance not in occupied:
                         self.predicted[bid] = avoidance
                 continue
 
             for path in active_paths:
                 if pos not in path[1:]:
                     continue
-
                 idx = path.index(pos)
                 prev = path[idx - 1]
                 if idx + 1 < len(path):
                     nxt = path[idx + 1]
-                    dx_t = nxt[0] - prev[0]
-                    dy_t = nxt[1] - prev[1]
+                    dx_t, dy_t = nxt[0] - prev[0], nxt[1] - prev[1]
                 else:
-                    dx_t = pos[0] - prev[0]
-                    dy_t = pos[1] - prev[1]
+                    dx_t, dy_t = pos[0] - prev[0], pos[1] - prev[1]
 
-                if abs(dx_t) >= abs(dy_t):
-                    perp = [(0, -1), (0, 1), (-1, 0), (1, 0)]
-                else:
-                    perp = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
+                perp = (
+                    [(0, -1), (0, 1), (-1, 0), (1, 0)]
+                    if abs(dx_t) >= abs(dy_t)
+                    else [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                )
                 path_cells = set(path)
                 for dx, dy in perp:
                     yp = (pos[0] + dx, pos[1] + dy)
-                    if yp in self.gs.blocked_static or yp in occupied:
-                        continue
-                    if yp in path_cells:
+                    if yp in self.gs.blocked_static or yp in occupied or yp in path_cells:
                         continue
                     self.predicted[bid] = yp
                     break
                 break
 
-    def _build_moving_obstacles(
-        self, bid: int
-    ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    def _build_moving_obstacles(self, bid: int) -> list[tuple[tuple[int, int], tuple[int, int]]]:
         """Build moving obstacle list for temporal BFS (other bots only)."""
         obstacles: list[tuple[tuple[int, int], tuple[int, int]]] = []
         for b in self.bots:
@@ -266,9 +244,7 @@ class MovementMixin(PlannerBase):
             dynamic_blocked = blocked - self.gs.blocked_static
             current_round = getattr(self, "current_round", 0)
             had_cache = bid in self.gs.bot_planned_paths
-            cached = self.gs.get_cached_next_step(
-                bid, pos, target, dynamic_blocked, current_round
-            )
+            cached = self.gs.get_cached_next_step(bid, pos, target, dynamic_blocked, current_round)
             if cached is not None and cached not in blocked:
                 if not self._would_oscillate(bid, cached):
                     next_step: tuple[int, int] = cached
@@ -320,9 +296,7 @@ class MovementMixin(PlannerBase):
         # skipped due to temporary dynamic blocking.
         cache_miss = not had_cache or bid not in self.gs.bot_planned_paths
         if use_cache and result is not None and cache_miss:
-            self.gs.store_path_for_step(
-                bid, pos, result, target, current_round
-            )
+            self.gs.store_path_for_step(bid, pos, result, target, current_round)
 
         return result
 
@@ -406,10 +380,7 @@ class MovementMixin(PlannerBase):
             if b["id"] == bid:
                 continue
             bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
-            if (
-                max_dist == float("inf")
-                or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist
-            ):
+            if max_dist == float("inf") or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist:
                 other.add(bp)
         blocked_set: set[tuple[int, int]] = self.gs.blocked_static | other
         return blocked_set

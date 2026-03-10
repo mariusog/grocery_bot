@@ -1,24 +1,23 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
-from collections import deque, namedtuple
+from collections import namedtuple
 from collections.abc import Iterator
 from typing import Any
 
 from grocery_bot.constants import (
-    BLACKLIST_EXPIRY_ROUNDS,
-    BOT_HISTORY_MAXLEN,
     DROPOFF_CLEAR_RADIUS,
     ENDGAME_ROUNDS_LEFT,
     MAX_INVENTORY,
     ORDER_NEARLY_COMPLETE_MAX,
-    PICKUP_FAIL_BLACKLIST_THRESHOLD,
     ZONE_CONGESTION_WEIGHT,
 )
 from grocery_bot.orders import get_needed_items
 from grocery_bot.planner.assignment import AssignmentMixin
+from grocery_bot.planner.blacklist import BlacklistMixin
 from grocery_bot.planner.coordination import CoordinationMixin
 from grocery_bot.planner.delivery import DeliveryMixin
 from grocery_bot.planner.idle import IdleMixin
+from grocery_bot.planner.inventory import InventoryMixin
 from grocery_bot.planner.movement import MovementMixin
 from grocery_bot.planner.pickup import PickupMixin
 from grocery_bot.planner.preview import PreviewMixin
@@ -32,8 +31,18 @@ BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active 
 
 
 class RoundPlanner(
-    MovementMixin, AssignmentMixin, PickupMixin, PreviewMixin, DeliveryMixin,
-    IdleMixin, SpeculativeMixin, SpawnMixin, CoordinationMixin, StepsMixin,
+    MovementMixin,
+    AssignmentMixin,
+    BlacklistMixin,
+    InventoryMixin,
+    PickupMixin,
+    PreviewMixin,
+    DeliveryMixin,
+    IdleMixin,
+    SpeculativeMixin,
+    SpawnMixin,
+    CoordinationMixin,
+    StepsMixin,
 ):
     """Plans actions for all bots in a single round."""
 
@@ -47,9 +56,7 @@ class RoundPlanner(
         full_state: dict[str, Any] | None = None,
     ) -> None:
         self.gs = gs
-        self.full_state: dict[str, Any] = (
-            full_state if full_state is not None else state
-        )
+        self.full_state: dict[str, Any] = full_state if full_state is not None else state
         self.bots: list[dict[str, Any]] = state["bots"]
         self.items: list[dict[str, Any]] = state["items"]
         self.orders: list[dict[str, Any]] = state["orders"]
@@ -88,15 +95,16 @@ class RoundPlanner(
         self._expire_blacklists()
 
         if not self.gs.blocked_static:
-            self.gs.init_static({
-                "grid": self._state_grid(),
-                "items": self.items,
-                "drop_off": list(self.drop_off),
-            })
+            self.gs.init_static(
+                {
+                    "grid": self._state_grid(),
+                    "items": self.items,
+                    "drop_off": list(self.drop_off),
+                }
+            )
 
         self.active: dict[str, Any] | None = next(
-            (o for o in self.orders
-             if o.get("status") == "active" and not o["complete"]),
+            (o for o in self.orders if o.get("status") == "active" and not o["complete"]),
             None,
         )
         self.preview: dict[str, Any] | None = next(
@@ -144,154 +152,6 @@ class RoundPlanner(
         grid: dict[str, Any] = self.full_state["grid"]
         return grid
 
-    def _init_bot_history(self) -> None:
-        """Initialize or validate bot history tracking."""
-        gen = id(self.gs.dist_cache)
-        needs_reset = (
-            not hasattr(self.gs, "bot_history")
-            or not hasattr(self.gs, "_history_gen")
-            or self.gs._history_gen != gen
-        )
-        if needs_reset:
-            self.gs.bot_history = {}
-            self.gs._history_gen = gen
-
-        for b in self.bots:
-            bid: int = b["id"]
-            pos: tuple[int, int] = tuple(b["position"])
-            if bid not in self.gs.bot_history:
-                self.gs.bot_history[bid] = deque(maxlen=BOT_HISTORY_MAXLEN)
-            self.gs.bot_history[bid].append(pos)
-
-    def _detect_pickup_failures(self) -> None:
-        gs = self.gs
-        for b in self.bots:
-            bid: int = b["id"]
-            if bid not in gs.last_pickup:
-                continue
-            last_item_id, last_inv_len = gs.last_pickup[bid]
-            actual_pos = tuple(b["position"])
-
-            # Check if bot is at the expected position — if not, this is a
-            # desync (server didn't apply our action) and we should NOT count
-            # the pickup failure.
-            expected_pos = gs.last_expected_pos.get(bid)
-            position_matches = expected_pos is None or actual_pos == expected_pos
-
-            if len(b["inventory"]) <= last_inv_len:
-                if position_matches:
-                    gs.pickup_fail_count[last_item_id] = (
-                        gs.pickup_fail_count.get(last_item_id, 0) + 1
-                    )
-                    if (
-                        gs.pickup_fail_count[last_item_id]
-                        >= PICKUP_FAIL_BLACKLIST_THRESHOLD
-                    ):
-                        gs.blacklisted_items.add(last_item_id)
-                        current_round = self.full_state.get("round", 0)
-                        gs.blacklist_round[last_item_id] = current_round
-                # else: desync detected, don't count failure
-            else:
-                gs.pickup_fail_count.pop(last_item_id, None)
-            del gs.last_pickup[bid]
-
-    def _expire_blacklists(self) -> None:
-        """Remove blacklisted items whose expiry window has passed."""
-        gs = self.gs
-        current_round = self.full_state.get("round", 0)
-        expired = [
-            item_id
-            for item_id, bl_round in gs.blacklist_round.items()
-            if current_round - bl_round >= BLACKLIST_EXPIRY_ROUNDS
-        ]
-        for item_id in expired:
-            gs.blacklisted_items.discard(item_id)
-            del gs.blacklist_round[item_id]
-            gs.pickup_fail_count.pop(item_id, None)
-
-    def _count_usable_inventory(
-        self,
-        bot: dict[str, Any],
-        remaining: dict[str, int],
-        reserved: dict[str, int] | None = None,
-    ) -> tuple[int, int]:
-        """Count inventory copies that can still satisfy the remaining need."""
-        skip = dict(reserved or {})
-        useful_total = 0
-        useful_types: set[str] = set()
-
-        for item in bot["inventory"]:
-            if skip.get(item, 0) > 0:
-                skip[item] -= 1
-                continue
-            if remaining.get(item, 0) <= 0:
-                continue
-            useful_total += 1
-            useful_types.add(item)
-
-        return useful_total, len(useful_types)
-
-    def _allocate_carried_need(
-        self,
-        needed: dict[str, int],
-        reserved_by_bot: dict[int, dict[str, int]] | None = None,
-    ) -> tuple[dict[str, int], dict[int, dict[str, int]], dict[str, int]]:
-        """Allocate carried inventory copies to the still-undelivered order need.
-
-        A carried item only counts as active if it is actually useful toward the
-        remaining order. Distinct coverage is prioritized first so mixed
-        inventories stay active while pure duplicate carriers fall back to
-        non-active behavior once the order is already covered.
-        """
-        remaining: dict[str, int] = {
-            item_type: count for item_type, count in needed.items() if count > 0
-        }
-        reserved_by_bot = reserved_by_bot or {}
-
-        allocated_total: dict[str, int] = {}
-        allocated_by_bot: dict[int, dict[str, int]] = {
-            b["id"]: {} for b in self.bots
-        }
-        pending = list(self.bots)
-
-        while pending and remaining:
-            ranked: list[tuple[int, float, int, int, dict[str, Any]]] = []
-            for bot in pending:
-                useful_total, useful_types = self._count_usable_inventory(
-                    bot, remaining, reserved_by_bot.get(bot["id"])
-                )
-                if useful_total <= 0:
-                    continue
-                bpos = tuple(bot["position"])
-                d_to_drop = self.gs.dist_static(bpos, self._nearest_dropoff(bpos))
-                ranked.append(
-                    (-useful_types, d_to_drop, -useful_total, bot["id"], bot)
-                )
-
-            if not ranked:
-                break
-
-            _, _, _, _, bot = min(ranked)
-            pending = [cand for cand in pending if cand["id"] != bot["id"]]
-
-            skip = dict(reserved_by_bot.get(bot["id"], {}))
-            bot_allocated: dict[str, int] = {}
-            for item in bot["inventory"]:
-                if skip.get(item, 0) > 0:
-                    skip[item] -= 1
-                    continue
-                if remaining.get(item, 0) <= 0:
-                    continue
-                bot_allocated[item] = bot_allocated.get(item, 0) + 1
-                allocated_total[item] = allocated_total.get(item, 0) + 1
-                remaining[item] -= 1
-                if remaining[item] <= 0:
-                    del remaining[item]
-
-            allocated_by_bot[bot["id"]] = bot_allocated
-
-        return allocated_total, allocated_by_bot, remaining
-
     def _compute_needs(self) -> None:
         assert self.active is not None, "_compute_needs called with no active order"
         self.active_needed: dict[str, int] = get_needed_items(self.active)
@@ -303,8 +163,7 @@ class RoundPlanner(
             self.active_needed
         )
         self.bot_has_active = {
-            bid: bool(bot_active)
-            for bid, bot_active in self.bot_carried_active.items()
+            bid: bool(bot_active) for bid, bot_active in self.bot_carried_active.items()
         }
         self.active_on_shelves: int = sum(self.net_active.values())
         _, _, self.net_preview = self._allocate_carried_need(
@@ -317,24 +176,16 @@ class RoundPlanner(
         )
         self.batch_b_bots: set[int] = set()
         self.active_types: set[str] = set(self.active_needed.keys())
-        self.order_nearly_complete: bool = (
-            0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
-        )
+        self.order_nearly_complete: bool = 0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
         idle_bots = sum(1 for bot in self.bots if not self._is_delivering(bot))
         total = self.active_on_shelves
         self.max_claim: int = (
-            max(1, (total + idle_bots - 1) // idle_bots)
-            if idle_bots > 0 else MAX_INVENTORY
+            max(1, (total + idle_bots - 1) // idle_bots) if idle_bots > 0 else MAX_INVENTORY
         )
         self.num_item_types: int = len(self.items_by_type)
         self.preview_bot_id: int | None = None
         self.preview_bot_ids: set[int] = set()
-        if (
-            self.order_nearly_complete
-            and len(self.bots) >= 2
-            and self.preview
-            and self.net_preview
-        ):
+        if self.order_nearly_complete and len(self.bots) >= 2 and self.preview and self.net_preview:
             self._assign_preview_bot()
 
     def _decide_bot(self, bot: dict[str, Any]) -> None:
@@ -349,7 +200,11 @@ class RoundPlanner(
         bid: int = bot["id"]
         bx, by = bot["position"]
         return BotContext(
-            bot=bot, bid=bid, bx=bx, by=by, pos=(bx, by),
+            bot=bot,
+            bid=bid,
+            bx=bx,
+            by=by,
+            pos=(bx, by),
             inv=bot["inventory"],
             blocked=self._build_blocked(bid),
             has_active=self.bot_has_active[bid],
@@ -357,14 +212,9 @@ class RoundPlanner(
         )
 
     def _is_available(self, item: dict[str, Any]) -> bool:
-        return (
-            item["id"] not in self.claimed
-            and item["id"] not in self.gs.blacklisted_items
-        )
+        return item["id"] not in self.claimed and item["id"] not in self.gs.blacklisted_items
 
-    def _iter_needed_items(
-        self, needed: dict[str, int]
-    ) -> Iterator[tuple[dict[str, Any], bool]]:
+    def _iter_needed_items(self, needed: dict[str, int]) -> Iterator[tuple[dict[str, Any], bool]]:
         for item_type, count in needed.items():
             if count <= 0:
                 continue
@@ -374,10 +224,14 @@ class RoundPlanner(
                     yield it, is_cascade
 
     def _find_adjacent_needed(
-        self, bx: int, by: int, needed: dict[str, int],
+        self,
+        bx: int,
+        by: int,
+        needed: dict[str, int],
         prefer_cascade: bool = False,
     ) -> dict[str, Any] | None:
         from grocery_bot.pathfinding import DIRECTIONS
+
         best: dict[str, Any] | None = None
         best_cascade = False
         for dx, dy in DIRECTIONS:
@@ -422,7 +276,7 @@ class RoundPlanner(
         return pos in self.drop_off_zones
 
     def _spare_slots(self, inv: list[str], bid: int = -1) -> int:
-        if bid >= 0 and len(self.bots) >= 2 and hasattr(self, 'bot_assignments'):
+        if bid >= 0 and len(self.bots) >= 2 and hasattr(self, "bot_assignments"):
             my_assigned = len(self.bot_assignments.get(bid, []))
             reserve = min(self.active_on_shelves, my_assigned)
         else:

@@ -56,8 +56,7 @@ class DeliveryMixin(PlannerBase):
         wait_radius = 0
         if self.gs.dropoff_wait_cells:
             wait_radius = max(
-                self.gs.dist_static(cell, nearest)
-                for cell in self.gs.dropoff_wait_cells
+                self.gs.dist_static(cell, nearest) for cell in self.gs.dropoff_wait_cells
             )
         if self.gs.dist_static(pos, nearest) > wait_radius + 1:
             return nearest, False
@@ -80,9 +79,7 @@ class DeliveryMixin(PlannerBase):
             return
         self._emit_move_or_wait(bid, bx, by, pos, target, blocked)
 
-    def _estimate_rounds_to_complete(
-        self, pos: tuple[int, int], inv: list[str]
-    ) -> float:
+    def _estimate_rounds_to_complete(self, pos: tuple[int, int], inv: list[str]) -> float:
         """Estimate rounds needed to pick up all remaining active items and deliver.
 
         Divides the sequential estimate by the number of bots that can
@@ -118,11 +115,15 @@ class DeliveryMixin(PlannerBase):
         # sequential cost by the number of available pickers (bots without
         # active items and with free inventory), capped by the number of
         # remaining items to avoid over-optimism.
-        num_pickers = max(1, sum(
-            1 for b in self.bots
-            if not self.bot_has_active.get(b["id"], False)
-            and len(b["inventory"]) < MAX_INVENTORY
-        ))
+        num_pickers = max(
+            1,
+            sum(
+                1
+                for b in self.bots
+                if not self.bot_has_active.get(b["id"], False)
+                and len(b["inventory"]) < MAX_INVENTORY
+            ),
+        )
         num_pickers = min(num_pickers, max(1, len(remaining)))
         if num_pickers > 1:
             total_dist = total_dist / num_pickers

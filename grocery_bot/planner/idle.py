@@ -1,6 +1,5 @@
 """Idle positioning and dropoff clearing for RoundPlanner."""
 
-
 from grocery_bot.constants import (
     BOT_HISTORY_MAXLEN,
     DROPOFF_CLEAR_RADIUS,
@@ -65,9 +64,7 @@ class IdleMixin(PlannerBase):
             return None
 
         occupied: set[tuple[int, int]] = {
-            self.predicted.get(b["id"], tuple(b["position"]))
-            for b in self.bots
-            if b["id"] != bid
+            self.predicted.get(b["id"], tuple(b["position"])) for b in self.bots if b["id"] != bid
         }
 
         best_target: tuple[int, int] | None = None
@@ -78,9 +75,7 @@ class IdleMixin(PlannerBase):
             d_from_bot = self.gs.dist_static(pos, cell)
             if d_from_bot == float("inf"):
                 continue
-            score = d_from_bot + weight * self.gs.dist_static(
-                cell, self._nearest_dropoff(cell)
-            )
+            score = d_from_bot + weight * self.gs.dist_static(cell, self._nearest_dropoff(cell))
             if score < best_score:
                 best_score = score
                 best_target = cell
@@ -174,9 +169,7 @@ class IdleMixin(PlannerBase):
                     ob_id in self.bot_assignments and self.bot_assignments[ob_id]
                 ) or self.bot_has_active.get(ob_id, False)
                 if has_task:
-                    other_bot_positions.append(
-                        self.predicted.get(ob_id, tuple(b["position"]))
-                    )
+                    other_bot_positions.append(self.predicted.get(ob_id, tuple(b["position"])))
                 else:
                     other_bot_positions.append(tuple(b["position"]))
             else:
@@ -232,7 +225,8 @@ class IdleMixin(PlannerBase):
         n_zones = max(1, len(self.drop_off_zones))
         bots_per_zone = len(self.bots) // n_zones
         drop_penalty_radius = max(
-            IDLE_DROPOFF_PENALTY_RADIUS, bots_per_zone // 2,
+            IDLE_DROPOFF_PENALTY_RADIUS,
+            bots_per_zone // 2,
         )
 
         target_weight = self.cfg.target_attraction_weight
@@ -243,16 +237,12 @@ class IdleMixin(PlannerBase):
             # Penalize being near any dropoff
             drop_dist = self.gs.dist_static(p, self._nearest_dropoff(p))
             if drop_dist <= drop_penalty_radius:
-                s += (
-                    drop_penalty_radius + 1 - drop_dist
-                ) * IDLE_DROPOFF_PENALTY_FACTOR
+                s += (drop_penalty_radius + 1 - drop_dist) * IDLE_DROPOFF_PENALTY_FACTOR
             # Penalize being near other bots
             for ob_pos in other_bot_positions:
                 ob_dist = abs(p[0] - ob_pos[0]) + abs(p[1] - ob_pos[1])
                 if ob_dist <= IDLE_BOT_PROXIMITY_RADIUS:
-                    s += (
-                        IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist
-                    ) * IDLE_BOT_PROXIMITY_FACTOR
+                    s += (IDLE_BOT_PROXIMITY_RADIUS + 1 - ob_dist) * IDLE_BOT_PROXIMITY_FACTOR
             # Penalize corridor rows on large teams (keep corridors clear)
             if is_large_team and corridor_ys and p[1] in corridor_ys:
                 s += IDLE_CORRIDOR_PENALTY
@@ -281,15 +271,10 @@ class IdleMixin(PlannerBase):
 
         if best:
             should_bias = at_idle_spot or is_large_team
-            stay_threshold = (
-                IDLE_STAY_IMPROVEMENT_THRESHOLD
-                + IDLE_STAY_TEAM_SCALE * max(0, self.cfg.num_bots - 3)
+            stay_threshold = IDLE_STAY_IMPROVEMENT_THRESHOLD + IDLE_STAY_TEAM_SCALE * max(
+                0, self.cfg.num_bots - 3
             )
-            if (
-                should_bias
-                and not is_stale
-                and (stay_score - best_score) < stay_threshold
-            ):
+            if should_bias and not is_stale and (stay_score - best_score) < stay_threshold:
                 return False
             self._emit(
                 bid,

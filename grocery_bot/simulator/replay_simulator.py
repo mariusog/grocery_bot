@@ -88,9 +88,7 @@ class ReplaySimulator(GameSimulator):
         self.walls = [list(w) for w in recorded["grid"]["walls"]]
         self.drop_off = list(recorded["drop_off"])
         zones = recorded.get("drop_off_zones")
-        self.drop_off_zones = (
-            [list(z) for z in zones] if zones else [self.drop_off]
-        )
+        self.drop_off_zones = [list(z) for z in zones] if zones else [self.drop_off]
         self.spawn = list(recorded["spawn"])
 
         # Build shelf_positions and item_shelves from recorded items
@@ -103,11 +101,13 @@ class ReplaySimulator(GameSimulator):
 
         self.items_on_map = []
         for it in recorded["items"]:
-            self.items_on_map.append({
-                "id": it["id"],
-                "type": it["type"],
-                "position": list(it["position"]),
-            })
+            self.items_on_map.append(
+                {
+                    "id": it["id"],
+                    "type": it["type"],
+                    "position": list(it["position"]),
+                }
+            )
         self._next_item_id = len(recorded["items"])
 
         self.item_type_names = sorted({it["type"] for it in recorded["items"]})
@@ -115,12 +115,14 @@ class ReplaySimulator(GameSimulator):
         # Orders from recording, optionally extended with deterministic padding.
         self.orders = []
         for order in recorded.get("orders", []):
-            self.orders.append({
-                "id": order["id"],
-                "items_required": list(order["items_required"]),
-                "items_delivered": [],
-                "complete": False,
-            })
+            self.orders.append(
+                {
+                    "id": order["id"],
+                    "items_required": list(order["items_required"]),
+                    "items_delivered": [],
+                    "complete": False,
+                }
+            )
 
         self.recorded_order_count = len(self.orders)
         requested_total = recorded.get("total_orders", total_orders)
@@ -140,12 +142,14 @@ class ReplaySimulator(GameSimulator):
             )
             for idx in range(self.recorded_order_count, self.total_orders):
                 generated = synthetic_orders[idx]
-                self.orders.append({
-                    "id": f"order_{idx}",
-                    "items_required": list(generated["items_required"]),
-                    "items_delivered": [],
-                    "complete": False,
-                })
+                self.orders.append(
+                    {
+                        "id": f"order_{idx}",
+                        "items_required": list(generated["items_required"]),
+                        "items_delivered": [],
+                        "complete": False,
+                    }
+                )
             self.synthetic_order_count = self.total_orders - self.recorded_order_count
 
         # Game state
@@ -158,8 +162,10 @@ class ReplaySimulator(GameSimulator):
         # Bots
         self.bots = []
         for i in range(self.num_bots):
-            self.bots.append({
-                "id": i,
-                "position": list(self.spawn),
-                "inventory": [],
-            })
+            self.bots.append(
+                {
+                    "id": i,
+                    "position": list(self.spawn),
+                    "inventory": [],
+                }
+            )

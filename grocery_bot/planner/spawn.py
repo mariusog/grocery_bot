@@ -56,7 +56,9 @@ class SpawnMixin(PlannerBase):
         self.gs.spawn_dispersal_targets = targets
 
     def _split_into_zones(
-        self, item_ys: list[int], num_bots: int,
+        self,
+        item_ys: list[int],
+        num_bots: int,
     ) -> list[list[int]]:
         """Split item Y-rows into num_bots vertical zones."""
         n_zones = min(num_bots, len(item_ys))
@@ -137,6 +139,7 @@ class SpawnMixin(PlannerBase):
 
         # Stop dispersing when an active item is adjacent -- pick it instead.
         from grocery_bot.pathfinding import DIRECTIONS
+
         for dx, dy in DIRECTIONS:
             for it in self.items_at_pos.get((ctx.bx + dx, ctx.by + dy), []):
                 if self._is_available(it) and self.net_active.get(it["type"], 0) > 0:
@@ -154,5 +157,10 @@ class SpawnMixin(PlannerBase):
             return False
 
         return self._emit_move(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, target, ctx.blocked,
+            ctx.bid,
+            ctx.bx,
+            ctx.by,
+            ctx.pos,
+            target,
+            ctx.blocked,
         )

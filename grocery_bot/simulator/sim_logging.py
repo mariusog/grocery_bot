@@ -57,7 +57,9 @@ def infer_difficulty_slug(sim: Any) -> str:
 
 
 def log_round(
-    state: dict, actions: list[dict], log_rows: list[dict],
+    state: dict,
+    actions: list[dict],
+    log_rows: list[dict],
 ) -> None:
     """Record one round of actions in the same CSV format as live games."""
     active_o = next(
@@ -67,32 +69,34 @@ def log_round(
     preview_o = next((o for o in state["orders"] if o.get("status") == "preview"), None)
     for a in actions:
         b = next(bt for bt in state["bots"] if bt["id"] == a["bot"])
-        log_rows.append({
-            "round": state["round"],
-            "score": state["score"],
-            "order_idx": state.get("active_order_index", ""),
-            "bot_id": a["bot"],
-            "bot_pos": f"{b['position'][0]},{b['position'][1]}",
-            "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
-            "action": a["action"],
-            "item_id": a.get("item_id", ""),
-            "active_needed": (
-                ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
-                if active_o else ""
-            ),
-            "active_delivered": (
-                ";".join(active_o["items_delivered"]) if active_o else ""
-            ),
-            "preview_needed": (
-                ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
-                if preview_o else ""
-            ),
-            "items_carried": len(b["inventory"]),
-            "dist_to_dropoff": (
-                abs(b["position"][0] - state["drop_off"][0])
-                + abs(b["position"][1] - state["drop_off"][1])
-            ),
-        })
+        log_rows.append(
+            {
+                "round": state["round"],
+                "score": state["score"],
+                "order_idx": state.get("active_order_index", ""),
+                "bot_id": a["bot"],
+                "bot_pos": f"{b['position'][0]},{b['position'][1]}",
+                "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
+                "action": a["action"],
+                "item_id": a.get("item_id", ""),
+                "active_needed": (
+                    ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
+                    if active_o
+                    else ""
+                ),
+                "active_delivered": (";".join(active_o["items_delivered"]) if active_o else ""),
+                "preview_needed": (
+                    ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
+                    if preview_o
+                    else ""
+                ),
+                "items_carried": len(b["inventory"]),
+                "dist_to_dropoff": (
+                    abs(b["position"][0] - state["drop_off"][0])
+                    + abs(b["position"][1] - state["drop_off"][1])
+                ),
+            }
+        )
 
 
 def save_local_log(
@@ -117,10 +121,19 @@ def save_local_log(
 def _write_csv(csv_path: str, log_rows: list[dict]) -> None:
     """Write round-log rows to a CSV file."""
     fieldnames = [
-        "round", "score", "order_idx", "bot_id", "bot_pos",
-        "inventory", "action", "item_id", "active_needed",
-        "active_delivered", "preview_needed",
-        "items_carried", "dist_to_dropoff",
+        "round",
+        "score",
+        "order_idx",
+        "bot_id",
+        "bot_pos",
+        "inventory",
+        "action",
+        "item_id",
+        "active_needed",
+        "active_delivered",
+        "preview_needed",
+        "items_carried",
+        "dist_to_dropoff",
     ]
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -151,8 +164,7 @@ def _write_meta_json(
         "items_on_map": len(sim.items_on_map),
         "item_types": item_types,
         "item_positions": [
-            {"type": it["type"], "position": list(it["position"])}
-            for it in sim.items_on_map
+            {"type": it["type"], "position": list(it["position"])} for it in sim.items_on_map
         ],
         "drop_off": list(sim.drop_off),
         "drop_off_zones": [list(z) for z in sim.drop_off_zones],

@@ -11,9 +11,7 @@ from grocery_bot.planner._base import PlannerBase
 
 def role_to_task_type(role: str) -> str:
     """Map a role name to its corresponding task type."""
-    return {"pick": "pick", "deliver": "deliver", "preview": "preview"}.get(
-        role, "idle"
-    )
+    return {"pick": "pick", "deliver": "deliver", "preview": "preview"}.get(role, "idle")
 
 
 class CoordinationMixin(PlannerBase):
@@ -22,10 +20,7 @@ class CoordinationMixin(PlannerBase):
     def _check_order_transition(self) -> None:
         """Detect when the active order changes and clear persistent state."""
         current_id = self.active["id"] if self.active else None
-        if (
-            self.gs.last_active_order_id is not None
-            and current_id != self.gs.last_active_order_id
-        ):
+        if self.gs.last_active_order_id is not None and current_id != self.gs.last_active_order_id:
             self.gs.delivery_queue.clear()
             self.gs.bot_tasks.clear()
         self.gs.last_active_order_id = current_id

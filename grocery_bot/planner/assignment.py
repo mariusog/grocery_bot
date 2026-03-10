@@ -259,9 +259,9 @@ class AssignmentMixin(PlannerBase):
             self.batch_b_bots = set()
             return
         self.batch_b_bots = {
-            b["id"] for b in self.bots
-            if b["id"] not in self.bot_assignments
-            and not self._is_delivering(b)
+            b["id"]
+            for b in self.bots
+            if b["id"] not in self.bot_assignments and not self._is_delivering(b)
         }
 
     def _bot_urgency(self, b: dict[str, Any]) -> int:

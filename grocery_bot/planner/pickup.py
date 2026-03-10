@@ -51,8 +51,11 @@ class PickupMixin(PlannerBase):
                 first_item = route[0][0]
                 ipos = tuple(first_item["position"])
                 for ac in self.gs.adj_cache.get(ipos, []):
-                    if (ac != route[0][1] and ac not in blocked
-                            and self._emit_move(bid, bx, by, pos, ac, blocked)):
+                    if (
+                        ac != route[0][1]
+                        and ac not in blocked
+                        and self._emit_move(bid, bx, by, pos, ac, blocked)
+                    ):
                         return True
 
         # Greedy fallback: find reachable items and plan TSP route
@@ -66,8 +69,11 @@ class PickupMixin(PlannerBase):
             first_item = route[0][0]
             ipos = tuple(first_item["position"])
             for ac in self.gs.adj_cache.get(ipos, []):
-                if (ac != route[0][1] and ac not in blocked
-                        and self._emit_move(bid, bx, by, pos, ac, blocked)):
+                if (
+                    ac != route[0][1]
+                    and ac not in blocked
+                    and self._emit_move(bid, bx, by, pos, ac, blocked)
+                ):
                     return True
 
         return False
@@ -299,4 +305,3 @@ class PickupMixin(PlannerBase):
 
         result.sort(key=lambda c: c[2])
         return result
-

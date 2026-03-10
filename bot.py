@@ -7,7 +7,6 @@ Classes live in their own modules:
 """
 
 import asyncio
-import csv
 import json
 import os
 import sys
@@ -15,8 +14,17 @@ import time
 from datetime import datetime
 
 from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.game_log import (
+    build_game_meta,
+    build_map_snapshot,
+    log_game_over,
+    log_round,
+    save_recorded_map,
+    update_expected_inventories,
+    update_expected_positions,
+)
 from grocery_bot.game_state import GameState
-from grocery_bot.orders import get_needed_items
+from grocery_bot.orders import get_needed_items  # noqa: F401 — re-exported for tests
 
 # Re-export everything tests and simulator access via `bot.xxx`
 from grocery_bot.pathfinding import (  # noqa: F401
@@ -213,7 +221,7 @@ async def play() -> None:
 
     # Desync detection: track expected positions and inventories
     expected_positions: dict[int, tuple[int, int]] = {}  # bot_id -> (x, y)
-    expected_inventories: dict[int, list[str]] = {}  # bot_id -> list[str]
+    expected_inventories: dict[int, list[str] | None] = {}  # bot_id -> list[str] or None
     last_actions_sent: dict[int, dict] = {}  # bot_id -> action_dict (what we ACTUALLY sent)
     desync_count = 0
     last_round_seen = -1
@@ -263,8 +271,8 @@ async def play() -> None:
             if msg_type == "game_over":
                 dbg(f"GAME_OVER msg#{msg_count} len={msg_len}")
                 game_meta["orders"] = recorded_orders
-                _log_game_over(data, game_meta, log_rows, log_path, meta_path)
-                _save_recorded_map(map_snapshot, recorded_orders, timestamp)
+                log_game_over(data, game_meta, log_rows, log_path, meta_path, _gs.blacklisted_items)
+                save_recorded_map(map_snapshot, recorded_orders, timestamp)
                 break
 
             if msg_type != "game_state":
@@ -281,9 +289,7 @@ async def play() -> None:
                 wall_set = set(tuple(w) for w in data["grid"]["walls"])
                 shelf_set = set((it["position"][0], it["position"][1]) for it in data["items"])
                 # Log ALL top-level keys to discover fields like drop_zones
-                state_keys = sorted(
-                    k for k in data if k not in ("grid", "bots", "items", "orders")
-                )
+                state_keys = sorted(k for k in data if k not in ("grid", "bots", "items", "orders"))
                 dbg(
                     f"R0 INIT walls={len(wall_set)} shelves={len(shelf_set)} "
                     f"grid={data['grid']['width']}x{data['grid']['height']} "
@@ -369,14 +375,14 @@ async def play() -> None:
             send_time = time.perf_counter()
 
             # Update expected positions AND inventories
-            _update_expected_positions(expected_positions, data, actions)
-            _update_expected_inventories(expected_inventories, data, actions)
+            update_expected_positions(expected_positions, data, actions)
+            update_expected_inventories(expected_inventories, data, actions)
             last_actions_sent = {a["bot"]: a for a in actions}
             prev_action_json = response_json
 
             # --- Everything below is post-send bookkeeping ---
             total_ms = (send_time - recv_time) * 1000
-            _log_round(data, actions, log_rows)
+            log_round(data, actions, log_rows)
 
             action_summary = " | ".join(
                 f"b{a['bot']}:{a['action']}" + (f"({a['item_id']})" if a.get("item_id") else "")
@@ -409,8 +415,8 @@ async def play() -> None:
                     )
 
             if round_num == 0:
-                game_meta.update(_build_game_meta(data, timestamp))
-                map_snapshot = _build_map_snapshot(data, timestamp)
+                game_meta.update(build_game_meta(data, timestamp))
+                map_snapshot = build_map_snapshot(data, timestamp)
                 grid = data["grid"]
                 print(
                     f"Map: {grid['width']}x{grid['height']} | "
@@ -437,211 +443,6 @@ async def play() -> None:
     with open(debug_path, "w") as f:
         f.write("\n".join(debug_lines) + "\n")
     print(f"  Debug: {debug_path}")
-
-
-def _update_expected_positions(expected: dict, data: dict, actions: list) -> None:
-    """Predict where each bot will be next round based on actions sent."""
-    bots_by_id = {b["id"]: b for b in data["bots"]}
-    for a in actions:
-        bid = a["bot"]
-        bot = bots_by_id.get(bid)
-        if not bot:
-            continue
-        bx, by = bot["position"]
-        action = a["action"]
-        if action == "move_up":
-            expected[bid] = (bx, by - 1)
-        elif action == "move_down":
-            expected[bid] = (bx, by + 1)
-        elif action == "move_left":
-            expected[bid] = (bx - 1, by)
-        elif action == "move_right":
-            expected[bid] = (bx + 1, by)
-        else:
-            expected[bid] = (bx, by)
-
-
-def _update_expected_inventories(expected: dict, data: dict, actions: list) -> None:
-    """Predict inventory after actions (for desync detection).
-
-    Note: drop_off only drops items matching the active order, not all items.
-    Since we can't perfectly predict which items the server will accept,
-    we skip inventory prediction for drop_off.
-    """
-    bots_by_id = {b["id"]: b for b in data["bots"]}
-    items_by_id = {it["id"]: it for it in data.get("items", [])}
-    for a in actions:
-        bid = a["bot"]
-        bot = bots_by_id.get(bid)
-        if not bot:
-            continue
-        inv = list(bot["inventory"])
-        action = a["action"]
-        if action == "pick_up":
-            item_id = a.get("item_id")
-            item = items_by_id.get(item_id)
-            if item:
-                inv.append(item["type"])
-            expected[bid] = inv
-        elif action == "drop_off":
-            expected[bid] = None  # can't predict — server drops only needed items
-        else:
-            expected[bid] = inv
-
-
-def _build_map_snapshot(data: dict, timestamp: str) -> dict:
-    """Capture the round-0 game state for map recording."""
-    return {
-        "version": 1,
-        "recorded_at": timestamp,
-        "source": "live",
-        "grid": data["grid"],
-        "drop_off": data["drop_off"],
-        "drop_off_zones": data.get("drop_off_zones"),
-        "spawn": data["bots"][0]["position"],
-        "num_bots": len(data["bots"]),
-        "max_rounds": data["max_rounds"],
-        "total_orders": data.get("total_orders"),
-        "items": [
-            {"id": it["id"], "type": it["type"], "position": it["position"]} for it in data["items"]
-        ],
-    }
-
-
-def _save_recorded_map(map_snapshot: dict, recorded_orders: list, timestamp: str) -> None:
-    """Write recorded map + orders to maps/ directory."""
-    if not map_snapshot:
-        return
-    map_snapshot["orders"] = recorded_orders
-    os.makedirs("maps", exist_ok=True)
-    grid = map_snapshot.get("grid", {})
-    w, h = grid.get("width", "?"), grid.get("height", "?")
-    n_bots = map_snapshot.get("num_bots", "?")
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    map_path = f"maps/{date_str}_{w}x{h}_{n_bots}bot.json"
-    # Merge orders from previous runs to accumulate the full order list
-    if os.path.exists(map_path):
-        try:
-            with open(map_path) as f:
-                existing = json.load(f)
-            existing_orders = existing.get("orders", [])
-            existing_ids = {o["id"] for o in existing_orders}
-            new_count = 0
-            for order in recorded_orders:
-                if order["id"] not in existing_ids:
-                    existing_orders.append(order)
-                    existing_ids.add(order["id"])
-                    new_count += 1
-            # Sort by order id to maintain consistent ordering
-            existing_orders.sort(key=lambda o: o["id"])
-            map_snapshot["orders"] = existing_orders
-            print(f"  Map merged: {new_count} new orders added (total: {len(existing_orders)})")
-        except (json.JSONDecodeError, KeyError):
-            pass
-    with open(map_path, "w") as f:
-        json.dump(map_snapshot, f, indent=2)
-    print(f"  Map saved: {map_path} ({len(map_snapshot['orders'])} orders)")
-
-
-def _build_game_meta(data: dict, timestamp: str) -> dict:
-    grid = data["grid"]
-    return {
-        "timestamp": timestamp,
-        "grid": {
-            "width": grid["width"],
-            "height": grid["height"],
-            "walls": len(grid["walls"]),
-            "wall_positions": grid["walls"],
-        },
-        "bots": len(data["bots"]),
-        "items_on_map": len(data["items"]),
-        "item_types": sorted({it["type"] for it in data["items"]}),
-        "item_positions": [
-            {"type": it["type"], "position": it["position"]} for it in data["items"]
-        ],
-        "drop_off": data["drop_off"],
-        "drop_off_zones": data.get("drop_off_zones", [data["drop_off"]]),
-        "max_rounds": data["max_rounds"],
-        "total_orders": data.get("total_orders", "?"),
-        "spawn": data["bots"][0]["position"],
-    }
-
-
-def _log_round(data: dict, actions: list, log_rows: list) -> None:
-    active_o = next(
-        (o for o in data["orders"] if o.get("status") == "active" and not o["complete"]),
-        None,
-    )
-    preview_o = next((o for o in data["orders"] if o.get("status") == "preview"), None)
-    for a in actions:
-        b = next(bt for bt in data["bots"] if bt["id"] == a["bot"])
-        log_rows.append(
-            {
-                "round": data["round"],
-                "score": data["score"],
-                "order_idx": data.get("active_order_index", ""),
-                "bot_id": a["bot"],
-                "bot_pos": f"{b['position'][0]},{b['position'][1]}",
-                "inventory": ";".join(b["inventory"]) if b["inventory"] else "",
-                "action": a["action"],
-                "item_id": a.get("item_id", ""),
-                "active_needed": (
-                    ";".join(f"{k}:{v}" for k, v in get_needed_items(active_o).items())
-                    if active_o
-                    else ""
-                ),
-                "active_delivered": (";".join(active_o["items_delivered"]) if active_o else ""),
-                "preview_needed": (
-                    ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
-                    if preview_o
-                    else ""
-                ),
-            }
-        )
-
-
-def _log_game_over(
-    data: dict, game_meta: dict, log_rows: list, log_path: str, meta_path: str
-) -> None:
-    print("\nGame Over!")
-    print(f"  Score: {data['score']}")
-    print(f"  Rounds: {data['rounds_used']}")
-    print(f"  Items delivered: {data['items_delivered']}")
-    print(f"  Orders completed: {data['orders_completed']}")
-
-    game_meta["result"] = {
-        "score": data["score"],
-        "rounds_used": data["rounds_used"],
-        "items_delivered": data["items_delivered"],
-        "orders_completed": data["orders_completed"],
-    }
-    if _gs.blacklisted_items:
-        game_meta["blacklisted_items"] = list(_gs.blacklisted_items)
-    # Orders are added to game_meta by play() after game_over
-
-    with open(log_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "round",
-                "score",
-                "order_idx",
-                "bot_id",
-                "bot_pos",
-                "inventory",
-                "action",
-                "item_id",
-                "active_needed",
-                "active_delivered",
-                "preview_needed",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(log_rows)
-    with open(meta_path, "w") as f:
-        json.dump(game_meta, f, indent=2)
-    print(f"  Log: {log_path}")
-    print(f"  Meta: {meta_path}")
 
 
 if __name__ == "__main__":

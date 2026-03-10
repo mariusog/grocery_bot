@@ -86,9 +86,7 @@ class SpeculativeMixin(PlannerBase):
     def _is_preferred_spec_type(self, item_type: str) -> bool:
         """Prefer preview-needed types for speculative pickup when available."""
         return bool(
-            self.cfg.num_bots < 16
-            and self.preview
-            and self.net_preview.get(item_type, 0) > 0
+            self.cfg.num_bots < 16 and self.preview and self.net_preview.get(item_type, 0) > 0
         )
 
     def _step_speculative_pickup(self, ctx: Any) -> bool:
@@ -102,10 +100,7 @@ class SpeculativeMixin(PlannerBase):
         free = MAX_INVENTORY - len(ctx.inv)
         if free <= 1 and self.active_on_shelves > 0 and self.cfg.num_bots >= 15:
             return False
-        has_assignment = (
-            ctx.bid in self.bot_assignments
-            and bool(self.bot_assignments[ctx.bid])
-        )
+        has_assignment = ctx.bid in self.bot_assignments and bool(self.bot_assignments[ctx.bid])
         if has_assignment:
             return False
         # Use centralized spec assignment if available
@@ -114,9 +109,7 @@ class SpeculativeMixin(PlannerBase):
             return self._act_on_spec_assignment(
                 ctx.bid, ctx.bx, ctx.by, ctx.pos, spec_item, ctx.blocked
             )
-        return self._try_speculative_pickup(
-            ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked
-        )
+        return self._try_speculative_pickup(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked)
 
     def _act_on_spec_assignment(
         self,
@@ -166,7 +159,10 @@ class SpeculativeMixin(PlannerBase):
 
         # Pass 1: adjacent pickup (zero travel cost — always take it)
         item = self._find_spec_adjacent(
-            bx, by, bot_types, team_type_count,
+            bx,
+            by,
+            bot_types,
+            team_type_count,
         )
         if item:
             self.claimed.add(item["id"])
@@ -177,7 +173,9 @@ class SpeculativeMixin(PlannerBase):
 
         # Pass 2: walk to nearest unclaimed item of an uncovered type
         target_item, target_cell = self._find_spec_target(
-            pos, bot_types, team_type_count,
+            pos,
+            bot_types,
+            team_type_count,
         )
         if not target_item or not target_cell:
             return False

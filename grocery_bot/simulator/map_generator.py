@@ -3,9 +3,22 @@
 import random
 
 ITEM_TYPE_NAMES = [
-    "milk", "cheese", "bread", "yogurt", "butter", "eggs",
-    "pasta", "juice", "rice", "flour", "sugar", "salt",
-    "oil", "vinegar", "honey", "tea",
+    "milk",
+    "cheese",
+    "bread",
+    "yogurt",
+    "butter",
+    "eggs",
+    "pasta",
+    "juice",
+    "rice",
+    "flour",
+    "sugar",
+    "salt",
+    "oil",
+    "vinegar",
+    "honey",
+    "tea",
 ]
 
 
@@ -72,9 +85,7 @@ def generate_store_layout(
             for crow in corridor_rows:
                 if crow <= 1 or crow >= height - 2:
                     continue
-                if (cap_col, crow) not in wall_set and (
-                    cap_col, crow
-                ) not in shelf_positions:
+                if (cap_col, crow) not in wall_set and (cap_col, crow) not in shelf_positions:
                     walls.append((cap_col, crow))
                     wall_set.add((cap_col, crow))
 
@@ -94,10 +105,12 @@ def generate_orders(
     for i in range(count):
         num_items = rng.randint(lo, hi)
         items = [rng.choice(item_type_names) for _ in range(num_items)]
-        orders.append({
-            "id": f"order_{i}",
-            "items_required": items,
-            "items_delivered": [],
-            "complete": False,
-        })
+        orders.append(
+            {
+                "id": f"order_{i}",
+                "items_required": items,
+                "items_delivered": [],
+                "complete": False,
+            }
+        )
     return orders

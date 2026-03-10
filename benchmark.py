@@ -27,17 +27,11 @@ def _default_replay_map_files(map_dir: str = DEFAULT_MAP_DIR) -> list[str]:
     """Return replay maps from the latest day only."""
     if not os.path.isdir(map_dir):
         return []
-    json_files = sorted(
-        name for name in os.listdir(map_dir) if name.endswith(".json")
-    )
+    json_files = sorted(name for name in os.listdir(map_dir) if name.endswith(".json"))
     if not json_files:
         return []
     latest_date = json_files[-1][:10]
-    return [
-        os.path.join(map_dir, name)
-        for name in json_files
-        if name.startswith(latest_date)
-    ]
+    return [os.path.join(map_dir, name) for name in json_files if name.startswith(latest_date)]
 
 
 def _replay_map_files_for_difficulties(
@@ -69,17 +63,13 @@ if __name__ == "__main__":
         choices=["Easy", "Medium", "Hard", "Expert", "Nightmare"],
         help="Run specific difficulties only",
     )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Print per-map results"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Print per-map results")
     parser.add_argument(
         "--diagnostics",
         action="store_true",
         help="Run with diagnostics (generates log files)",
     )
-    parser.add_argument(
-        "--map", type=str, help="Path to a single recorded map JSON to benchmark"
-    )
+    parser.add_argument("--map", type=str, help="Path to a single recorded map JSON to benchmark")
     parser.add_argument(
         "--map-dir",
         type=str,

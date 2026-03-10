@@ -154,17 +154,13 @@ def get_team_config(num_bots: int) -> TeamConfig:
         use_coordination=num_bots >= 4,
         max_concurrent_deliverers=max_concurrent,
         max_nonactive_deliverers=max_nonactive,
-        min_inv_nonactive_idle=(
-            1 if num_bots >= 8 else MIN_INV_FOR_NONACTIVE_DELIVERY
-        ),
+        min_inv_nonactive_idle=(1 if num_bots >= 8 else MIN_INV_FOR_NONACTIVE_DELIVERY),
         enable_speculative=num_bots >= 5,
         enable_spec_assignment=num_bots >= 8,
         use_best_pickup=num_bots < 8,
         use_dropoff_weight=num_bots > 3,
         preview_stage_weight=preview_stage,
-        target_attraction_weight=(
-            0.0 if num_bots >= 10 else IDLE_TARGET_DISTANCE_WEIGHT
-        ),
+        target_attraction_weight=(0.0 if num_bots >= 10 else IDLE_TARGET_DISTANCE_WEIGHT),
         use_idle_spots=num_bots >= 8,
         use_corridor_penalty=num_bots >= 8,
         use_predictions=num_bots >= 8,
