@@ -169,8 +169,9 @@ class DiagnosticTracker:
         avg_rounds_per_order = (
             statistics.mean(self.rounds_per_order) if self.rounds_per_order else 0.0
         )
-        items_delivered = self.prev_score  # approximate
-        pickup_delivery_ratio = total_pickups / max(1, items_delivered)
+        items_actually_delivered = sum(self.delivery_sizes)
+        true_undelivered = total_pickups - items_actually_delivered
+        pickup_delivery_ratio = total_pickups / max(1, items_actually_delivered)
 
         return {
             "idle_rounds": self.idle_rounds,
@@ -186,7 +187,7 @@ class DiagnosticTracker:
             "useful_pickups": self.useful_pickups,
             "wasted_pickups": self.wasted_pickups,
             "pickup_waste_pct": (
-                self.wasted_pickups / total_pickups * 100 if total_pickups > 0 else 0.0
+                true_undelivered / total_pickups * 100 if total_pickups > 0 else 0.0
             ),
             "inv_full_waits": self.inv_full_waits,
             "avg_rounds_per_order": avg_rounds_per_order,

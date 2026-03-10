@@ -135,7 +135,7 @@ def print_summary(meta: dict, rounds_data: dict[int, list[dict]]) -> None:
         return
     print(
         f"\n  Moves={diag['moves']} Waits={diag['waits']} "
-        f"Picks={diag['pickups']} Delivers={diag['delivers']}"
+        f"Picks={diag['pickups']} Trips={diag['delivers']}"
     )
     print(
         f"  Waste={diag.get('pickup_waste_pct', 0):.1f}% "
@@ -148,7 +148,7 @@ def print_summary(meta: dict, rounds_data: dict[int, list[dict]]) -> None:
     if pba:
         cols = (
             f"{'Bot':>5} {'Moves':>6} {'Picks':>5}"
-            f" {'Deliv':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}"
+            f" {'Trips':>5} {'Idle':>5} {'Stuck':>5} {'Util%':>5}"
         )
         print(f"\n  {cols}")
         for bid in sorted(pba, key=lambda x: int(x)):
