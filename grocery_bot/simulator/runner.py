@@ -10,11 +10,13 @@ from grocery_bot.constants import (
     DIAG_LOW_SCORE,
     DIAG_OSCILLATION,
 )
-from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 from grocery_bot.simulator.game_simulator import GameSimulator
+from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 
 
-def run_benchmark(configs=None, seeds=None, verbose=False):
+def run_benchmark(
+    configs: dict | None = None, seeds: list | None = None, verbose: bool = False
+) -> list:
     """Run multiple simulator configurations and print a comparison table."""
     if configs is None:
         configs = DIFFICULTY_PRESETS
@@ -57,7 +59,7 @@ def run_benchmark(configs=None, seeds=None, verbose=False):
     return all_results
 
 
-def profile_congestion(num_bots, seeds, verbose=False):
+def profile_congestion(num_bots: int, seeds: list, verbose: bool = False) -> list:
     """Run each seed with diagnostics and print a congestion profile table."""
     cfg = dict(DIFFICULTY_PRESETS["Hard"])
     cfg["num_bots"] = num_bots

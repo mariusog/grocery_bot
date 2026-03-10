@@ -2,7 +2,10 @@
 
 import csv
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from grocery_bot.simulator.game_simulator import GameSimulator
 
 
 def parse_actions(csv_path: str) -> list[dict[str, Any]]:
@@ -124,7 +127,7 @@ def _parse_needed_str(needed_str: str) -> list[str]:
 
 def _infer_drop_off_zones(csv_path: str, primary_drop_off: list[int]) -> list[list[int]]:
     """Infer drop-off zones from CSV by finding where drop_off actions succeed."""
-    zones: set[tuple[int, int]] = {tuple(primary_drop_off)}
+    zones: set[tuple[int, int]] = {(primary_drop_off[0], primary_drop_off[1])}
     with open(csv_path) as f:
         reader = csv.DictReader(f)
         for row in reader:

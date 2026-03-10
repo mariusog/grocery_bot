@@ -12,7 +12,6 @@ from typing import Any
 from grocery_bot.orders import get_needed_items
 from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 
-
 _LOG_DIR = "logs"
 _MAX_LOCAL_LOGS = 20
 

@@ -3,11 +3,11 @@
 import random
 import time
 from collections import defaultdict
+from typing import Any
 
 import bot
-
-from grocery_bot.simulator.map_generator import generate_store_layout, generate_orders
 from grocery_bot.simulator.diagnostics import DiagnosticTracker
+from grocery_bot.simulator.map_generator import generate_orders, generate_store_layout
 from grocery_bot.simulator.physics import PhysicsMixin
 from grocery_bot.simulator.sim_logging import (
     compute_timing_stats,
@@ -127,7 +127,7 @@ class GameSimulator(PhysicsMixin):
     ) -> dict:
         """Run full game, return results dict."""
         bot.reset_state()
-        timings = defaultdict(list) if profile else None
+        timings: defaultdict[str, list[float]] | None = defaultdict(list) if profile else None
         tracker = DiagnosticTracker(self) if diagnose else None
         log_rows: list[dict] | None = [] if log else None
 
@@ -142,7 +142,7 @@ class GameSimulator(PhysicsMixin):
             if profile:
                 t0 = time.perf_counter()
             actions = bot.decide_actions(state)
-            if profile:
+            if profile and timings is not None:
                 timings["decide_actions"].append(time.perf_counter() - t0)
 
             if log_rows is not None:
@@ -168,7 +168,7 @@ class GameSimulator(PhysicsMixin):
         log_rows: list[dict] | None,
     ) -> dict:
         """Assemble the final result dict after a run."""
-        result = {
+        result: dict[str, Any] = {
             "score": self.score,
             "items_delivered": self.items_delivered,
             "orders_completed": self.orders_completed,

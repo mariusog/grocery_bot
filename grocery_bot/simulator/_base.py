@@ -14,7 +14,7 @@ class SimulatorBase:
     # --- Map geometry ---
     width: int
     height: int
-    walls: list[tuple[int, int]]
+    walls: list[list[int]]
     shelf_positions: set[tuple[int, int]]
 
     # --- Game objects ---

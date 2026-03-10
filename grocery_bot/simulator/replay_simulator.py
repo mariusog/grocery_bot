@@ -11,7 +11,7 @@ from grocery_bot.simulator.presets import DIFFICULTY_PRESETS
 DEFAULT_REPLAY_TOTAL_ORDERS = 50
 
 
-def _matching_preset(recorded):
+def _matching_preset(recorded: dict) -> dict | None:
     """Return the difficulty preset matching the recorded map, if any."""
     for cfg in DIFFICULTY_PRESETS.values():
         if (
@@ -23,7 +23,7 @@ def _matching_preset(recorded):
     return None
 
 
-def _default_total_orders(recorded):
+def _default_total_orders(recorded: dict) -> int:
     """Infer the live total-order count when older recordings omitted it."""
     preset = _matching_preset(recorded)
     if preset is not None and preset.get("max_rounds", 0) >= 500:
@@ -31,11 +31,12 @@ def _default_total_orders(recorded):
     return DEFAULT_REPLAY_TOTAL_ORDERS
 
 
-def _infer_items_per_order(recorded):
+def _infer_items_per_order(recorded: dict) -> tuple[int, int]:
     """Infer the synthetic padding order size range for a recorded map."""
     preset = _matching_preset(recorded)
     if preset is not None:
-        return preset["items_per_order"]
+        ipo = preset["items_per_order"]
+        return (int(ipo[0]), int(ipo[1]))
 
     sizes = [
         len(order.get("items_required", []))
@@ -47,7 +48,7 @@ def _infer_items_per_order(recorded):
     return (3, 4)
 
 
-def _padding_seed(recorded):
+def _padding_seed(recorded: dict) -> int:
     """Build a stable seed from the static map layout, independent of seen orders."""
     payload = {
         "grid": recorded["grid"],
@@ -70,7 +71,9 @@ class ReplaySimulator(GameSimulator):
     from a JSON recording.
     """
 
-    def __init__(self, map_path, pad_orders=True, total_orders=None):
+    def __init__(
+        self, map_path: str, pad_orders: bool = True, total_orders: int | None = None
+    ) -> None:
         # Skip GameSimulator.__init__ — we load everything from the recording
         with open(map_path) as f:
             recorded = json.load(f)

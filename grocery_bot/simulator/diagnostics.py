@@ -2,6 +2,9 @@
 
 import statistics
 from collections import defaultdict
+from typing import Any
+
+from grocery_bot.simulator._base import SimulatorBase
 
 
 class DiagnosticTracker:
@@ -10,15 +13,15 @@ class DiagnosticTracker:
     Separates diagnostic concerns from the core simulation loop.
     """
 
-    def __init__(self, sim):
+    def __init__(self, sim: SimulatorBase) -> None:
         self.num_bots = len(sim.bots)
         self.idle_rounds = 0
         self.stuck_rounds = 0
         self.oscillation_count = 0
         self.last_delivery_round = 0
         self.max_delivery_gap = 0
-        self.idle_per_round = []
-        self.prev_positions = {b["id"]: [] for b in sim.bots}
+        self.idle_per_round: list[int] = []
+        self.prev_positions: dict[int, list[Any]] = {b["id"]: [] for b in sim.bots}
         self.prev_score = 0
         self.prev_orders_completed = 0
 
@@ -36,11 +39,11 @@ class DiagnosticTracker:
         self.inv_full_waits = 0
 
         # Per-bot idle tracking
-        self.per_bot_idle = defaultdict(int)
+        self.per_bot_idle: dict[int, int] = defaultdict(int)
 
         # Order timing
         self.order_start_round = sim.round
-        self.rounds_per_order = []
+        self.rounds_per_order: list[int] = []
 
         # Per-bot action breakdown
         self.per_bot_moves: dict[int, int] = defaultdict(int)
@@ -55,12 +58,12 @@ class DiagnosticTracker:
         self.order_completion_rounds: list[int] = []
 
         # Pre-round snapshots (set in pre_round)
-        self._pre_positions = {}
-        self._pre_inv_sizes = {}
-        self._active_needed = set()
-        self._items_snapshot = {}
+        self._pre_positions: dict[int, tuple[int, int]] = {}
+        self._pre_inv_sizes: dict[int, int] = {}
+        self._active_needed: set[str] = set()
+        self._items_snapshot: dict[str, str] = {}
 
-    def pre_round(self, sim):
+    def pre_round(self, sim: SimulatorBase) -> None:
         """Snapshot state before actions are applied."""
         self._pre_positions = {b["id"]: tuple(b["position"]) for b in sim.bots}
         self._pre_inv_sizes = {b["id"]: len(b["inventory"]) for b in sim.bots}
@@ -68,7 +71,7 @@ class DiagnosticTracker:
         self._active_needed = set()
         if sim.active_order_idx < len(sim.orders):
             order = sim.orders[sim.active_order_idx]
-            needed = {}
+            needed: dict[str, int] = {}
             for it in order["items_required"]:
                 needed[it] = needed.get(it, 0) + 1
             for it in order["items_delivered"]:
@@ -77,7 +80,7 @@ class DiagnosticTracker:
 
         self._items_snapshot = {it["id"]: it["type"] for it in sim.items_on_map}
 
-    def post_round(self, sim, actions):
+    def post_round(self, sim: SimulatorBase, actions: list) -> None:
         """Update diagnostics after actions are applied."""
         actions_by_bot = {a["bot"]: a for a in actions}
         round_idle = 0
@@ -152,7 +155,7 @@ class DiagnosticTracker:
             self.last_delivery_round = sim.round
         self.prev_score = sim.score
 
-    def get_results(self):
+    def get_results(self) -> dict:
         """Return diagnostics summary dict."""
         total_bot_rounds = (self.last_delivery_round or 1) + sum(
             1 for _ in self.idle_per_round

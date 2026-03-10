@@ -1,6 +1,8 @@
 """Difficulty presets for the grocery bot simulator."""
 
-DIFFICULTY_PRESETS = {
+from typing import Any
+
+DIFFICULTY_PRESETS: dict[str, dict[str, Any]] = {
     "Easy": {
         "num_bots": 1,
         "width": 12,

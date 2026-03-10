@@ -1,5 +1,6 @@
 """Map layout and order generation for the grocery bot simulator."""
 
+import random
 
 ITEM_TYPE_NAMES = [
     "milk", "cheese", "bread", "yogurt", "butter", "eggs",
@@ -8,7 +9,9 @@ ITEM_TYPE_NAMES = [
 ]
 
 
-def generate_store_layout(width, height, num_item_types):
+def generate_store_layout(
+    width: int, height: int, num_item_types: int
+) -> tuple[list, set, list, list]:
     """Generate a store layout with border walls, vertical aisles, and shelves.
 
     Returns:
@@ -78,7 +81,9 @@ def generate_store_layout(width, height, num_item_types):
     return walls, shelf_positions, item_shelves, item_type_names
 
 
-def generate_orders(rng, item_type_names, items_per_order, count=50):
+def generate_orders(
+    rng: "random.Random", item_type_names: list, items_per_order: tuple, count: int = 50
+) -> list[dict]:
     """Generate random orders using available item types.
 
     Returns:
