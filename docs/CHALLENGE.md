@@ -26,12 +26,15 @@ claude mcp add --transport http grocery-bot https://mcp-docs.ainm.no/mcp
 
 ## Our Best Scores
 
-| Level  | Grid   | Bots | Best Score |
-|--------|--------|------|------------|
-| Easy   | 12x10  | 1    | 118 pts    |
-| Medium | 16x12  | 3    | 35 pts     |
-| Hard   | 22x14  | 5    | No score   |
-| Expert | 28x18  | 10   | No score   |
+Team: **Runic Tech** 🇳🇴 — Overall rank **#2** — Total **876 pts**
+
+| Level     | Grid   | Bots | Best Score | Rank |
+|-----------|--------|------|------------|------|
+| Easy      | 12x10  | 1    | 133 pts    | #46  |
+| Medium    | 16x12  | 3    | 153 pts    | #45  |
+| Hard      | 22x14  | 5    | 140 pts    | #43  |
+| Expert    | 28x18  | 10   | 119 pts    | #29  |
+| Nightmare | 30x18  | 20   | 331 pts    | #16  |
 
 ---
 
@@ -48,12 +51,13 @@ Server sends game_state (round N)
 
 ### Difficulty Levels
 
-| Level  | Grid   | Bots | Aisles | Item Types | Order Size |
-|--------|--------|------|--------|------------|------------|
-| Easy   | 12x10  | 1    | 2      | 4          | 3-4        |
-| Medium | 16x12  | 3    | 3      | 8          | 3-5        |
-| Hard   | 22x14  | 5    | 4      | 12         | 3-5        |
-| Expert | 28x18  | 10   | 5      | 16         | 4-6        |
+| Level     | Grid   | Bots | Aisles | Item Types | Order Size |
+|-----------|--------|------|--------|------------|------------|
+| Easy      | 12x10  | 1    | 2      | 4          | 3-4        |
+| Medium    | 16x12  | 3    | 3      | 8          | 3-5        |
+| Hard      | 22x14  | 5    | 4      | 12         | 3-5        |
+| Expert    | 28x18  | 10   | 5      | 16         | 4-6        |
+| Nightmare | 30x18  | 20   | 6      | 21         | 4-6        |
 
 One map per difficulty. Item placement and orders change daily — same day, same game (deterministic).
 
