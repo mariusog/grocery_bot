@@ -86,7 +86,7 @@ class SpeculativeMixin(PlannerBase):
     def _is_preferred_spec_type(self, item_type: str) -> bool:
         """Prefer preview-needed types for speculative pickup when available."""
         return bool(
-            self.cfg.num_bots < 16 and self.preview and self.net_preview.get(item_type, 0) > 0
+            self.cfg.prefer_preview_spec and self.preview and self.net_preview.get(item_type, 0) > 0
         )
 
     def _step_speculative_pickup(self, ctx: Any) -> bool:
@@ -98,7 +98,7 @@ class SpeculativeMixin(PlannerBase):
         # Don't fill last slot with speculative when active items need picking.
         # Keeps 1 slot free so the bot can pick active items next round.
         free = MAX_INVENTORY - len(ctx.inv)
-        if free <= 1 and self.active_on_shelves > 0 and self.cfg.num_bots >= 15:
+        if free <= 1 and self.active_on_shelves > 0 and self.cfg.reserve_last_slot_for_spec:
             return False
         has_assignment = ctx.bid in self.bot_assignments and bool(self.bot_assignments[ctx.bid])
         if has_assignment:

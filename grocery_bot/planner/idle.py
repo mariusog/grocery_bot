@@ -209,7 +209,7 @@ class IdleMixin(PlannerBase):
             spot_idx = (rank * len(preferred)) // n_bots
             item_target = preferred[spot_idx]
 
-        if item_target is None and self.cfg.num_bots >= 3 and self.items:
+        if item_target is None and self.cfg.use_idle_shelf_targeting and self.items:
             # Smaller teams or fallback: original shelf-column targeting
             item_positions = [tuple(it["position"]) for it in self.items]
             if item_positions:

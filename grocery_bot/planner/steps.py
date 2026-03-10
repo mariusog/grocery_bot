@@ -158,8 +158,7 @@ class StepsMixin(PlannerBase):
 
     def _step_early_delivery(self, ctx: Any) -> bool:
         """Deliver partial inventory when cheaper than filling up (medium teams 4-7)."""
-        num_bots = self.cfg.num_bots
-        if num_bots < 4 or num_bots >= 8:
+        if not self.cfg.enable_early_delivery:
             return False
         if not (ctx.has_active and self.active_on_shelves > 0):
             return False
@@ -255,7 +254,7 @@ class StepsMixin(PlannerBase):
         if self._is_at_any_dropoff(ctx.pos):
             return False
         max_na_del = self.cfg.max_nonactive_deliverers
-        if self.cfg.num_bots >= 5 and self._nonactive_delivering >= max_na_del:
+        if self.cfg.apply_nonactive_throttle and self._nonactive_delivering >= max_na_del:
             return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
@@ -301,7 +300,7 @@ class StepsMixin(PlannerBase):
         )
         if not carries_matching:
             max_na_del = self.cfg.max_nonactive_deliverers
-            if self.cfg.num_bots >= 5 and self._nonactive_delivering >= max_na_del:
+            if self.cfg.apply_nonactive_throttle and self._nonactive_delivering >= max_na_del:
                 return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)

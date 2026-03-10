@@ -62,6 +62,16 @@ class TeamConfig:
     # --- Simple gates ---
     multi_bot: bool
 
+    # --- Bot-neutral behavioral flags (replace runtime num_bots checks) ---
+    enable_early_delivery: bool       # 4-7 bot teams only
+    apply_nonactive_throttle: bool    # cap concurrent non-active deliverers
+    allow_preview_walk_when_active: bool  # walk to distant preview when active items remain
+    use_spawn_dispersal: bool         # disperse bots from spawn at game start
+    use_idle_shelf_targeting: bool    # fallback shelf-column idle targeting
+    prefer_preview_spec: bool         # prefer preview-needed types in speculative pickup
+    reserve_last_slot_for_spec: bool  # keep 1 slot free for active when speculating
+    use_multi_preview_bots: bool      # allow multiple simultaneous preview bots
+
     # --- Methods for runtime-dependent values ---
 
     def max_walkers(self, active_on_shelves: int) -> int:
@@ -168,4 +178,12 @@ def get_team_config(num_bots: int) -> TeamConfig:
         extra_preview_roles=num_bots >= 8,
         use_wave_mode=num_bots >= WAVE_MODE_MIN_BOTS,
         multi_bot=num_bots > 1,
+        enable_early_delivery=4 <= num_bots < 8,
+        apply_nonactive_throttle=num_bots >= 5,
+        allow_preview_walk_when_active=num_bots > 5,
+        use_spawn_dispersal=num_bots >= 10,
+        use_idle_shelf_targeting=num_bots >= 3,
+        prefer_preview_spec=num_bots < 16,
+        reserve_last_slot_for_spec=num_bots >= 15,
+        use_multi_preview_bots=num_bots >= 5,
     )

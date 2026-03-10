@@ -40,10 +40,10 @@ class SpawnMixin(PlannerBase):
         if self.gs.spawn_dispersal_targets is not None:
             return
 
-        num_bots = len(self.bots)
-        if num_bots <= 1:
+        if not self.cfg.multi_bot:
             self.gs.spawn_dispersal_targets = {}
             return
+        num_bots = len(self.bots)
 
         item_ys = sorted({tuple(it["position"])[1] for it in self.items})
         if not item_ys:
@@ -126,7 +126,7 @@ class SpawnMixin(PlannerBase):
 
     def _step_spawn_dispersal(self, ctx: Any) -> bool:
         """Route unassigned bots toward diverse zones during opening."""
-        if self.cfg.num_bots < 10:
+        if not self.cfg.use_spawn_dispersal:
             return False
         if self.current_round >= self.cfg.spawn_dispersal_max_rounds():
             return False

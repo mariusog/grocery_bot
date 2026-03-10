@@ -27,14 +27,6 @@ PICKUP_FAIL_BLACKLIST_THRESHOLD = 3  # consecutive fails before blacklisting an 
 BLACKLIST_EXPIRY_ROUNDS = 15  # rounds before a blacklisted item is retried
 
 # ---------------------------------------------------------------------------
-# Bot team-size thresholds for strategy branching
-# ---------------------------------------------------------------------------
-SMALL_TEAM_MAX = 3  # len(bots) <= this for small-team logic
-MEDIUM_TEAM_MIN = 5  # len(bots) >= this for medium-team logic
-LARGE_TEAM_MIN = 6  # len(bots) >= this for large-team logic
-PREDICTION_TEAM_MIN = 8  # len(bots) >= this to use predicted positions
-
-# ---------------------------------------------------------------------------
 # Blocking / collision avoidance
 # ---------------------------------------------------------------------------
 BLOCKING_RADIUS_LARGE_TEAM = 4  # default Manhattan blocking radius for 5+ bots

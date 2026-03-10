@@ -52,7 +52,10 @@ class AssignmentMixin(PlannerBase):
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = min(MAX_PREVIEW_BOTS, max(1, surplus - 1)) if self.cfg.num_bots >= 5 else 1
+        if self.cfg.use_multi_preview_bots:
+            max_preview = min(MAX_PREVIEW_BOTS, max(1, surplus - 1))
+        else:
+            max_preview = 1
 
         candidates: list[tuple[float, int]] = []
         for bot in idle_for_active:

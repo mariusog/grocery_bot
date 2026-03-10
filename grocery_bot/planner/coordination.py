@@ -75,7 +75,7 @@ class CoordinationMixin(PlannerBase):
         else:
             active_picker_count = math.ceil(self.active_on_shelves / MAX_INVENTORY)
             active_picker_count = (
-                min(active_picker_count, num_bots - 1) if num_bots > 1 else num_bots
+                min(active_picker_count, num_bots - 1) if self.cfg.multi_bot else num_bots
             )
 
         # W5: when the full wave is ready, admit all bots to deliver simultaneously.

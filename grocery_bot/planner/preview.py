@@ -43,8 +43,7 @@ class PreviewMixin(PlannerBase):
 
         # Pass 2: walk to distant preview items
         if not is_preview_bot and not force_walkers:
-            if self.cfg.num_bots <= 5 and self.active_on_shelves > 0:
-                # Small/medium teams (≤5): don't divert from active work
+            if not self.cfg.allow_preview_walk_when_active and self.active_on_shelves > 0:
                 return False
             max_walkers = self.cfg.max_walkers(self.active_on_shelves)
             if self._preview_walkers >= max_walkers:
