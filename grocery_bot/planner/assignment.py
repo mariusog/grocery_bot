@@ -74,7 +74,7 @@ class AssignmentMixin(PlannerBase):
                 break
             self.preview_bot_ids.add(bid)
 
-        if len(self.preview_bot_ids) == 1 or self.preview_bot_ids:
+        if self.preview_bot_ids:
             self.preview_bot_id = next(iter(self.preview_bot_ids))
 
     def _bot_delivery_completes_order(self, bot: dict[str, Any]) -> bool:

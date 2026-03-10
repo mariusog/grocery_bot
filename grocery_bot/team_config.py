@@ -31,7 +31,7 @@ class TeamConfig:
     reads intent rather than inline ``num_bots`` comparisons:
 
     - ``multi_bot`` — more than one bot on the team
-    - ``enable_early_delivery`` — deliver early when cost favors it (4–7 bots)
+    - ``enable_early_delivery`` — deliver early when cost favors it (4-7 bots)
     - ``apply_nonactive_throttle`` — limit simultaneous non-active deliveries
     - ``allow_preview_walk_when_active`` — walk to preview items while active remain
     - ``use_spawn_dispersal`` — fan bots out from spawn in opening rounds
@@ -78,14 +78,14 @@ class TeamConfig:
     multi_bot: bool
 
     # --- Bot-neutral behavioral flags (replace runtime num_bots checks) ---
-    enable_early_delivery: bool       # 4-7 bot teams only
-    apply_nonactive_throttle: bool    # cap concurrent non-active deliverers
+    enable_early_delivery: bool  # 4-7 bot teams only
+    apply_nonactive_throttle: bool  # cap concurrent non-active deliverers
     allow_preview_walk_when_active: bool  # walk to distant preview when active items remain
-    use_spawn_dispersal: bool         # disperse bots from spawn at game start
-    use_idle_shelf_targeting: bool    # fallback shelf-column idle targeting
-    prefer_preview_spec: bool         # prefer preview-needed types in speculative pickup
+    use_spawn_dispersal: bool  # disperse bots from spawn at game start
+    use_idle_shelf_targeting: bool  # fallback shelf-column idle targeting
+    prefer_preview_spec: bool  # prefer preview-needed types in speculative pickup
     reserve_last_slot_for_spec: bool  # keep 1 slot free for active when speculating
-    use_multi_preview_bots: bool      # allow multiple simultaneous preview bots
+    use_multi_preview_bots: bool  # allow multiple simultaneous preview bots
 
     # --- Methods for runtime-dependent values ---
 
