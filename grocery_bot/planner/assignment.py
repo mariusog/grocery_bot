@@ -1,6 +1,6 @@
 """Bot-to-item assignment logic for RoundPlanner."""
 
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
@@ -16,13 +16,11 @@ class AssignmentMixin:
     def _is_delivering(self, bot: dict[str, Any]) -> bool:
         """True if bot is busy delivering (shouldn't count as idle)."""
         has_ai = self.bot_has_active[bot["id"]]
-        if has_ai and (
-            len(bot["inventory"]) >= MAX_INVENTORY or self.active_on_shelves == 0
-        ):
-            return True
-        if has_ai and self._is_at_any_dropoff(tuple(bot["position"])):
-            return True
-        return False
+        return has_ai and (
+            len(bot["inventory"]) >= MAX_INVENTORY
+            or self.active_on_shelves == 0
+            or self._is_at_any_dropoff(tuple(bot["position"]))
+        )
 
     def _assign_preview_bot(self) -> None:
         """Assign bots furthest from remaining active items as preview-only bots.
@@ -53,10 +51,7 @@ class AssignmentMixin:
         surplus = len(idle_for_active) - self.active_on_shelves
         if surplus <= 0:
             return
-        max_preview = (
-            min(MAX_PREVIEW_BOTS, max(1, surplus - 1))
-            if self.cfg.num_bots >= 5 else 1
-        )
+        max_preview = min(MAX_PREVIEW_BOTS, max(1, surplus - 1)) if self.cfg.num_bots >= 5 else 1
 
         candidates: list[tuple[float, int]] = []
         for bot in idle_for_active:
@@ -75,9 +70,7 @@ class AssignmentMixin:
                 break
             self.preview_bot_ids.add(bid)
 
-        if len(self.preview_bot_ids) == 1:
-            self.preview_bot_id = next(iter(self.preview_bot_ids))
-        elif self.preview_bot_ids:
+        if len(self.preview_bot_ids) == 1 or self.preview_bot_ids:
             self.preview_bot_id = next(iter(self.preview_bot_ids))
 
     def _bot_delivery_completes_order(self, bot: dict[str, Any]) -> bool:
@@ -123,17 +116,15 @@ class AssignmentMixin:
         # 5-7 bots: moderate zones
         # <5 bots: no zones needed
         num_zones = self.cfg.num_zones(len(assignable))
-        zone_width: Optional[float] = (map_width / num_zones) if num_zones > 1 else None
+        zone_width: float | None = (map_width / num_zones) if num_zones > 1 else None
 
-        drop_off = (
-            self._nearest_dropoff(assignable[0][1])
-            if self.cfg.use_dropoff_weight
-            else None
-        )
+        drop_off = self._nearest_dropoff(assignable[0][1]) if self.cfg.use_dropoff_weight else None
         max_slots = max(s for _, _, s in assignable)
         if max_slots == 1 or len(assignable) >= len(candidates):
             self.bot_assignments = self.gs.assign_items_to_bots(
-                assignable, candidates, zone_width=zone_width,
+                assignable,
+                candidates,
+                zone_width=zone_width,
                 drop_off=drop_off,
             )
         else:
@@ -148,8 +139,8 @@ class AssignmentMixin:
         self,
         assignable: list[tuple[int, tuple[int, int], int]],
         candidates: list[dict[str, Any]],
-        zone_width: Optional[float],
-        drop_off: Optional[tuple[int, int]] = None,
+        zone_width: float | None,
+        drop_off: tuple[int, int] | None = None,
     ) -> None:
         """Greedy distance-sorted assignment supporting multi-slot bots."""
         n_bots = len(assignable)
@@ -175,7 +166,7 @@ class AssignmentMixin:
 
         bot_counts: dict[int, int] = {}
         taken: set[int] = set()
-        for d, bi, ii in pairs:
+        for _d, bi, ii in pairs:
             bot_id, _, slots = assignable[bi]
             if bot_counts.get(bi, 0) >= slots or ii in taken:
                 continue
@@ -202,7 +193,7 @@ class AssignmentMixin:
 
         col_bots: dict[int, list[tuple[int, float]]] = {}
         for bid, cols in bot_columns.items():
-            bot_pos: Optional[tuple[int, int]] = None
+            bot_pos: tuple[int, int] | None = None
             for b_id, b_pos, _ in assignable:
                 if b_id == bid:
                     bot_pos = b_pos
@@ -228,7 +219,7 @@ class AssignmentMixin:
 
             for old_item in items_in_col:
                 old_type = old_item["type"]
-                best_alt: Optional[dict[str, Any]] = None
+                best_alt: dict[str, Any] | None = None
                 best_alt_d = float("inf")
                 bot_pos = None
                 for b_id, b_pos, _ in assignable:
