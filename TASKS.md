@@ -39,8 +39,18 @@ Status: `open` | `in-progress` | `done` | `blocked`
 
 ## Priority Tasks (path to 1000 points)
 
-### T61: Rounds-Per-Order Threshold Integration Tests
+### T62: Wave mode for Expert (W2 proportional batch split required first)
 - **Status**: open
+- **Priority**: 1 (largest single gap: +100-200 Expert)
+- **Difficulty**: Hard (4-6 hours)
+- **Files**: `grocery_bot/planner/assignment.py`, `grocery_bot/planner/steps.py`, `grocery_bot/constants.py`
+- **Root cause**: `WAVE_MODE_MIN_BOTS = 15` so 10-bot Expert has no batch B. Code review confirmed that lowering to 10 REGRESSES (inv_full_waits: 430/451 vs ceiling 400) because batch B bots fill 3 preview items then sit idle while active_on_shelves > 0.
+- **What's needed**: Implement proper W2 proportional split: `n_a = round(n_bots * active_count / wave_count)` bots for active, rest for preview. This limits batch B to the right number of bots so they don't over-fill. Only then lower `WAVE_MODE_MIN_BOTS` to 10.
+- **Key insight**: Test guard in `test_inv_full_waits_bounded` at 400 will tell us when this is fixed.
+- **Expected gain**: +50-150 Expert, +20-50 Hard.
+
+### T61: Rounds-Per-Order Threshold Integration Tests
+- **Status**: done — tests exist in `tests/test_replay_regression.py::TestReplayPerformanceThresholds`
 - **Priority**: 0 (infrastructure — do first)
 - **Difficulty**: Easy (1-2 hours)
 - **Files**: `tests/test_replay_regression.py`
