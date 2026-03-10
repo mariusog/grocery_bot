@@ -6,10 +6,9 @@ Three fixes:
 3. Early delivery: wire _should_deliver_early() into step chain
 """
 
-from tests.conftest import make_state
-from grocery_bot.planner.round_planner import RoundPlanner
-from grocery_bot.constants import MAX_INVENTORY
 import bot
+from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import make_state
 
 
 def _order(items, status="active"):

@@ -3,7 +3,7 @@
 import csv
 import json
 
-from grocery_bot.simulator.log_replay import replay_log, parse_actions
+from grocery_bot.simulator.log_replay import parse_actions, replay_log
 
 
 def _write_test_log(tmp_path, rounds_data):

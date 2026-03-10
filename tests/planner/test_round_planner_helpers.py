@@ -4,8 +4,6 @@ from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
 
 
-
-
 class TestIsAvailable:
     def test_available_item(self):
         """Unclaimed, non-blacklisted item is available."""

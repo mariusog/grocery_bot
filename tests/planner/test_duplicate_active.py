@@ -8,9 +8,9 @@ Fix: skip the non-active delivery throttle for bots carrying items that
 match the active order when active_on_shelves == 0.
 """
 
-from tests.conftest import make_state
-from grocery_bot.planner.round_planner import RoundPlanner
 import bot
+from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import make_state
 
 
 def _order(items, status="active"):

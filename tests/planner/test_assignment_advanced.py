@@ -4,8 +4,6 @@ from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
 
 
-
-
 class TestGreedyAssign:
     def test_assigns_closest_items(self):
         """Greedy assign should prefer closer items for each bot."""

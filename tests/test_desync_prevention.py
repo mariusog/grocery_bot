@@ -13,7 +13,6 @@ processing our actions, so our actions are applied to the wrong round.
 import bot
 from tests.conftest import make_state
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _standard_items():
@@ -76,7 +75,7 @@ class TestDesyncPickupFailure:
             items=items,
             orders=orders,
         )
-        actions1, gs = _run_round(state1)
+        _actions1, gs = _run_round(state1)
 
         # Simulate: bot sent pick_up for item_2 (cheese at 3,3), expected to stay at (4,3)
         # Manually set last_pickup to simulate what _emit_action does

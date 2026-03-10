@@ -1,13 +1,14 @@
 """Shared fixtures and helpers for grocery bot tests."""
 
 import gc
-import sys
 import os
+import sys
 
 # Ensure project root is on the import path so tests can import bot, simulator, etc.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+
 import bot
 
 

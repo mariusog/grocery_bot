@@ -7,7 +7,7 @@ See docs/hard_invfull_fix_plan.md for the full design.
 """
 
 import bot
-from tests.conftest import make_state, get_action
+from tests.conftest import make_state
 from tests.planner.conftest import _active_order, _preview_order
 
 
@@ -44,7 +44,7 @@ class TestPreviewPrepickWalkGate:
         preview_ids = {"p0", "p1"}
         for a in actions:
             if a["action"] == "pick_up" and a["item_id"] in preview_ids:
-                assert False, (
+                raise AssertionError(
                     f"Bot {a['bot']} picked distant preview {a['item_id']} "
                     f"when 5 active items exist on shelves"
                 )
@@ -73,7 +73,7 @@ class TestPreviewPrepickWalkGate:
         actions = bot.decide_actions(state)
         for a in actions:
             if a["action"] == "pick_up" and a["item_id"] == "p0":
-                assert False, (
+                raise AssertionError(
                     "Bot walked to distant preview on 4-bot team with active on shelves"
                 )
 
@@ -127,6 +127,6 @@ class TestPreviewPrepickWalkGate:
                 _preview_order(["bread"]),
             ],
         )
-        actions = bot.decide_actions(state)
+        bot.decide_actions(state)
         # Adjacent preview pickup via _step_opportunistic_preview is OK
         # (no assertion on picking it up — we only block walking)

@@ -117,5 +117,5 @@ class TestGenerateOrders:
         types = ["cheese", "milk", "bread"]
         orders1 = generate_orders(rng1, types, (2, 3), count=10)
         orders2 = generate_orders(rng2, types, (2, 3), count=10)
-        for o1, o2 in zip(orders1, orders2):
+        for o1, o2 in zip(orders1, orders2, strict=True):
             assert o1["items_required"] == o2["items_required"]

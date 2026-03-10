@@ -1,8 +1,7 @@
 """Tests for single-bot decision logic: pickup, delivery, endgame, edge cases."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
-
+from tests.conftest import get_action, make_state, reset_bot
 
 # --- Test: bot should not deliver with only 1 item when more items are nearby ---
 
@@ -173,7 +172,8 @@ class TestSingleItemDeliveryWaste:
         """
         reset_bot()
         # Order needs 4 cheese. Bot has 0. There are 4 cheese items.
-        # Bot should pick up 3, deliver, pick up 1, deliver — NOT pick 1, deliver, pick 1, deliver...
+        # Bot should pick up 3, deliver, pick up 1, deliver
+        # NOT: pick 1, deliver, pick 1, deliver...
         # Layout: aisle at y=5, shelves on both sides
         #   Items on shelves at x=2 and x=4 (rows), bot walks in aisle x=3
         #   Bot at (3,5) is adjacent to items at (2,5) and (4,5)

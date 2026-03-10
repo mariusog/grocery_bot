@@ -1,7 +1,7 @@
 """Tests for multi-bot coordination: assignment, collision, deadlock, dispersal."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import get_action, make_state, reset_bot
 
 
 class TestMultiBotAssignment:
@@ -167,7 +167,7 @@ class TestAntiCollision:
         # It should wait or find alternative.
         if a1["action"] == "move_left":
             # This would try to move into bot 0's cell (4,5) — bad
-            assert False, "Bot 1 should not try to move into bot 0's cell"
+            raise AssertionError("Bot 1 should not try to move into bot 0's cell")
 
 
 class TestInterleavedDelivery:

@@ -5,9 +5,9 @@ to preview items, prioritizing items far from dropoff (expensive to
 pick later). Each bot gets a unique target — no starvation.
 """
 
-from tests.conftest import make_state
-from grocery_bot.planner.round_planner import RoundPlanner
 import bot
+from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import make_state
 
 
 def _order(items, status="active"):

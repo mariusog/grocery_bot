@@ -32,7 +32,7 @@ class TestMultiTripPlanning:
         items = state["items"]
         candidates = []
         for it in items:
-            cell, d = bot.find_best_item_target(bot_pos, it, bot._gs.blocked_static)
+            cell, _d = bot.find_best_item_target(bot_pos, it, bot._gs.blocked_static)
             if cell:
                 candidates.append((it, cell))
 

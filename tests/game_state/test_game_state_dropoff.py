@@ -133,7 +133,7 @@ class TestIsDropoffCongested:
         drop_off = (1, 8)
         from grocery_bot.game_state import MAX_APPROACH_SLOTS
         # Place bots on dropoff itself plus approach cells
-        positions = [drop_off] + gs.dropoff_approach_cells[:MAX_APPROACH_SLOTS]
+        positions = [drop_off, *gs.dropoff_approach_cells[:MAX_APPROACH_SLOTS]]
         assert gs.is_dropoff_congested(drop_off, positions) is True
 
 

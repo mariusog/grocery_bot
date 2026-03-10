@@ -1,7 +1,7 @@
 """Tests for preview pickup, cascade delivery, and pipelining logic."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import get_action, make_state, reset_bot
 
 
 class TestPreviewDoesntBlockActive:
@@ -210,7 +210,7 @@ class TestPreviewDoesntBlockActive:
                 # Check if last 10 actions repeat a 2-round cycle
                 # Allow endgame idle (last 30 rounds) — bot may legitimately wait
                 if len(set(last_actions)) <= 2 and sim.round < 270:
-                    assert False, (
+                    raise AssertionError(
                         f"Bot stuck in loop at round {sim.round}: {last_actions}"
                     )
             sim.apply_actions(actions)

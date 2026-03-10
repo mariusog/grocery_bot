@@ -4,8 +4,6 @@ from tests.conftest import make_planner
 from tests.planner.conftest import _active_order, _preview_order
 
 
-
-
 class TestIsDelivering:
     def test_full_inventory_with_active_items(self):
         """Bot with full inventory and active items is delivering."""

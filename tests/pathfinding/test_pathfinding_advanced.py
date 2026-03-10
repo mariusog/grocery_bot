@@ -1,15 +1,14 @@
 """Tests for pathfinding helper functions and distance calculations."""
 
-from tests.pathfinding.conftest import _bounded_blocked
-
 from grocery_bot.pathfinding import (
+    _predict_pos,
     bfs,
     bfs_temporal,
     bfs_toward,
     direction_to,
-    _predict_pos,
     find_adjacent_positions,
 )
+from tests.pathfinding.conftest import _bounded_blocked
 
 
 class TestBfsTemporal:

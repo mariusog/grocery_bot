@@ -4,9 +4,9 @@ import time
 
 import bot
 from grocery_bot.simulator import (
+    DIFFICULTY_PRESETS,
     GameSimulator,
     run_benchmark,
-    DIFFICULTY_PRESETS,
 )
 from tests.conftest import reset_bot
 

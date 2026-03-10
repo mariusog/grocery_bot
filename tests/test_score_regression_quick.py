@@ -10,8 +10,8 @@ Run with: pytest tests/test_score_regression_quick.py -v
 
 import pytest
 
-from grocery_bot.simulator import GameSimulator
 from grocery_bot import GameState, RoundPlanner
+from grocery_bot.simulator import GameSimulator
 
 
 def _run_sim(num_bots, width, height, num_item_types, max_rounds, seed=42):

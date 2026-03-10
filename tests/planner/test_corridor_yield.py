@@ -5,8 +5,8 @@ in its path, the idle bot should detect this and move perpendicular to
 clear the way. This prevents wasteful detours for active bots.
 """
 
-from tests.conftest import make_state, get_action
 import bot
+from tests.conftest import get_action, make_state
 
 
 def _order(items, status="active"):

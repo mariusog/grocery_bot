@@ -7,7 +7,7 @@ import statistics
 
 import pytest
 
-from grocery_bot.simulator import GameSimulator, DIFFICULTY_PRESETS
+from grocery_bot.simulator import DIFFICULTY_PRESETS, GameSimulator
 
 
 def _run_batch(seeds, *, diagnose=False, **sim_kwargs):
@@ -118,7 +118,10 @@ class TestScoreRegression:
 
     # 6. Medium no total deadlock
     def test_medium_no_total_deadlock(self, medium_results):
-        """No Medium seed (1-20) should score below 20. Catches preview-item deadlock bug (3 bots)."""
+        """No Medium seed (1-20) should score below 20.
+
+        Catches preview-item deadlock bug (3 bots).
+        """
         scores = _scores(medium_results)
         for i, score in enumerate(scores):
             seed = i + 1

@@ -2,8 +2,7 @@
 
 import bot
 from grocery_bot.simulator import GameSimulator
-from tests.conftest import make_state, reset_bot, get_action
-
+from tests.conftest import get_action, make_state, reset_bot
 
 # --- Test: bot should not deliver with only 1 item when more items are nearby ---
 

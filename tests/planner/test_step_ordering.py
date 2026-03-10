@@ -7,7 +7,10 @@ class TestStepChainStructure:
     def test_clear_dropoff_before_idle_deliver(self):
         chain = RoundPlanner._STEP_CHAIN
         clear_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_clear_dropoff")
-        idle_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_idle_nonactive_deliver")
+        idle_idx = next(
+            i for i, s in enumerate(chain)
+            if s.__name__ == "_step_idle_nonactive_deliver"
+        )
         assert clear_idx < idle_idx
 
     def test_deliver_at_dropoff_early(self):

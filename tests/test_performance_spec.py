@@ -9,7 +9,7 @@ causing a desync that destroys the score. This test catches that.
 """
 
 import time
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -33,7 +33,7 @@ MIN_SCORES = {
 }
 
 
-@lru_cache(maxsize=None)
+@cache
 def _run_game_with_timing_cached(preset_name, seed=42):
     """Run a full game, measuring per-round decide_actions latency.
 
@@ -82,7 +82,7 @@ def _run_game_with_timing(preset_name, seed=42):
     }, list(round_times), max_ms
 
 
-@lru_cache(maxsize=None)
+@cache
 def _check_action_position_consistency_cached(preset_name, seed=42):
     """Run a full game and verify every action produces the expected position.
 
@@ -161,7 +161,7 @@ class TestRoundLatency:
     @pytest.mark.parametrize("preset", ["Easy", "Medium", "Hard"])
     def test_no_round_exceeds_budget(self, preset):
         """No single round should exceed ROUND_BUDGET_MS."""
-        _, round_times, max_ms = _run_game_with_timing(preset)
+        _, _round_times, max_ms = _run_game_with_timing(preset)
         assert max_ms < ROUND_BUDGET_MS, (
             f"{preset}: slowest round took {max_ms:.1f}ms "
             f"(budget {ROUND_BUDGET_MS}ms)"
@@ -171,7 +171,7 @@ class TestRoundLatency:
     @pytest.mark.slow
     def test_large_presets_under_hard_limit(self, preset):
         """Large presets must stay under the hard ceiling."""
-        _, round_times, max_ms = _run_game_with_timing(preset)
+        _, _round_times, max_ms = _run_game_with_timing(preset)
         assert max_ms < ROUND_HARD_LIMIT_MS, (
             f"{preset}: slowest round took {max_ms:.1f}ms "
             f"(hard limit {ROUND_HARD_LIMIT_MS}ms)"

@@ -4,8 +4,6 @@ from tests.conftest import make_planner
 from tests.planner.conftest import _active_order, _preview_order
 
 
-
-
 class TestBuildSingleBotRoute:
     def test_returns_route_for_single_bot(self):
         """Single bot route builder should find items."""
@@ -148,7 +146,7 @@ class TestFindDetourItemEdgeCases:
             ],
             drop_off=[1, 8],
         )
-        item, cell = planner._find_detour_item(
+        item, _cell = planner._find_detour_item(
             (3, 5), planner.net_preview, max_detour=0
         )
         # milk at (9,1) is a huge detour from (3,5) -> (1,8), should be None
@@ -195,7 +193,7 @@ class TestBuildAssignedRouteEdgeCases:
         )
         # Claim all items
         planner.claimed = {"i0", "i1"}
-        if 0 in planner.bot_assignments and planner.bot_assignments[0]:
+        if planner.bot_assignments.get(0):
             result = planner._build_assigned_route(0, (2, 3))
             assert result is None
 

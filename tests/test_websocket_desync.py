@@ -48,8 +48,8 @@ class TestActionPositionConsistency:
 
     def test_simulator_actions_are_consistent(self):
         """Simulator should never have action-position mismatches."""
-        from grocery_bot.simulator import GameSimulator
         import bot
+        from grocery_bot.simulator import GameSimulator
 
         bot.reset_state()
         sim = GameSimulator(seed=42, num_bots=1, width=12, height=10)

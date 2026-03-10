@@ -9,8 +9,8 @@ a snake. The fix: assign each bot a unique dispersal target based on
 map geometry so they spread vertically across item rows.
 """
 
-from tests.conftest import make_state
 import bot
+from tests.conftest import make_state
 
 
 def _order(items):

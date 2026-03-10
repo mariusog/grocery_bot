@@ -1,14 +1,13 @@
 """Tests for pathfinding helper functions and distance calculations."""
 
 import bot
-from tests.conftest import make_state, reset_bot
-from tests.pathfinding.conftest import _bounded_blocked
-
 from grocery_bot.pathfinding import (
     bfs,
     bfs_all,
     bfs_full_path,
 )
+from tests.conftest import make_state, reset_bot
+from tests.pathfinding.conftest import _bounded_blocked
 
 
 class TestHelperFunctions:

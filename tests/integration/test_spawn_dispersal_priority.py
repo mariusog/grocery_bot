@@ -1,7 +1,6 @@
 """Spawn dispersal tests for large teams."""
 
 import bot
-
 from grocery_bot.planner.round_planner import RoundPlanner
 from grocery_bot.simulator.replay_simulator import ReplaySimulator
 

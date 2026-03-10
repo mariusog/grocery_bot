@@ -7,7 +7,7 @@ Also covers multiple drop-off zones (Nightmare difficulty).
 """
 
 import bot
-from tests.conftest import make_state, get_action
+from tests.conftest import get_action, make_state
 from tests.planner.conftest import _active_order, _preview_order
 
 
@@ -77,7 +77,6 @@ class TestActivePriorityOverPreview:
             ],
         )
         actions = bot.decide_actions(state)
-        preview_ids = {"i_bread", "i_eggs"}
         active_ids = {"i_cheese", "i_milk", "i_salt"}
         pickups = [a for a in actions if a["action"] == "pick_up"]
         assert len(pickups) == 3, f"Expected 3 pickups, got {len(pickups)}"

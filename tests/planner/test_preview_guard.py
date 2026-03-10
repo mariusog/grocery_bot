@@ -8,9 +8,9 @@ The fix extends the assigned-bot guard from small teams (<3) to all team
 sizes when active items remain on shelves.
 """
 
-from tests.conftest import make_state
-from grocery_bot.planner.round_planner import RoundPlanner
 import bot
+from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import make_state
 
 
 def _order(items, status="active"):

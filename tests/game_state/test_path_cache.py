@@ -85,7 +85,7 @@ class TestStorePathForStep:
         gs = _make_gs_with_dropoff()
         gs.store_path_for_step(0, (1, 1), (2, 1), (3, 1), 0)
         assert 0 in gs.bot_planned_paths
-        target, path, rnd = gs.bot_planned_paths[0]
+        target, path, _rnd = gs.bot_planned_paths[0]
         assert target == (3, 1)
         assert path[0] == (1, 1)
         assert path[-1] == (3, 1)

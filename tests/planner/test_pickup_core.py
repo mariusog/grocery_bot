@@ -1,8 +1,8 @@
 """Unit tests for PickupMixin methods (pickup.py)."""
 
-from tests.conftest import make_planner, make_state, get_action
 import bot
 from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import get_action, make_planner, make_state
 from tests.planner.conftest import _active_order, _preview_order
 
 
@@ -196,7 +196,7 @@ class TestFindDetourItem:
             ],
         )
         # milk at (2,6) — adjacent walkable might be (1,6) or (3,6)
-        item, cell = planner._find_detour_item(
+        item, _cell = planner._find_detour_item(
             (3, 5), planner.net_preview, max_detour=10
         )
         if item is not None:
@@ -217,7 +217,7 @@ class TestFindDetourItem:
             drop_off=[1, 8],
         )
         # milk is very far from the path between (1,7) and dropoff (1,8)
-        item, cell = planner._find_detour_item(
+        item, _cell = planner._find_detour_item(
             (1, 7), planner.net_preview, max_detour=1
         )
         # If found, detour must be <= max_detour (but likely None due to distance)

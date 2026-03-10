@@ -1,9 +1,9 @@
 """Unit tests for MovementMixin methods (movement.py)."""
 
 from collections import deque
+
 from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
-
 
 
 class TestBuildMovingObstacles:

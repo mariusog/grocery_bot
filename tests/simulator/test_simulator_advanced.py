@@ -2,7 +2,6 @@
 
 import os
 
-
 from grocery_bot.simulator import (
     DIFFICULTY_PRESETS,
     GameSimulator,

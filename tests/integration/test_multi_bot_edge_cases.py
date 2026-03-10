@@ -1,7 +1,7 @@
 """Tests for multi-bot coordination: assignment, collision, deadlock, dispersal."""
 
 import bot
-from tests.conftest import make_state, reset_bot, get_action
+from tests.conftest import get_action, make_state, reset_bot
 
 
 class TestMultiBotCollisionEdgeCases:

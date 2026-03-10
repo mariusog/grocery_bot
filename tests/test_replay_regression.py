@@ -14,7 +14,6 @@ import pytest
 
 from grocery_bot.simulator.replay_simulator import ReplaySimulator
 
-
 MAPS_DIR = Path(__file__).resolve().parent.parent / "maps"
 
 

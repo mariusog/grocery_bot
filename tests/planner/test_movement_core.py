@@ -1,8 +1,9 @@
 """Unit tests for MovementMixin methods (movement.py)."""
 
 from collections import deque
-from tests.conftest import make_planner, make_state, get_action
+
 import bot
+from tests.conftest import get_action, make_planner, make_state
 from tests.planner.conftest import _active_order
 
 

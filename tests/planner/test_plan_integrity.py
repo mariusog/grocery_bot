@@ -1,11 +1,14 @@
 """Test that plan() always produces valid output across team sizes."""
 
-from tests.conftest import make_planner, make_state, get_action
 import bot
+from tests.conftest import get_action, make_planner, make_state
 
 
 def _order(items, oid="o0"):
-    return {"id": oid, "items_required": items, "items_delivered": [], "complete": False, "status": "active"}
+    return {
+        "id": oid, "items_required": items, "items_delivered": [],
+        "complete": False, "status": "active",
+    }
 
 
 class TestOneActionPerBot:

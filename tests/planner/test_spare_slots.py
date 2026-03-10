@@ -1,13 +1,16 @@
 """Test _spare_slots gating that controls preview picking."""
 
-from tests.conftest import make_state
-from grocery_bot.planner.round_planner import RoundPlanner
-from grocery_bot.constants import MAX_INVENTORY
 import bot
+from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.planner.round_planner import RoundPlanner
+from tests.conftest import make_state
 
 
 def _order(items):
-    return {"id": "o0", "items_required": items, "items_delivered": [], "complete": False, "status": "active"}
+    return {
+        "id": "o0", "items_required": items, "items_delivered": [],
+        "complete": False, "status": "active",
+    }
 
 
 def _planner(bots, items, orders, **kw):
@@ -17,7 +20,9 @@ def _planner(bots, items, orders, **kw):
     gs = bot._gs
     p = RoundPlanner(gs, state, full_state=state)
     p._detect_pickup_failures()
-    p.active = next((o for o in p.orders if o.get("status") == "active" and not o["complete"]), None)
+    p.active = next(
+        (o for o in p.orders if o.get("status") == "active" and not o["complete"]), None
+    )
     p.preview = None
     if p.active:
         p._check_order_transition()

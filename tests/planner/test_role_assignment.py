@@ -4,11 +4,17 @@ from tests.conftest import make_planner
 
 
 def _order(items, oid="o0"):
-    return {"id": oid, "items_required": items, "items_delivered": [], "complete": False, "status": "active"}
+    return {
+        "id": oid, "items_required": items, "items_delivered": [],
+        "complete": False, "status": "active",
+    }
 
 
 def _preview(items, oid="o1"):
-    return {"id": oid, "items_required": items, "items_delivered": [], "complete": False, "status": "preview"}
+    return {
+        "id": oid, "items_required": items, "items_delivered": [],
+        "complete": False, "status": "preview",
+    }
 
 
 class TestRoleAssignment:

@@ -4,8 +4,6 @@ from tests.conftest import make_planner
 from tests.planner.conftest import _active_order
 
 
-
-
 class TestDetectPickupFailures:
     def test_failure_increments_count(self):
         """Failed pickup should increment pickup_fail_count."""
@@ -98,8 +96,8 @@ class TestPlan:
 
     def test_plan_no_active_order_all_wait(self):
         """Without an active order, all bots should wait."""
-        from tests.conftest import make_state
         import bot
+        from tests.conftest import make_state
 
         state = make_state(
             bots=[{"id": 0, "position": [3, 3], "inventory": []}],
