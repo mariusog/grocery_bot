@@ -219,7 +219,7 @@ class TestReset:
         gs.pickup_fail_count["i1"] = 3
         gs.delivery_queue.append(0)
         gs.reset()
-        assert gs.blocked_static is None
+        assert gs.blocked_static == set()
         assert gs.dist_cache == {}
         assert gs.adj_cache == {}
         assert gs.blacklisted_items == set()
@@ -231,8 +231,8 @@ class TestReset:
     def test_reset_then_reinit(self):
         gs = make_gs_with_state(items=[{"id": "i1", "type": "a", "position": [4, 4]}])
         gs.reset()
-        assert gs.blocked_static is None
+        assert gs.blocked_static == set()
         # Reinitialize
         state = {"grid": {"width": 11, "height": 9, "walls": []}, "items": []}
         gs.init_static(state)
-        assert gs.blocked_static is not None
+        assert gs.blocked_static != set()

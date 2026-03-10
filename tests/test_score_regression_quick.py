@@ -29,7 +29,7 @@ def _run_sim(num_bots, width, height, num_item_types, max_rounds, seed=42):
         state = sim.get_state()
         if state is None:
             break
-        if gs.blocked_static is None:
+        if not gs.blocked_static:
             gs.init_static(state)
         planner = RoundPlanner(gs, state, full_state=state)
         actions = planner.plan()
