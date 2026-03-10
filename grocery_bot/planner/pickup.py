@@ -1,13 +1,13 @@
 """Pickup logic (active items, routing) for RoundPlanner."""
 
 from itertools import permutations
-from typing import Any, Optional
+from typing import Any
 
-from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     CLUSTER_DISTANCE_WEIGHT,
     MAX_INVENTORY,
 )
+from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.planner._base import PlannerBase
 
 
@@ -51,9 +51,9 @@ class PickupMixin(PlannerBase):
                 first_item = route[0][0]
                 ipos = tuple(first_item["position"])
                 for ac in self.gs.adj_cache.get(ipos, []):
-                    if ac != route[0][1] and ac not in blocked:
-                        if self._emit_move(bid, bx, by, pos, ac, blocked):
-                            return True
+                    if (ac != route[0][1] and ac not in blocked
+                            and self._emit_move(bid, bx, by, pos, ac, blocked)):
+                        return True
 
         # Greedy fallback: find reachable items and plan TSP route
         route = self._build_greedy_route(pos, inv)
@@ -66,15 +66,15 @@ class PickupMixin(PlannerBase):
             first_item = route[0][0]
             ipos = tuple(first_item["position"])
             for ac in self.gs.adj_cache.get(ipos, []):
-                if ac != route[0][1] and ac not in blocked:
-                    if self._emit_move(bid, bx, by, pos, ac, blocked):
-                        return True
+                if (ac != route[0][1] and ac not in blocked
+                        and self._emit_move(bid, bx, by, pos, ac, blocked)):
+                    return True
 
         return False
 
     def _build_assigned_route(
         self, bid: int, pos: tuple[int, int]
-    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
+    ) -> list[tuple[Any, tuple[int, int]]] | None:
         assigned: list[tuple[Any, tuple[int, int]]] = []
         for it in self.bot_assignments[bid]:
             if it["id"] in self.claimed:
@@ -91,7 +91,7 @@ class PickupMixin(PlannerBase):
 
     def _build_greedy_route(
         self, pos: tuple[int, int], inv: list[str]
-    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
+    ) -> list[tuple[Any, tuple[int, int]]] | None:
         # Single-bot: use optimized item selection
         if not self.cfg.multi_bot:
             return self._build_single_bot_route(pos, inv)
@@ -126,7 +126,7 @@ class PickupMixin(PlannerBase):
 
         selected: list[tuple[Any, tuple[int, int]]] = []
         selected_types: dict[str, int] = {}
-        for it, cell, d in candidates:
+        for it, cell, _d in candidates:
             t = it["type"]
             still_needed = self.net_active.get(t, 0) - selected_types.get(t, 0)
             if still_needed > 0:
@@ -145,7 +145,7 @@ class PickupMixin(PlannerBase):
 
     def _build_single_bot_route(
         self, pos: tuple[int, int], inv: list[str]
-    ) -> Optional[list[tuple[Any, tuple[int, int]]]]:
+    ) -> list[tuple[Any, tuple[int, int]]] | None:
         """Optimized route for single bot: use precomputed route tables."""
         slots = MAX_INVENTORY - len(inv)
         if slots <= 0:
@@ -219,7 +219,7 @@ class PickupMixin(PlannerBase):
             if n == 1:
                 it, _ = item_targets[0]
                 ipos = tuple(it["position"])
-                best_cell: Optional[tuple[int, int]] = None
+                best_cell: tuple[int, int] | None = None
                 best_cost = float("inf")
                 for ac in self.gs.adj_cache.get(ipos, []):
                     cost: float = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(
@@ -240,7 +240,7 @@ class PickupMixin(PlannerBase):
                 cells = [default_cell]
             item_cells.append((it, cells))
 
-        best_order: Optional[list[tuple[int, tuple[int, int]]]] = None
+        best_order: list[tuple[int, tuple[int, int]]] | None = None
         best_cost = float("inf")
 
         for perm in permutations(range(n)):

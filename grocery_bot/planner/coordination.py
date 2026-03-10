@@ -55,13 +55,10 @@ class CoordinationMixin(PlannerBase):
             pos = tuple(bot["position"])
             should_queue = False
 
-            if len(inv) >= MAX_INVENTORY:
-                should_queue = True
-            elif self.active_on_shelves == 0:
-                should_queue = True
-            elif bid in self.bot_assignments and not self.bot_assignments[bid]:
-                should_queue = True
-            elif bid not in self.bot_assignments and self.active_on_shelves == 0:
+            assigned_empty = bid in self.bot_assignments and not self.bot_assignments[bid]
+            unassigned_idle = bid not in self.bot_assignments and self.active_on_shelves == 0
+            full_inv = len(inv) >= MAX_INVENTORY
+            if full_inv or self.active_on_shelves == 0 or assigned_empty or unassigned_idle:
                 should_queue = True
 
             if should_queue:
@@ -88,12 +85,10 @@ class CoordinationMixin(PlannerBase):
 
         max_deliverers = self.cfg.max_concurrent_deliverers
 
-        delivering_count = 0
-        for bid in gs.delivery_queue:
+        for delivering_count, bid in enumerate(gs.delivery_queue):
             if delivering_count >= max_deliverers:
                 break
             self.bot_roles[bid] = "deliver"
-            delivering_count += 1
 
         picker_candidates: list[tuple[float, int]] = []
         for bot in self.bots:
@@ -103,7 +98,7 @@ class CoordinationMixin(PlannerBase):
             if self.bot_has_active.get(bid, False):
                 self.bot_roles[bid] = "pick"
                 continue
-            if bid in self.bot_assignments and self.bot_assignments[bid]:
+            if self.bot_assignments.get(bid):
                 pos = tuple(bot["position"])
                 first_item = self.bot_assignments[bid][0]
                 _, d = self.gs.find_best_item_target(pos, first_item)
@@ -193,7 +188,7 @@ class CoordinationMixin(PlannerBase):
                     "committed_until": self.current_round + TASK_COMMITMENT_ROUNDS,
                 }
             elif role == "pick":
-                if bid in self.bot_assignments and self.bot_assignments[bid]:
+                if self.bot_assignments.get(bid):
                     first_item = self.bot_assignments[bid][0]
                     gs.bot_tasks[bid] = {
                         "type": "pick",

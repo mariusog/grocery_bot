@@ -40,10 +40,7 @@ class DeliveryMixin(PlannerBase):
             if not self._should_head_to_dropoff(bot):
                 continue
             obid = bot["id"]
-            if obid == bid:
-                ob_pos = pos
-            else:
-                ob_pos = self.predicted.get(obid, tuple(bot["position"]))
+            ob_pos = pos if obid == bid else self.predicted.get(obid, tuple(bot["position"]))
             delivering_bots.append((obid, ob_pos))
 
         nearest = self._nearest_dropoff(pos)
@@ -103,7 +100,7 @@ class DeliveryMixin(PlannerBase):
         total_dist: float = 0
         current = pos
         picked = 0
-        for it, cell, _ in remaining:
+        for _it, cell, _ in remaining:
             d = self.gs.dist_static(current, cell)
             total_dist += d + 1
             current = cell

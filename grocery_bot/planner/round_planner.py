@@ -1,9 +1,9 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
 from collections import deque, namedtuple
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any
 
-from grocery_bot.orders import get_needed_items
 from grocery_bot.constants import (
     BLACKLIST_EXPIRY_ROUNDS,
     BOT_HISTORY_MAXLEN,
@@ -14,18 +14,18 @@ from grocery_bot.constants import (
     PICKUP_FAIL_BLACKLIST_THRESHOLD,
     ZONE_CONGESTION_WEIGHT,
 )
-from grocery_bot.team_config import TeamConfig, get_team_config
-
-from grocery_bot.planner.movement import MovementMixin
+from grocery_bot.orders import get_needed_items
 from grocery_bot.planner.assignment import AssignmentMixin
-from grocery_bot.planner.pickup import PickupMixin
-from grocery_bot.planner.preview import PreviewMixin
+from grocery_bot.planner.coordination import CoordinationMixin
 from grocery_bot.planner.delivery import DeliveryMixin
 from grocery_bot.planner.idle import IdleMixin
-from grocery_bot.planner.speculative import SpeculativeMixin
+from grocery_bot.planner.movement import MovementMixin
+from grocery_bot.planner.pickup import PickupMixin
+from grocery_bot.planner.preview import PreviewMixin
 from grocery_bot.planner.spawn import SpawnMixin
-from grocery_bot.planner.coordination import CoordinationMixin
+from grocery_bot.planner.speculative import SpeculativeMixin
 from grocery_bot.planner.steps import StepsMixin
+from grocery_bot.team_config import TeamConfig, get_team_config
 
 # Bundles per-bot context passed through the step chain.
 BotContext = namedtuple("BotContext", "bot bid bx by pos inv blocked has_active role")
@@ -38,13 +38,13 @@ class RoundPlanner(
     """Plans actions for all bots in a single round."""
 
     # Step chain: populated after class definition.
-    _STEP_CHAIN: Optional[list] = None
+    _STEP_CHAIN: list | None = None
 
     def __init__(
         self,
         gs: Any,
         state: dict[str, Any],
-        full_state: Optional[dict[str, Any]] = None,
+        full_state: dict[str, Any] | None = None,
     ) -> None:
         self.gs = gs
         self.full_state: dict[str, Any] = (
@@ -94,12 +94,12 @@ class RoundPlanner(
                 "drop_off": list(self.drop_off),
             })
 
-        self.active: Optional[dict[str, Any]] = next(
+        self.active: dict[str, Any] | None = next(
             (o for o in self.orders
              if o.get("status") == "active" and not o["complete"]),
             None,
         )
-        self.preview: Optional[dict[str, Any]] = next(
+        self.preview: dict[str, Any] | None = next(
             (o for o in self.orders if o.get("status") == "preview"), None
         )
 
@@ -212,7 +212,7 @@ class RoundPlanner(
         self,
         bot: dict[str, Any],
         remaining: dict[str, int],
-        reserved: Optional[dict[str, int]] = None,
+        reserved: dict[str, int] | None = None,
     ) -> tuple[int, int]:
         """Count inventory copies that can still satisfy the remaining need."""
         skip = dict(reserved or {})
@@ -233,7 +233,7 @@ class RoundPlanner(
     def _allocate_carried_need(
         self,
         needed: dict[str, int],
-        reserved_by_bot: Optional[dict[int, dict[str, int]]] = None,
+        reserved_by_bot: dict[int, dict[str, int]] | None = None,
     ) -> tuple[dict[str, int], dict[int, dict[str, int]], dict[str, int]]:
         """Allocate carried inventory copies to the still-undelivered order need.
 
@@ -320,7 +320,7 @@ class RoundPlanner(
             if idle_bots > 0 else MAX_INVENTORY
         )
         self.num_item_types: int = len(self.items_by_type)
-        self.preview_bot_id: Optional[int] = None
+        self.preview_bot_id: int | None = None
         self.preview_bot_ids: set[int] = set()
         if (
             self.order_nearly_complete
@@ -369,9 +369,9 @@ class RoundPlanner(
     def _find_adjacent_needed(
         self, bx: int, by: int, needed: dict[str, int],
         prefer_cascade: bool = False,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         from grocery_bot.pathfinding import DIRECTIONS
-        best: Optional[dict[str, Any]] = None
+        best: dict[str, Any] | None = None
         best_cascade = False
         for dx, dy in DIRECTIONS:
             for it in self.items_at_pos.get((bx + dx, by + dy), []):

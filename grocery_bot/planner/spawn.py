@@ -9,7 +9,7 @@ The dispersal only overrides idle/unassigned bots — assigned bots
 follow their normal pickup routes.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import SPAWN_DISPERSAL_MAX_ROUNDS
 from grocery_bot.planner._base import PlannerBase
@@ -18,7 +18,7 @@ from grocery_bot.planner._base import PlannerBase
 class SpawnMixin(PlannerBase):
     """Mixin providing opening-round dispersal for all team sizes."""
 
-    def _infer_spawn_origin(self) -> Optional[tuple[int, int]]:
+    def _infer_spawn_origin(self) -> tuple[int, int] | None:
         """Persist the clustered spawn cell inferred from bot positions."""
         if self.gs.spawn_origin is not None:
             return tuple(self.gs.spawn_origin)  # type: ignore[return-value]
@@ -106,7 +106,7 @@ class SpawnMixin(PlannerBase):
         zone_ys: list[int],
         row_cells: dict[int, list[tuple[int, int]]],
         spawn_pos: tuple[int, int],
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Find the best walkable cell in a vertical zone."""
         mid_y = zone_ys[len(zone_ys) // 2]
         candidates: list[tuple[int, int]] = []

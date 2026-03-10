@@ -7,7 +7,8 @@ No logic lives here — only type annotations and abstract-like stubs.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from grocery_bot.team_config import TeamConfig
@@ -30,7 +31,7 @@ class PlannerBase:
     # ------------------------------------------------------------------ #
     # Team config
     # ------------------------------------------------------------------ #
-    cfg: "TeamConfig"
+    cfg: TeamConfig
 
     # ------------------------------------------------------------------ #
     # Round-level game data (set in __init__)
@@ -68,8 +69,8 @@ class PlannerBase:
     # ------------------------------------------------------------------ #
     # Order references (set in plan())
     # ------------------------------------------------------------------ #
-    active: Optional[dict[str, Any]]
-    preview: Optional[dict[str, Any]]
+    active: dict[str, Any] | None
+    preview: dict[str, Any] | None
 
     # ------------------------------------------------------------------ #
     # Computed needs (set in _compute_needs())
@@ -84,7 +85,7 @@ class PlannerBase:
     order_nearly_complete: bool
     max_claim: int
     num_item_types: int
-    preview_bot_id: Optional[int]
+    preview_bot_id: int | None
     preview_bot_ids: set[int]
 
     # ------------------------------------------------------------------ #
@@ -131,7 +132,7 @@ class PlannerBase:
         by: int,
         needed: dict[str, int],
         prefer_cascade: bool = False,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         raise NotImplementedError
 
     def _is_available(self, item: dict[str, Any]) -> bool:
@@ -252,12 +253,12 @@ class PlannerBase:
         needed: dict[str, int],
         max_detour: int = 0,
         prefer_cascade: bool = False,
-    ) -> tuple[Optional[dict[str, Any]], Optional[tuple[int, int]]]:
+    ) -> tuple[dict[str, Any] | None, tuple[int, int] | None]:
         raise NotImplementedError
 
     def _find_nearest_active_item_pos(
         self, pos: tuple[int, int]
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         raise NotImplementedError
 
     # -- IdleMixin (idle.py) --

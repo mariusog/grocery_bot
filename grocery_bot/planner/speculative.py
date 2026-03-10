@@ -5,13 +5,13 @@ grab items from shelves.  If those items match a future order the bot
 can deliver immediately, shaving entire pickup-travel cycles.
 """
 
-from typing import Any, Optional
+from typing import Any
 
-from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.constants import (
     MAX_INVENTORY,
     SPEC_MAX_TEAM_COPIES,
 )
+from grocery_bot.pathfinding import DIRECTIONS
 from grocery_bot.planner._base import PlannerBase
 
 
@@ -69,7 +69,7 @@ class SpeculativeMixin(PlannerBase):
         for _d_drop, item in preview_items:
             if not idle_bids:
                 break
-            best_bid: Optional[int] = None
+            best_bid: int | None = None
             best_dist = float("inf")
             for bid in idle_bids:
                 if bid in assigned_bids:
@@ -193,10 +193,10 @@ class SpeculativeMixin(PlannerBase):
         by: int,
         bot_types: set[str],
         team_type_count: dict[str, int],
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Find an adjacent item suitable for speculative pickup."""
-        preview_item: Optional[dict[str, Any]] = None
-        fallback_item: Optional[dict[str, Any]] = None
+        preview_item: dict[str, Any] | None = None
+        fallback_item: dict[str, Any] | None = None
         for dx, dy in DIRECTIONS:
             for it in self.items_at_pos.get((bx + dx, by + dy), []):
                 if not self._is_available(it):
@@ -222,10 +222,10 @@ class SpeculativeMixin(PlannerBase):
         pos: tuple[int, int],
         bot_types: set[str],
         team_type_count: dict[str, int],
-    ) -> tuple[Optional[dict[str, Any]], Optional[tuple[int, int]]]:
+    ) -> tuple[dict[str, Any] | None, tuple[int, int] | None]:
         """Find the nearest walkable item of an uncovered type."""
-        best_item: Optional[dict[str, Any]] = None
-        best_cell: Optional[tuple[int, int]] = None
+        best_item: dict[str, Any] | None = None
+        best_cell: tuple[int, int] | None = None
         best_key: tuple[int, float] = (2, float("inf"))
         for it in self.items:
             if not self._is_available(it):

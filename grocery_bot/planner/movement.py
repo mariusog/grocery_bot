@@ -1,16 +1,16 @@
 """Movement, collision avoidance, and action emission for RoundPlanner."""
 
-from typing import Any, Optional
+from typing import Any
 
+from grocery_bot.constants import (
+    DROPOFF_CLEAR_RADIUS,
+)
 from grocery_bot.pathfinding import (
     DIRECTIONS,
+    _predict_pos,
     bfs,
     bfs_temporal,
     direction_to,
-    _predict_pos,
-)
-from grocery_bot.constants import (
-    DROPOFF_CLEAR_RADIUS,
 )
 from grocery_bot.planner._base import PlannerBase
 
@@ -99,7 +99,7 @@ class MovementMixin(PlannerBase):
             if b["id"] != bid
         }
         # Prefer non-oscillating alternatives, but fall back to any unblocked
-        fallback: Optional[dict[str, Any]] = None
+        fallback: dict[str, Any] | None = None
         for dx, dy in DIRECTIONS:
             alt = (bx + dx, by + dy)
             if alt == blocked_target or alt in self.gs.blocked_static:
@@ -135,7 +135,7 @@ class MovementMixin(PlannerBase):
             pos: tuple[int, int] = tuple(b["position"])
             has_active: bool = self.bot_has_active.get(bid, False)
 
-            target: Optional[tuple[int, int]] = None
+            target: tuple[int, int] | None = None
 
             # Delivering bots predict toward the congestion-aware dropoff target.
             if has_active and self._should_head_to_dropoff(b):
@@ -147,7 +147,7 @@ class MovementMixin(PlannerBase):
                 continue
 
             # Bots with assigned items move toward first assigned item
-            elif bid in self.bot_assignments and self.bot_assignments[bid]:
+            elif self.bot_assignments.get(bid):
                 first_item = self.bot_assignments[bid][0]
                 cell, _ = self.gs.find_best_item_target(pos, first_item)
                 if cell:
@@ -174,7 +174,7 @@ class MovementMixin(PlannerBase):
             # Only idle bots yield (no active items, no assignment)
             if self.bot_has_active.get(bid, False):
                 continue
-            if bid in self.bot_assignments and self.bot_assignments[bid]:
+            if self.bot_assignments.get(bid):
                 continue
             occupied: set[tuple[int, int]] = {
                 tuple(other["position"])
@@ -249,7 +249,7 @@ class MovementMixin(PlannerBase):
         pos: tuple[int, int],
         target: tuple[int, int],
         blocked: set[tuple[int, int]],
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Use cached full-path, then temporal BFS, then standard BFS.
 
         T17: First tries the cached deterministic path to avoid flip-flopping.
@@ -290,7 +290,7 @@ class MovementMixin(PlannerBase):
             return preferred
 
         # Cached path unavailable or blocked — fall back to live BFS
-        result: Optional[tuple[int, int]] = None
+        result: tuple[int, int] | None = None
         if self.cfg.use_temporal_bfs:
             obstacles = self._build_moving_obstacles(bid)
             result = bfs_temporal(pos, target, self.gs.blocked_static, obstacles)
@@ -318,11 +318,11 @@ class MovementMixin(PlannerBase):
         # cache was invalidated (target changed, position mismatch, or
         # shorter path found).  Don't overwrite when the cache is merely
         # skipped due to temporary dynamic blocking.
-        if use_cache and result is not None:
-            if not had_cache or bid not in self.gs.bot_planned_paths:
-                self.gs.store_path_for_step(
-                    bid, pos, result, target, current_round
-                )
+        cache_miss = not had_cache or bid not in self.gs.bot_planned_paths
+        if use_cache and result is not None and cache_miss:
+            self.gs.store_path_for_step(
+                bid, pos, result, target, current_round
+            )
 
         return result
 
@@ -376,7 +376,7 @@ class MovementMixin(PlannerBase):
 
         if not next_pos:
             # Prefer non-oscillating neighbors, fall back to any unblocked
-            fallback_pos: Optional[tuple[int, int]] = None
+            fallback_pos: tuple[int, int] | None = None
             for dx, dy in DIRECTIONS:
                 npos = (bx + dx, by + dy)
                 if npos not in blocked:

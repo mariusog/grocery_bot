@@ -1,6 +1,6 @@
 """Preview pre-pick and detour logic for RoundPlanner."""
 
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
@@ -50,7 +50,7 @@ class PreviewMixin(PlannerBase):
                 return False
             self._preview_walkers += 1
 
-        best: Optional[dict[str, Any]] = None
+        best: dict[str, Any] | None = None
         best_dist = float("inf")
         best_cascade = False
         for it, is_cascade in self._iter_needed_items(self.net_preview):
@@ -75,12 +75,12 @@ class PreviewMixin(PlannerBase):
         needed: dict[str, int],
         max_detour: int = MAX_DETOUR_STEPS,
         prefer_cascade: bool = False,
-    ) -> tuple[Optional[dict[str, Any]], Optional[tuple[int, int]]]:
+    ) -> tuple[dict[str, Any] | None, tuple[int, int] | None]:
         """Find item worth detouring for on the way to drop-off."""
         nd = self._nearest_dropoff(pos)
         direct = self.gs.dist_static(pos, nd)
-        best_item: Optional[dict[str, Any]] = None
-        best_cell: Optional[tuple[int, int]] = None
+        best_item: dict[str, Any] | None = None
+        best_cell: tuple[int, int] | None = None
         best_cost = float("inf")
         best_cascade = False
 
@@ -109,9 +109,9 @@ class PreviewMixin(PlannerBase):
 
     def _find_nearest_active_item_pos(
         self, pos: tuple[int, int]
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Find the position of the nearest reachable active item on shelves."""
-        best_cell: Optional[tuple[int, int]] = None
+        best_cell: tuple[int, int] | None = None
         best_d = float("inf")
         for it, _ in self._iter_needed_items(self.net_active):
             cell, d = self.gs.find_best_item_target(pos, it)

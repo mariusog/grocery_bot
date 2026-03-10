@@ -1,8 +1,6 @@
 """Idle positioning and dropoff clearing for RoundPlanner."""
 
-from typing import Optional
 
-from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.constants import (
     BOT_HISTORY_MAXLEN,
     DROPOFF_CLEAR_RADIUS,
@@ -13,6 +11,7 @@ from grocery_bot.constants import (
     IDLE_DROPOFF_PENALTY_RADIUS,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
 )
+from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.planner._base import PlannerBase
 
 # Minimum history length to detect A-B-A oscillation.
@@ -37,7 +36,7 @@ class IdleMixin(PlannerBase):
         # A-B-A pattern: first == third, first != second
         return bool(history[-3] == history[-1] and history[-3] != history[-2])
 
-    def _preview_stage_weight(self, bid: int) -> Optional[float]:
+    def _preview_stage_weight(self, bid: int) -> float | None:
         """Return the dropoff-bias weight for preview-only staging, if any."""
         if not self.preview or self.bot_has_active.get(bid, False):
             return None
@@ -54,7 +53,7 @@ class IdleMixin(PlannerBase):
         bid: int,
         pos: tuple[int, int],
         blocked: set[tuple[int, int]],
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Pick a dropoff-biased idle spot for bots carrying preview-only items."""
         weight = self._preview_stage_weight(bid)
         if weight is None:
@@ -70,7 +69,7 @@ class IdleMixin(PlannerBase):
             if b["id"] != bid
         }
 
-        best_target: Optional[tuple[int, int]] = None
+        best_target: tuple[int, int] | None = None
         best_score = float("inf")
         for cell in idle_spots:
             if cell in blocked or cell in occupied:
@@ -113,7 +112,7 @@ class IdleMixin(PlannerBase):
         dist_to_drop = self.gs.dist_static(pos, nearest)
         if dist_to_drop > clear_radius:
             return False
-        best_away: Optional[tuple[int, int]] = None
+        best_away: tuple[int, int] | None = None
         best_dist = dist_to_drop
         for dx, dy in DIRECTIONS:
             npos = (bx + dx, by + dy)
@@ -192,9 +191,8 @@ class IdleMixin(PlannerBase):
         is_stale = False
         if is_large_team:
             history = self.gs.bot_history.get(bid)
-            if history and len(history) >= BOT_HISTORY_MAXLEN:
-                if all(h == pos for h in history):
-                    is_stale = True
+            if history and len(history) >= BOT_HISTORY_MAXLEN and all(h == pos for h in history):
+                is_stale = True
 
         # Corridor rows to penalize for large teams
         corridor_ys = set(getattr(self.gs, "corridor_y", []))
@@ -203,7 +201,7 @@ class IdleMixin(PlannerBase):
         # (10 bots), fall back to shelf-column targeting for smaller teams.
         # For large teams, prefer off-corridor spots (not in corridor_y)
         # to avoid blocking active bots traversing the main corridor.
-        item_target: Optional[tuple[int, int]] = None
+        item_target: tuple[int, int] | None = None
         if idle_spots and is_large_team:
             # Large teams: assign each bot a unique idle spot for spread,
             # preferring off-corridor spots to keep corridors clear.
@@ -265,7 +263,7 @@ class IdleMixin(PlannerBase):
 
         stay_score = _score(pos)
 
-        best: Optional[tuple[int, int]] = None
+        best: tuple[int, int] | None = None
         best_score = stay_score
         for dx, dy in DIRECTIONS:
             npos = (bx + dx, by + dy)
