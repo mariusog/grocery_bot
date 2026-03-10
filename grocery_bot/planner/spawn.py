@@ -9,18 +9,19 @@ The dispersal only overrides idle/unassigned bots — assigned bots
 follow their normal pickup routes.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 from grocery_bot.constants import SPAWN_DISPERSAL_MAX_ROUNDS
+from grocery_bot.planner._base import PlannerBase
 
 
-class SpawnMixin:
+class SpawnMixin(PlannerBase):
     """Mixin providing opening-round dispersal for all team sizes."""
 
     def _infer_spawn_origin(self) -> Optional[tuple[int, int]]:
         """Persist the clustered spawn cell inferred from bot positions."""
         if self.gs.spawn_origin is not None:
-            return self.gs.spawn_origin
+            return tuple(self.gs.spawn_origin)  # type: ignore[return-value]
 
         counts: dict[tuple[int, int], int] = {}
         for b in self.bots:
@@ -97,8 +98,8 @@ class SpawnMixin:
     def _get_spawn_pos(self) -> tuple[int, int]:
         """Get spawn position from bots or stored origin."""
         if self.gs.spawn_origin is not None:
-            return self.gs.spawn_origin
-        return tuple(self.bots[0]["position"])
+            return tuple(self.gs.spawn_origin)  # type: ignore[return-value]
+        return tuple(self.bots[0]["position"])  # type: ignore[return-value]
 
     def _find_zone_target(
         self,
@@ -122,7 +123,7 @@ class SpawnMixin:
             ),
         )
 
-    def _step_spawn_dispersal(self, ctx) -> bool:
+    def _step_spawn_dispersal(self, ctx: Any) -> bool:
         """Route unassigned bots toward diverse zones during opening."""
         if self.cfg.num_bots < 10:
             return False

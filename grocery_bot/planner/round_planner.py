@@ -1,7 +1,7 @@
 """RoundPlanner — per-round decision orchestration for all bots."""
 
 from collections import deque, namedtuple
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from grocery_bot.orders import get_needed_items
 from grocery_bot.constants import (
@@ -87,7 +87,7 @@ class RoundPlanner(
         self._detect_pickup_failures()
         self._expire_blacklists()
 
-        if self.gs.blocked_static is None:
+        if not self.gs.blocked_static:
             self.gs.init_static({
                 "grid": self._state_grid(),
                 "items": self.items,
@@ -140,7 +140,8 @@ class RoundPlanner(
         return self.actions
 
     def _state_grid(self) -> dict[str, Any]:
-        return self.full_state["grid"]
+        grid: dict[str, Any] = self.full_state["grid"]
+        return grid
 
     def _init_bot_history(self) -> None:
         """Initialize or validate bot history tracking."""
@@ -291,6 +292,7 @@ class RoundPlanner(
         return allocated_total, allocated_by_bot, remaining
 
     def _compute_needs(self) -> None:
+        assert self.active is not None, "_compute_needs called with no active order"
         self.active_needed: dict[str, int] = get_needed_items(self.active)
         preview_needed = get_needed_items(self.preview) if self.preview else {}
         self.items_by_type: dict[str, list[dict[str, Any]]] = {}
@@ -330,6 +332,7 @@ class RoundPlanner(
 
     def _decide_bot(self, bot: dict[str, Any]) -> None:
         ctx = self._build_bot_context(bot)
+        assert self._STEP_CHAIN is not None
         for step in self._STEP_CHAIN:
             if step(self, ctx):
                 return
@@ -352,7 +355,9 @@ class RoundPlanner(
             and item["id"] not in self.gs.blacklisted_items
         )
 
-    def _iter_needed_items(self, needed: dict[str, int]):
+    def _iter_needed_items(
+        self, needed: dict[str, int]
+    ) -> Iterator[tuple[dict[str, Any], bool]]:
         for item_type, count in needed.items():
             if count <= 0:
                 continue

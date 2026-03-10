@@ -12,9 +12,10 @@ from grocery_bot.pathfinding import (
 from grocery_bot.constants import (
     DROPOFF_CLEAR_RADIUS,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
-class MovementMixin:
+class MovementMixin(PlannerBase):
     """Mixin providing movement, BFS, and action emission methods."""
 
     def _trace_static_bfs_path(
@@ -270,7 +271,8 @@ class MovementMixin:
             )
             if cached is not None and cached not in blocked:
                 if not self._would_oscillate(bid, cached):
-                    return cached
+                    next_step: tuple[int, int] = cached
+                    return next_step
                 # Cache leads to oscillation — invalidate and recompute
                 self.gs.bot_planned_paths.pop(bid, None)
                 had_cache = False
@@ -354,7 +356,7 @@ class MovementMixin:
         history = self.gs.bot_history.get(bid)
         if not history or len(history) < 2:
             return False
-        return next_pos == history[-2]
+        return bool(next_pos == history[-2])
 
     def _emit_move_or_wait(
         self,
@@ -409,4 +411,5 @@ class MovementMixin:
                 or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist
             ):
                 other.add(bp)
-        return self.gs.blocked_static | other
+        blocked_set: set[tuple[int, int]] = self.gs.blocked_static | other
+        return blocked_set

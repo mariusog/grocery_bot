@@ -8,9 +8,10 @@ from grocery_bot.constants import (
     MAX_PREVIEW_BOTS,
     ZONE_CROSS_PENALTY,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
-class AssignmentMixin:
+class AssignmentMixin(PlannerBase):
     """Mixin providing bot assignment, preview bot selection, and urgency."""
 
     def _is_delivering(self, bot: dict[str, Any]) -> bool:

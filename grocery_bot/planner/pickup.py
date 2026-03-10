@@ -8,9 +8,10 @@ from grocery_bot.constants import (
     CLUSTER_DISTANCE_WEIGHT,
     MAX_INVENTORY,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
-class PickupMixin:
+class PickupMixin(PlannerBase):
     """Mixin providing active item pickup, preview pre-pick, and route building."""
 
     def _try_active_pickup(
@@ -82,7 +83,10 @@ class PickupMixin:
             if cell and d < float("inf"):
                 assigned.append((it, cell))
         if assigned:
-            return self.gs.tsp_route(pos, assigned, self._nearest_dropoff(pos))
+            result: list[tuple[Any, tuple[int, int]]] = self.gs.tsp_route(
+                pos, assigned, self._nearest_dropoff(pos)
+            )
+            return result
         return None
 
     def _build_greedy_route(
@@ -132,9 +136,12 @@ class PickupMixin:
         if not selected:
             return None
         nd = self._nearest_dropoff(pos)
+        route: list[tuple[Any, tuple[int, int]]]
         if len(selected) > slots:
-            return self.gs.plan_multi_trip(pos, selected, nd, slots)
-        return self.gs.tsp_route(pos, selected, nd)
+            route = self.gs.plan_multi_trip(pos, selected, nd, slots)
+            return route
+        route = self.gs.tsp_route(pos, selected, nd)
+        return route
 
     def _build_single_bot_route(
         self, pos: tuple[int, int], inv: list[str]
@@ -164,13 +171,13 @@ class PickupMixin:
             # Map (type, cell) -> (item, cell), verify reachability
             selected: list[tuple[Any, tuple[int, int]]] = []
             for t, cell in optimal:
-                it = type_to_item.get(t)
-                if it is None:
+                item = type_to_item.get(t)
+                if item is None:
                     continue
                 d_bot = self.gs.dist_static(pos, cell)
                 d_drop = self.gs.dist_static(cell, nd)
                 if d_bot + 1 + d_drop < self.rounds_left:
-                    selected.append((it, cell))
+                    selected.append((item, cell))
             if selected:
                 return selected
 
@@ -215,7 +222,7 @@ class PickupMixin:
                 best_cell: Optional[tuple[int, int]] = None
                 best_cost = float("inf")
                 for ac in self.gs.adj_cache.get(ipos, []):
-                    cost = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(
+                    cost: float = self.gs.dist_static(bot_pos, ac) + self.gs.dist_static(
                         ac, drop_off
                     )
                     if cost < best_cost:
@@ -237,7 +244,7 @@ class PickupMixin:
         best_cost = float("inf")
 
         for perm in permutations(range(n)):
-            cost: float = 0
+            cost = 0.0
             prev = bot_pos
             cells_chosen: list[tuple[int, tuple[int, int]]] = []
             for idx in perm:

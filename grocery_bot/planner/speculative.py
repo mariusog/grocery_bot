@@ -12,9 +12,10 @@ from grocery_bot.constants import (
     MAX_INVENTORY,
     SPEC_MAX_TEAM_COPIES,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
-class SpeculativeMixin:
+class SpeculativeMixin(PlannerBase):
     """Mixin providing speculative item pickup for idle bots."""
 
     def _assign_speculative_targets(self) -> None:
@@ -90,7 +91,7 @@ class SpeculativeMixin:
             and self.net_preview.get(item_type, 0) > 0
         )
 
-    def _step_speculative_pickup(self, ctx) -> bool:
+    def _step_speculative_pickup(self, ctx: Any) -> bool:
         """Speculatively pick up items when idle (large teams)."""
         if not self.cfg.enable_speculative:
             return False

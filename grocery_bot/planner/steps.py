@@ -1,5 +1,7 @@
 """Decision step methods for the RoundPlanner step chain."""
 
+from typing import Any
+
 from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     DELIVER_WHEN_CLOSE_DIST,
@@ -7,12 +9,13 @@ from grocery_bot.constants import (
     MAX_INVENTORY,
 )
 from grocery_bot.pathfinding import DIRECTIONS
+from grocery_bot.planner._base import PlannerBase
 
 
-class StepsMixin:
+class StepsMixin(PlannerBase):
     """Mixin providing all _step_* decision methods for the step chain."""
 
-    def _step_preview_bot(self, ctx) -> bool:
+    def _step_preview_bot(self, ctx: Any) -> bool:
         """Dedicated preview bot skips active items entirely."""
         if ctx.bid not in self.preview_bot_ids or ctx.has_active:
             return False
@@ -27,7 +30,7 @@ class StepsMixin:
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked
         )
 
-    def _step_break_oscillation(self, ctx) -> bool:
+    def _step_break_oscillation(self, ctx: Any) -> bool:
         """Break A-B-A oscillation: carry -> deliver, empty -> wait."""
         if not self._is_stuck_oscillating(ctx.bid):
             return False
@@ -38,14 +41,14 @@ class StepsMixin:
         self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "wait"})
         return True
 
-    def _step_deliver_at_dropoff(self, ctx) -> bool:
+    def _step_deliver_at_dropoff(self, ctx: Any) -> bool:
         """At drop-off with active items -> deliver."""
         if self._is_at_any_dropoff(ctx.pos) and ctx.has_active:
             self._emit(ctx.bid, ctx.bx, ctx.by, {"bot": ctx.bid, "action": "drop_off"})
             return True
         return False
 
-    def _step_deliver_completes_order(self, ctx) -> bool:
+    def _step_deliver_completes_order(self, ctx: Any) -> bool:
         """Deliver partial items if it COMPLETES the order (+5 bonus)."""
         if (
             ctx.has_active
@@ -57,7 +60,7 @@ class StepsMixin:
             return True
         return False
 
-    def _step_rush_deliver(self, ctx) -> bool:
+    def _step_rush_deliver(self, ctx: Any) -> bool:
         """All active items picked up -> rush to deliver."""
         if not (ctx.has_active and self.active_on_shelves == 0):
             return False
@@ -81,14 +84,14 @@ class StepsMixin:
             item, cell = self._find_detour_item(
                 ctx.pos, self.net_preview, max_detour=max_detour, prefer_cascade=True
             )
-            if item:
+            if item and cell is not None:
                 self._claim(item, self.net_preview)
                 if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
                     return True
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
-    def _step_opportunistic_preview(self, ctx) -> bool:
+    def _step_opportunistic_preview(self, ctx: Any) -> bool:
         """Opportunistic adjacent preview pickup (spare slots only).
 
         Skip when active items should be prioritized:
@@ -117,14 +120,14 @@ class StepsMixin:
             return True
         return False
 
-    def _step_inventory_full_deliver(self, ctx) -> bool:
+    def _step_inventory_full_deliver(self, ctx: Any) -> bool:
         """Inventory full -> deliver."""
         if not (ctx.has_active and len(ctx.inv) >= MAX_INVENTORY):
             return False
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
-    def _step_zero_cost_delivery(self, ctx) -> bool:
+    def _step_zero_cost_delivery(self, ctx: Any) -> bool:
         """Zero-cost delivery -- deliver if adjacent to dropoff."""
         nd = self._nearest_dropoff(ctx.pos)
         if not (
@@ -143,7 +146,7 @@ class StepsMixin:
                 return True
         return False
 
-    def _step_early_delivery(self, ctx) -> bool:
+    def _step_early_delivery(self, ctx: Any) -> bool:
         """Deliver partial inventory when cheaper than filling up (medium teams 4-7)."""
         num_bots = self.cfg.num_bots
         if num_bots < 4 or num_bots >= 8:
@@ -155,7 +158,7 @@ class StepsMixin:
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
-    def _step_endgame(self, ctx) -> bool:
+    def _step_endgame(self, ctx: Any) -> bool:
         """Improved end-game strategy."""
         if not (self.endgame and ctx.inv):
             return False
@@ -175,11 +178,11 @@ class StepsMixin:
                 return True
         return False
 
-    def _step_active_pickup(self, ctx) -> bool:
+    def _step_active_pickup(self, ctx: Any) -> bool:
         """Pick up active items (adjacent first, then TSP route)."""
         return self._try_active_pickup(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked)
 
-    def _step_deliver_active(self, ctx) -> bool:
+    def _step_deliver_active(self, ctx: Any) -> bool:
         """Deliver active items."""
         if not ctx.has_active:
             return False
@@ -196,14 +199,14 @@ class StepsMixin:
         spare = self._spare_slots(ctx.inv, ctx.bid)
         if self.preview and spare > 0 and not self.order_nearly_complete:
             item, cell = self._find_detour_item(ctx.pos, self.net_preview)
-            if item:
+            if item and cell is not None:
                 self._claim(item, self.net_preview)
                 if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
                     return True
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
-    def _step_clear_nonactive_inventory(self, ctx) -> bool:
+    def _step_clear_nonactive_inventory(self, ctx: Any) -> bool:
         """Bot has non-active items clogging inventory."""
         if ctx.has_active or len(ctx.inv) == 0 or self.active_on_shelves == 0:
             return False
@@ -221,7 +224,7 @@ class StepsMixin:
         self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
         return True
 
-    def _step_preview_prepick(self, ctx) -> bool:
+    def _step_preview_prepick(self, ctx: Any) -> bool:
         """Pre-pick preview items."""
         has_assignment = ctx.bid in self.bot_assignments and bool(self.bot_assignments[ctx.bid])
         force = self.cfg.preview_prepick_force(
@@ -231,11 +234,11 @@ class StepsMixin:
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=force
         )
 
-    def _step_clear_dropoff(self, ctx) -> bool:
+    def _step_clear_dropoff(self, ctx: Any) -> bool:
         """Clear dropoff area when idle."""
         return self._try_clear_dropoff(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
 
-    def _step_idle_nonactive_deliver(self, ctx) -> bool:
+    def _step_idle_nonactive_deliver(self, ctx: Any) -> bool:
         """Idle bot with non-active inventory -- deliver for points."""
         min_inv = self.cfg.min_inv_nonactive_idle
         if not (ctx.inv and not ctx.has_active and len(ctx.inv) >= min_inv):
@@ -260,7 +263,7 @@ class StepsMixin:
         self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
         return True
 
-    def _step_idle_positioning(self, ctx) -> bool:
+    def _step_idle_positioning(self, ctx: Any) -> bool:
         """Idle bot positioning -- spread out from other bots."""
         if self.cfg.multi_bot:
             return self._try_idle_positioning(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)

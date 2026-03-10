@@ -6,6 +6,7 @@ from grocery_bot.constants import (
     MAX_INVENTORY,
     TASK_COMMITMENT_ROUNDS,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
 def role_to_task_type(role: str) -> str:
@@ -15,7 +16,7 @@ def role_to_task_type(role: str) -> str:
     )
 
 
-class CoordinationMixin:
+class CoordinationMixin(PlannerBase):
     """Mixin providing delivery queue, role assignment, and task management."""
 
     def _check_order_transition(self) -> None:

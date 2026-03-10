@@ -7,9 +7,10 @@ from grocery_bot.constants import (
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
 )
+from grocery_bot.planner._base import PlannerBase
 
 
-class PreviewMixin:
+class PreviewMixin(PlannerBase):
     """Mixin providing preview pre-pick, detour finding, and nearest-item lookup."""
 
     def _try_preview_prepick(

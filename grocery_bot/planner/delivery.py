@@ -1,12 +1,15 @@
 """Delivery decision logic and end-game helpers for RoundPlanner."""
 
+from typing import Any
+
 from grocery_bot.constants import DELIVER_WHEN_CLOSE_DIST, MAX_INVENTORY
+from grocery_bot.planner._base import PlannerBase
 
 
-class DeliveryMixin:
+class DeliveryMixin(PlannerBase):
     """Mixin providing delivery timing, end-game estimation, and item maximization."""
 
-    def _should_head_to_dropoff(self, bot: dict[str, object]) -> bool:
+    def _should_head_to_dropoff(self, bot: dict[str, Any]) -> bool:
         """Return True when a bot is likely to prioritize delivery this round."""
         bid = int(bot["id"])
         if not self.bot_has_active.get(bid, False):
@@ -94,7 +97,7 @@ class DeliveryMixin:
             if cell and d < float("inf"):
                 remaining.append((it, cell, d))
         if not remaining:
-            return self.gs.dist_static(pos, self._nearest_dropoff(pos)) + 1
+            return float(self.gs.dist_static(pos, self._nearest_dropoff(pos)) + 1)
 
         remaining.sort(key=lambda c: c[2])
         total_dist: float = 0
@@ -194,7 +197,7 @@ class DeliveryMixin:
             ndc = self._nearest_dropoff(cur)
             cost_fill += self.gs.dist_static(cur, ndc) + 1
 
-        return total_deliver_now < cost_fill - 2
+        return bool(total_deliver_now < cost_fill - 2)
 
     def _try_maximize_items(
         self,
