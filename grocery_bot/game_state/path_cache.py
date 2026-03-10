@@ -1,12 +1,11 @@
 """Full-path caching and commitment for GameState."""
 
-from typing import Optional
-
 from grocery_bot.constants import PATH_RECHECK_INTERVAL
+from grocery_bot.game_state._base import GameStateBase
 from grocery_bot.pathfinding import bfs_full_path
 
 
-class PathCacheMixin:
+class PathCacheMixin(GameStateBase):
     """Mixin providing deterministic path caching to avoid flip-flopping."""
 
     def get_cached_next_step(
@@ -16,7 +15,7 @@ class PathCacheMixin:
         target: tuple[int, int],
         dynamic_blocked: set[tuple[int, int]],
         current_round: int,
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Return the next step toward *target* using a cached full path.
 
         The cache is invalidated when:

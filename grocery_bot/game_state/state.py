@@ -1,16 +1,15 @@
 """GameState — persistent map caches, cross-round tracking."""
 
-from typing import Any, Optional
+from typing import Any
 
-from grocery_bot.pathfinding import find_adjacent_positions
 from grocery_bot.constants import CORRIDOR_HEIGHT_THRESHOLD
-
 from grocery_bot.game_state.distance import DistanceMixin
+from grocery_bot.game_state.dropoff import DropoffMixin
+from grocery_bot.game_state.hungarian import AssignmentMixin
+from grocery_bot.game_state.path_cache import PathCacheMixin
 from grocery_bot.game_state.route_tables import RouteTableMixin
 from grocery_bot.game_state.tsp import TspMixin
-from grocery_bot.game_state.hungarian import AssignmentMixin
-from grocery_bot.game_state.dropoff import DropoffMixin
-from grocery_bot.game_state.path_cache import PathCacheMixin
+from grocery_bot.pathfinding import find_adjacent_positions
 
 
 class GameState(
@@ -25,7 +24,7 @@ class GameState(
 
     def __init__(self) -> None:
         # Static map data
-        self.blocked_static: Optional[set[tuple[int, int]]] = None
+        self.blocked_static: set[tuple[int, int]] = set()
         self.dist_cache: dict[tuple[int, int], dict[tuple[int, int], int]] = {}
         self.adj_cache: dict[tuple[int, int], list[tuple[int, int]]] = {}
         self.grid_width: int = 0
@@ -44,50 +43,42 @@ class GameState(
         self.last_round_processed: int = -1
 
         # Precomputed route tables
-        self.best_pickup: dict[
-            str, tuple[tuple[int, int], tuple[int, int], float]
-        ] = {}
-        self.best_pair_route: dict[
-            tuple[str, str], list[tuple[str, tuple[int, int]]]
-        ] = {}
-        self.best_triple_route: dict[
-            tuple[str, str, str], list[tuple[str, tuple[int, int]]]
-        ] = {}
+        self.best_pickup: dict[str, tuple[tuple[int, int], tuple[int, int], float]] = {}
+        self.best_pair_route: dict[tuple[str, str], list[tuple[str, tuple[int, int]]]] = {}
+        self.best_triple_route: dict[tuple[str, str, str], list[tuple[str, tuple[int, int]]]] = {}
 
         # Active items remaining on shelves
         self.active_on_shelves: int = 0
 
         # Dropoff congestion (T30)
-        self.drop_off_pos: Optional[tuple[int, int]] = None
+        self.drop_off_pos: tuple[int, int] | None = None
         self.dropoff_adjacents: list[tuple[int, int]] = []
         self.dropoff_approach_cells: list[tuple[int, int]] = []
         self.dropoff_approach_set: set[tuple[int, int]] = set()
         self.dropoff_wait_cells: list[tuple[int, int]] = []
 
         # Path caching (T17)
-        self.bot_planned_paths: dict[
-            int, tuple[tuple[int, int], list[tuple[int, int]], int]
-        ] = {}
+        self.bot_planned_paths: dict[int, tuple[tuple[int, int], list[tuple[int, int]], int]] = {}
 
         # Round tracking (T30)
         self._round_bot_positions: dict[int, tuple[int, int]] = {}
-        self._round_bot_targets: dict[int, Optional[tuple[int, int]]] = {}
-        self._round_drop_off: Optional[tuple[int, int]] = None
+        self._round_bot_targets: dict[int, tuple[int, int] | None] = {}
+        self._round_drop_off: tuple[int, int] | None = None
 
         # Coordination (T15)
         self.delivery_queue: list[int] = []
         self.bot_tasks: dict[int, dict[str, Any]] = {}
-        self.last_active_order_id: Optional[str] = None
+        self.last_active_order_id: str | None = None
 
         # Bot history (oscillation detection)
         self.bot_history: dict[int, Any] = {}
-        self._history_gen: Optional[int] = None
-        self.spawn_origin: Optional[tuple[int, int]] = None
-        self.spawn_dispersal_targets: Optional[dict[int, tuple[int, int]]] = None
+        self._history_gen: int | None = None
+        self.spawn_origin: tuple[int, int] | None = None
+        self.spawn_dispersal_targets: dict[int, tuple[int, int]] | None = None
 
     def reset(self) -> None:
         """Reset all state for a new game."""
-        self.blocked_static = None
+        self.blocked_static = set()
         self.dist_cache = {}
         self.adj_cache = {}
         self.grid_width = 0
@@ -145,9 +136,7 @@ class GameState(
 
         for it in state["items"]:
             ipos = tuple(it["position"])
-            self.adj_cache[ipos] = find_adjacent_positions(
-                ipos[0], ipos[1], self.blocked_static
-            )
+            self.adj_cache[ipos] = find_adjacent_positions(ipos[0], ipos[1], self.blocked_static)
 
         self._compute_idle_spots(width, height, item_positions)
 

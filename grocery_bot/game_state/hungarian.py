@@ -1,6 +1,6 @@
 """Hungarian algorithm and bot-to-item assignment for GameState."""
 
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
@@ -9,17 +9,18 @@ from grocery_bot.constants import (
     LAST_ITEM_COST_MULTIPLIER,
     ZONE_CROSS_PENALTY,
 )
+from grocery_bot.game_state._base import GameStateBase
 
 
-class AssignmentMixin:
+class AssignmentMixin(GameStateBase):
     """Mixin providing optimal bot-to-item assignment."""
 
     def assign_items_to_bots(
         self,
         assignable_bots: list[tuple[int, tuple[int, int], int]],
         candidate_items: list[dict[str, Any]],
-        zone_width: Optional[float] = None,
-        drop_off: Optional[tuple[int, int]] = None,
+        zone_width: float | None = None,
+        drop_off: tuple[int, int] | None = None,
     ) -> dict[int, list[dict[str, Any]]]:
         """Assign items to bots optimally using Hungarian algorithm."""
         if not assignable_bots or not candidate_items:
@@ -63,7 +64,7 @@ class AssignmentMixin:
             flat.sort()
             used_b: set[int] = set()
             used_i: set[int] = set()
-            for d, bi, ii in flat:
+            for _d, bi, ii in flat:
                 if bi not in used_b and ii not in used_i:
                     pairs.append((bi, ii))
                     used_b.add(bi)
@@ -84,7 +85,7 @@ class AssignmentMixin:
         self,
         bot_positions: list[tuple[int, int]],
         item_positions: list[tuple[int, int]],
-        dist_fn: Optional[Any] = None,
+        dist_fn: Any | None = None,
     ) -> list[tuple[int, int]]:
         """Optimal bot-to-item assignment. Falls back to greedy for >100 pairs."""
         if not bot_positions or not item_positions:
@@ -123,9 +124,7 @@ def hungarian_solve(cost_matrix: list[list[float]]) -> list[tuple[int, int]]:
     if not has_finite:
         return []
 
-    max_finite = max(
-        (val for row in cost_matrix for val in row if val < INF), default=0
-    )
+    max_finite = max((val for row in cost_matrix for val in row if val < INF), default=0)
     pad_val = max_finite * n + 1
 
     matrix: list[list[float]] = []
@@ -189,9 +188,8 @@ def hungarian_solve(cost_matrix: list[list[float]]) -> list[tuple[int, int]]:
     for j in range(1, n + 1):
         row_idx = p[j] - 1
         col_idx = j - 1
-        if row_idx < n_rows and col_idx < n_cols:
-            if cost_matrix[row_idx][col_idx] < INF:
-                result.append((row_idx, col_idx))
+        if row_idx < n_rows and col_idx < n_cols and cost_matrix[row_idx][col_idx] < INF:
+            result.append((row_idx, col_idx))
     return result
 
 
@@ -212,7 +210,7 @@ def greedy_assign(
     assigned_bots: set[int] = set()
     assigned_items: set[int] = set()
     result: list[tuple[int, int]] = []
-    for d, bi, ii in pairs:
+    for _d, bi, ii in pairs:
         if bi in assigned_bots or ii in assigned_items:
             continue
         result.append((bi, ii))

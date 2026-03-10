@@ -1,12 +1,13 @@
 """Distance computation and caching for GameState."""
 
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import DIST_CACHE_MAX
+from grocery_bot.game_state._base import GameStateBase
 from grocery_bot.pathfinding import bfs_all, find_adjacent_positions
 
 
-class DistanceMixin:
+class DistanceMixin(GameStateBase):
     """Mixin providing BFS-based distance lookups with caching."""
 
     def get_distances_from(self, source: tuple[int, int]) -> dict[tuple[int, int], int]:
@@ -25,7 +26,7 @@ class DistanceMixin:
 
     def find_best_item_target(
         self, pos: tuple[int, int], item: dict[str, Any]
-    ) -> tuple[Optional[tuple[int, int]], float]:
+    ) -> tuple[tuple[int, int] | None, float]:
         """Find the closest adjacent cell to reach an item shelf."""
         ipos = tuple(item["position"])
         adj_cells = self.adj_cache.get(
@@ -33,7 +34,7 @@ class DistanceMixin:
         )
         if not adj_cells:
             return None, float("inf")
-        best_cell: Optional[tuple[int, int]] = None
+        best_cell: tuple[int, int] | None = None
         best_d = float("inf")
         for ac in adj_cells:
             d = self.dist_static(pos, ac)

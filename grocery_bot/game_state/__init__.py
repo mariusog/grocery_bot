@@ -8,8 +8,8 @@ from grocery_bot.constants import (
 from grocery_bot.game_state.state import GameState
 
 __all__ = [
-    "GameState",
     "DROPOFF_CONGESTION_RADIUS",
     "DROPOFF_WAIT_DISTANCE",
     "MAX_APPROACH_SLOTS",
+    "GameState",
 ]

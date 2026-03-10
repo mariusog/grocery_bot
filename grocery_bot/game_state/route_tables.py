@@ -1,10 +1,12 @@
 """Precomputed route tables for optimal item pickup ordering."""
 
 from itertools import combinations, permutations
-from typing import Any, Optional
+from typing import Any
+
+from grocery_bot.game_state._base import GameStateBase
 
 
-class RouteTableMixin:
+class RouteTableMixin(GameStateBase):
     """Mixin providing precomputed pickup routes per item type."""
 
     def _precompute_route_tables(
@@ -20,8 +22,8 @@ class RouteTableMixin:
         # Best pickup cell per item type: minimize dist(adj_cell, dropoff)
         self.best_pickup = {}
         for item_type, type_items in items_by_type.items():
-            best_cell: Optional[tuple[int, int]] = None
-            best_ipos: Optional[tuple[int, int]] = None
+            best_cell: tuple[int, int] | None = None
+            best_ipos: tuple[int, int] | None = None
             best_d: float = float("inf")
             for it in type_items:
                 ipos = tuple(it["position"])
@@ -59,7 +61,7 @@ class RouteTableMixin:
         self.best_triple_route = {}
         for types in combinations(all_types, 3):
             cells = [self.best_pickup[t][0] for t in types]
-            best_perm: Optional[tuple[int, ...]] = None
+            best_perm: tuple[int, ...] | None = None
             best_cost: float = float("inf")
             for perm in permutations(range(3)):
                 cost: float = self.dist_static(drop_off, cells[perm[0]])
@@ -75,17 +77,16 @@ class RouteTableMixin:
                         best_cost = cost
                         best_perm = perm
             if best_perm is not None:
-                key = tuple(sorted(types))
-                self.best_triple_route[key] = [
-                    (types[i], cells[i]) for i in best_perm
-                ]
+                s = sorted(types)
+                triple_key: tuple[str, str, str] = (s[0], s[1], s[2])
+                self.best_triple_route[triple_key] = [(types[i], cells[i]) for i in best_perm]
 
     def get_optimal_route(
         self,
         item_types: list[str],
         bot_pos: tuple[int, int],
         drop_off: tuple[int, int],
-    ) -> Optional[list[tuple[str, tuple[int, int]]]]:
+    ) -> list[tuple[str, tuple[int, int]]] | None:
         """Return precomputed optimal route for given item types.
 
         Adjusts for bot position — the precomputed route assumes starting
@@ -104,8 +105,9 @@ class RouteTableMixin:
             return None
 
         if n == 2:
-            key = tuple(sorted(item_types))
-            route = self.best_pair_route.get(key)
+            s = sorted(item_types)
+            key2: tuple[str, str] = (s[0], s[1])
+            route = self.best_pair_route.get(key2)
             if route is None:
                 return None
             cost_fwd = self.dist_static(bot_pos, route[0][1])
@@ -127,12 +129,13 @@ class RouteTableMixin:
             return list(route)
 
         if n == 3:
-            key = tuple(sorted(item_types))
-            route = self.best_triple_route.get(key)
+            s3 = sorted(item_types)
+            key3: tuple[str, str, str] = (s3[0], s3[1], s3[2])
+            route = self.best_triple_route.get(key3)
             if route is None:
                 return None
             cells = [(t, c) for t, c in route]
-            best_order: Optional[list[tuple[str, tuple[int, int]]]] = None
+            best_order: list[tuple[str, tuple[int, int]]] | None = None
             best_cost: float = float("inf")
             for perm in permutations(range(3)):
                 cost = self.dist_static(bot_pos, cells[perm[0]][1])

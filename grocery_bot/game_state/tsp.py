@@ -1,12 +1,13 @@
 """TSP routing and multi-trip planning for GameState."""
 
 from itertools import combinations, permutations
-from typing import Any, Optional
+from typing import Any
 
 from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.game_state._base import GameStateBase
 
 
-class TspMixin:
+class TspMixin(GameStateBase):
     """Mixin providing TSP route optimization and interleaved delivery planning."""
 
     def tsp_route(
@@ -18,10 +19,10 @@ class TspMixin:
         """Find optimal pickup order via brute-force TSP."""
         if len(item_targets) <= 1:
             return item_targets
-        best_order: Optional[tuple[int, ...]] = None
+        best_order: tuple[int, ...] | None = None
         best_cost = float("inf")
         for perm in permutations(range(len(item_targets))):
-            cost = 0
+            cost: float = 0
             prev = bot_pos
             for idx in perm:
                 _, cell = item_targets[idx]
@@ -64,7 +65,7 @@ class TspMixin:
         if n <= capacity:
             return self.tsp_route(bot_pos, all_candidates, drop_off)
         best_cost = float("inf")
-        best_trip1: Optional[list[tuple[Any, tuple[int, int]]]] = None
+        best_trip1: list[tuple[Any, tuple[int, int]]] | None = None
         for trip1_size in range(max(1, n - capacity), min(capacity, n) + 1):
             for trip1_indices in combinations(range(n), trip1_size):
                 trip2_indices = tuple(i for i in range(n) if i not in trip1_indices)
@@ -80,9 +81,7 @@ class TspMixin:
                 if total < best_cost:
                     best_cost = total
                     best_trip1 = route1
-        return best_trip1 or self.tsp_route(
-            bot_pos, all_candidates[:capacity], drop_off
-        )
+        return best_trip1 or self.tsp_route(bot_pos, all_candidates[:capacity], drop_off)
 
     def plan_interleaved_route(
         self,
@@ -108,9 +107,9 @@ class TspMixin:
             full_route = self.tsp_route(bot_pos, item_targets, drop_off)
             full_cost = self.tsp_cost(bot_pos, full_route, drop_off)
             best_cost = full_cost
-            best_plan: Optional[list[tuple[str, Any]]] = [
-                ("pickup", it) for it in full_route
-            ] + [("deliver", drop_off)]
+            best_plan: list[tuple[str, Any]] | None = [("pickup", it) for it in full_route] + [
+                ("deliver", drop_off)
+            ]
         else:
             best_cost = float("inf")
             best_plan = None

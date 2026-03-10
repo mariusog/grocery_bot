@@ -1,16 +1,15 @@
 """Dropoff congestion management for GameState."""
 
-from typing import Optional
-
 from grocery_bot.constants import (
     DROPOFF_CONGESTION_RADIUS,
     DROPOFF_WAIT_DISTANCE,
     MAX_APPROACH_SLOTS,
 )
+from grocery_bot.game_state._base import GameStateBase
 from grocery_bot.pathfinding import bfs_all
 
 
-class DropoffMixin:
+class DropoffMixin(GameStateBase):
     """Mixin providing dropoff area congestion detection and avoidance."""
 
     def _precompute_dropoff_zones(self, drop_off: tuple[int, int]) -> None:
@@ -87,13 +86,13 @@ class DropoffMixin:
         self,
         bot_pos: tuple[int, int],
         drop_off: tuple[int, int],
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Return a position away from the dropoff for non-delivering bots."""
         my_dist = self.dist_static(bot_pos, drop_off)
         if my_dist > DROPOFF_CONGESTION_RADIUS:
             return None
 
-        best: Optional[tuple[int, int]] = None
+        best: tuple[int, int] | None = None
         best_d = float("inf")
         candidates = self.idle_spots + self.dropoff_wait_cells
         for pos in candidates:
@@ -115,7 +114,7 @@ class DropoffMixin:
         self._round_bot_targets = {}
         self._round_drop_off = drop_off
 
-    def notify_bot_target(self, bot_id: int, target: Optional[tuple[int, int]]) -> None:
+    def notify_bot_target(self, bot_id: int, target: tuple[int, int] | None) -> None:
         """Record that a bot is heading toward a specific target."""
         self._round_bot_targets[bot_id] = target
 
