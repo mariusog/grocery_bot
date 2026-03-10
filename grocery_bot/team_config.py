@@ -18,6 +18,7 @@ from grocery_bot.constants import (
     MAX_INVENTORY,
     MAX_NONACTIVE_DELIVERERS,
     MIN_INV_FOR_NONACTIVE_DELIVERY,
+    WAVE_MODE_MIN_BOTS,
 )
 
 
@@ -54,6 +55,9 @@ class TeamConfig:
 
     # --- Coordination ---
     extra_preview_roles: bool
+
+    # --- Wave delivery ---
+    use_wave_mode: bool
 
     # --- Simple gates ---
     multi_bot: bool
@@ -159,5 +163,6 @@ def get_team_config(num_bots: int) -> TeamConfig:
         use_predictions=num_bots >= 8,
         use_temporal_bfs=num_bots > 1,
         extra_preview_roles=num_bots >= 8,
+        use_wave_mode=num_bots >= WAVE_MODE_MIN_BOTS,
         multi_bot=num_bots > 1,
     )

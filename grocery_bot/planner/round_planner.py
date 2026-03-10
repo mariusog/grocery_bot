@@ -109,6 +109,7 @@ class RoundPlanner(
         self._check_order_transition()
         self._compute_needs()
         self._compute_bot_assignments()
+        self._identify_batch_b()
         self._assign_speculative_targets()
         self.gs.update_round_positions(
             {b["id"]: tuple(b["position"]) for b in self.bots},
@@ -309,6 +310,12 @@ class RoundPlanner(
         _, _, self.net_preview = self._allocate_carried_need(
             preview_needed, reserved_by_bot=self.bot_carried_active
         )
+        preview_on_shelves: int = sum(self.net_preview.values())
+        self.wave_mode: bool = self.cfg.use_wave_mode and self.preview is not None
+        self.wave_on_shelves: int = (
+            self.active_on_shelves + preview_on_shelves if self.wave_mode else -1
+        )
+        self.batch_b_bots: set[int] = set()
         self.active_types: set[str] = set(self.active_needed.keys())
         self.order_nearly_complete: bool = (
             0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX

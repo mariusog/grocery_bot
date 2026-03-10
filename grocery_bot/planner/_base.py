@@ -87,6 +87,9 @@ class PlannerBase:
     num_item_types: int
     preview_bot_id: int | None
     preview_bot_ids: set[int]
+    wave_mode: bool
+    wave_on_shelves: int
+    batch_b_bots: set[int]
 
     # ------------------------------------------------------------------ #
     # Bot assignments (set in _compute_bot_assignments())
@@ -220,6 +223,9 @@ class PlannerBase:
         raise NotImplementedError
 
     def _bot_delivery_completes_order(self, bot: dict[str, Any]) -> bool:
+        raise NotImplementedError
+
+    def _identify_batch_b(self) -> None:
         raise NotImplementedError
 
     # -- PickupMixin (pickup.py) --

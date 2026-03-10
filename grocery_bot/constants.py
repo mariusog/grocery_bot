@@ -159,3 +159,8 @@ SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
 # Preview bot cap (large teams)
 # ---------------------------------------------------------------------------
 MAX_PREVIEW_BOTS = 3  # max bots designated as preview pickers on large teams
+
+# ---------------------------------------------------------------------------
+# Wave delivery mode (Phase 2)
+# ---------------------------------------------------------------------------
+WAVE_MODE_MIN_BOTS = 15  # minimum team size to enable wave delivery

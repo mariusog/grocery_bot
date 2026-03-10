@@ -253,6 +253,17 @@ class AssignmentMixin(PlannerBase):
                     taken_items.add(best_alt["id"])
                     break
 
+    def _identify_batch_b(self) -> None:
+        """Identify Batch B: unassigned, non-delivering bots for wave preview pickup."""
+        if not self.wave_mode or not self.net_preview:
+            self.batch_b_bots = set()
+            return
+        self.batch_b_bots = {
+            b["id"] for b in self.bots
+            if b["id"] not in self.bot_assignments
+            and not self._is_delivering(b)
+        }
+
     def _bot_urgency(self, b: dict[str, Any]) -> int:
         has_ai = self.bot_has_active[b["id"]]
         n = len(b["inventory"])
