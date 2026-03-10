@@ -14,20 +14,20 @@ import sys
 import time
 from datetime import datetime
 
+from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.game_state import GameState
+from grocery_bot.orders import get_needed_items
+
 # Re-export everything tests and simulator access via `bot.xxx`
 from grocery_bot.pathfinding import (  # noqa: F401
     DIRECTIONS,
+    _predict_pos,
     bfs,
     bfs_all,
     direction_to,
     find_adjacent_positions,
-    _predict_pos,
 )
-from grocery_bot.orders import get_needed_items  # noqa: F401
-from grocery_bot.constants import MAX_INVENTORY  # noqa: F401
-from grocery_bot.game_state import GameState  # noqa: F401
-from grocery_bot.planner.round_planner import RoundPlanner  # noqa: F401
-
+from grocery_bot.planner.round_planner import RoundPlanner
 
 # ---------------------------------------------------------------------------
 # Module-level singleton and backward-compatible API
@@ -36,42 +36,44 @@ from grocery_bot.planner.round_planner import RoundPlanner  # noqa: F401
 _gs = GameState()
 
 
-def reset_state():
+def reset_state() -> None:
     _gs.reset()
 
 
-def init_static(state):
+def init_static(state: dict) -> None:
     _gs.init_static(state)
 
 
-def dist_static(a, b):
+def dist_static(a: tuple, b: tuple) -> float:
     return _gs.dist_static(a, b)
 
 
-def get_distances_from(source, blocked):
+def get_distances_from(source: tuple, blocked: set) -> dict:
     if blocked is _gs.blocked_static:
         return _gs.get_distances_from(source)
     return bfs_all(source, blocked)
 
 
-def find_best_item_target(pos, item, _blocked_static=None):
+def find_best_item_target(pos: tuple, item: dict, _blocked_static: object = None) -> tuple:
     return _gs.find_best_item_target(pos, item)
 
 
-def tsp_route(bot_pos, item_targets, drop_off):
+def tsp_route(bot_pos: tuple, item_targets: list, drop_off: tuple) -> list:
     return _gs.tsp_route(bot_pos, item_targets, drop_off)
 
 
-def tsp_cost(bot_pos, item_targets, drop_off):
+def tsp_cost(bot_pos: tuple, item_targets: list, drop_off: tuple) -> float:
     return _gs.tsp_cost(bot_pos, item_targets, drop_off)
 
 
-def plan_multi_trip(bot_pos, all_candidates, drop_off, capacity=3):
+def plan_multi_trip(
+    bot_pos: tuple, all_candidates: list, drop_off: tuple, capacity: int = 3
+) -> list:
     return _gs.plan_multi_trip(bot_pos, all_candidates, drop_off, capacity)
 
 
-def decide_actions(state):
-    if _gs.blocked_static is None:
+def decide_actions(state: dict) -> list:
+    if not _gs.blocked_static:
         _gs.init_static(state)
 
     planner = RoundPlanner(_gs, state, full_state=state)
@@ -79,28 +81,28 @@ def decide_actions(state):
     return _validate_actions(actions, state)
 
 
-def _validate_actions(actions, state):
+def _validate_actions(actions: list, state: dict) -> list:
     """Final safety net: replace illegal actions with wait.
 
     Catches edge cases the planner missed — critical for the live server
     where illegal moves may incur 10-second penalties.
     """
     blocked = _gs.blocked_static
-    if blocked is None:
+    if not blocked:
         return actions
 
     zones = state.get("drop_off_zones")
-    drop_off_set = (
-        set(tuple(z) for z in zones) if zones else {tuple(state["drop_off"])}
-    )
+    drop_off_set = set(tuple(z) for z in zones) if zones else {tuple(state["drop_off"])}
     bot_positions = {b["id"]: tuple(b["position"]) for b in state["bots"]}
     occupied_cells = set(bot_positions.values())
     bot_inv_len = {b["id"]: len(b["inventory"]) for b in state["bots"]}
     items_by_id = {it["id"]: it for it in state["items"]}
 
     move_deltas = {
-        "move_up": (0, -1), "move_down": (0, 1),
-        "move_left": (-1, 0), "move_right": (1, 0),
+        "move_up": (0, -1),
+        "move_down": (0, 1),
+        "move_left": (-1, 0),
+        "move_right": (1, 0),
     }
 
     # Compute intended destinations for all bots
@@ -141,8 +143,7 @@ def _validate_actions(actions, state):
                 for other_bid in bot_positions:
                     if other_bid == bid:
                         continue
-                    if (dest == bot_positions[other_bid]
-                            and destinations.get(other_bid) == pos):
+                    if dest == bot_positions[other_bid] and destinations.get(other_bid) == pos:
                         valid = False
                         break
 
@@ -183,7 +184,7 @@ def _validate_actions(actions, state):
 # ---------------------------------------------------------------------------
 
 
-async def play():
+async def play() -> None:
     reset_state()
 
     ws_url = sys.argv[1] if len(sys.argv) > 1 else input("Enter WebSocket URL: ")
@@ -207,7 +208,7 @@ async def play():
     debug_path = f"logs/debug_{timestamp}.log"
     debug_lines = []
 
-    def dbg(line):
+    def dbg(line: str) -> None:
         debug_lines.append(line)
 
     # Desync detection: track expected positions and inventories
@@ -249,7 +250,7 @@ async def play():
                         message = newer
                         break
                     message = newer
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     break
             if stale_this_round > 0:
                 recv_time = time.perf_counter()
@@ -267,7 +268,10 @@ async def play():
                 break
 
             if msg_type != "game_state":
-                dbg(f"NON-STATE msg#{msg_count} type={msg_type} len={msg_len}: {json.dumps(data)[:300]}")
+                dbg(
+                    f"NON-STATE msg#{msg_count} type={msg_type} len={msg_len}: "
+                    f"{json.dumps(data)[:300]}"
+                )
                 continue
 
             round_num = data["round"]
@@ -277,19 +281,28 @@ async def play():
                 wall_set = set(tuple(w) for w in data["grid"]["walls"])
                 shelf_set = set((it["position"][0], it["position"][1]) for it in data["items"])
                 # Log ALL top-level keys to discover fields like drop_zones
-                state_keys = sorted(k for k in data.keys() if k not in ('grid', 'bots', 'items', 'orders'))
-                dbg(f"R0 INIT walls={len(wall_set)} shelves={len(shelf_set)} "
+                state_keys = sorted(
+                    k for k in data if k not in ("grid", "bots", "items", "orders")
+                )
+                dbg(
+                    f"R0 INIT walls={len(wall_set)} shelves={len(shelf_set)} "
                     f"grid={data['grid']['width']}x{data['grid']['height']} "
-                    f"drop_off={data['drop_off']} spawn={data['bots'][0]['position']}")
+                    f"drop_off={data['drop_off']} spawn={data['bots'][0]['position']}"
+                )
                 dbg(f"R0 ALL_KEYS: {list(data.keys())}")
                 for k in state_keys:
                     dbg(f"R0 FIELD {k}={data[k]}")
 
             # Detect skipped rounds
             if last_round_seen >= 0 and round_num > last_round_seen + 1:
-                dbg(f"R{round_num} ROUND_SKIP: last_seen=R{last_round_seen}, jumped to R{round_num}")
+                dbg(
+                    f"R{round_num} ROUND_SKIP: last_seen=R{last_round_seen}, jumped to R{round_num}"
+                )
             if last_round_seen >= 0 and round_num <= last_round_seen:
-                dbg(f"R{round_num} ROUND_REPEAT: last_seen=R{last_round_seen}, got R{round_num} again!")
+                dbg(
+                    f"R{round_num} ROUND_REPEAT: "
+                    f"last_seen=R{last_round_seen}, got R{round_num} again!"
+                )
             last_round_seen = round_num
 
             # === DESYNC DETECTION ===
@@ -320,8 +333,7 @@ async def play():
                 if exp_inv is not None and actual_inv != exp_inv:
                     act_name = last_act.get("action", "?")
                     desync_details.append(
-                        f"bot{bid}: inv expected={exp_inv} actual={actual_inv} "
-                        f"(sent {act_name})"
+                        f"bot{bid}: inv expected={exp_inv} actual={actual_inv} (sent {act_name})"
                     )
 
             for d in desync_details:
@@ -336,9 +348,15 @@ async def play():
                         if bot_data and exp_pos:
                             target = expected_positions.get(bid)
                             if target and target in wall_set:
-                                dbg(f"R{round_num} ILLEGAL_MOVE bot{bid}: {action} target {target} is a WALL!")
+                                dbg(
+                                    f"R{round_num} ILLEGAL_MOVE bot{bid}: "
+                                    f"{action} target {target} is a WALL!"
+                                )
                             if target and target in shelf_set:
-                                dbg(f"R{round_num} ILLEGAL_MOVE bot{bid}: {action} target {target} is a SHELF!")
+                                dbg(
+                                    f"R{round_num} ILLEGAL_MOVE bot{bid}: "
+                                    f"{action} target {target} is a SHELF!"
+                                )
 
             actions = decide_actions(data)
             # Actions are already validated by _validate_actions() inside
@@ -361,15 +379,18 @@ async def play():
             _log_round(data, actions, log_rows)
 
             action_summary = " | ".join(
-                f"b{a['bot']}:{a['action']}" + (f"({a['item_id']})" if a.get('item_id') else "")
+                f"b{a['bot']}:{a['action']}" + (f"({a['item_id']})" if a.get("item_id") else "")
                 for a in actions
             )
             bots_info = [(b["id"], b["position"], b["inventory"]) for b in data["bots"]]
             score = data.get("score", 0)
             desync_tag = " DESYNC!" if desync_this_round else ""
-            dbg(f"R{round_num} msg#{msg_count} len={msg_len} wait={recv_wait_ms:.1f}ms gap={gap_ms:.1f}ms "
+            dbg(
+                f"R{round_num} msg#{msg_count} len={msg_len} "
+                f"wait={recv_wait_ms:.1f}ms gap={gap_ms:.1f}ms "
                 f"send={total_ms:.1f}ms "
-                f"bots={bots_info} score={score} -> [{action_summary}]{desync_tag}")
+                f"bots={bots_info} score={score} -> [{action_summary}]{desync_tag}"
+            )
             if desync_this_round:
                 dbg(f"R{round_num} SENT: {response_json[:300]}")
                 dbg(f"R{round_num} PREV_SENT: {prev_action_json[:300]}")
@@ -380,10 +401,12 @@ async def play():
                 oid = order["id"]
                 if oid not in seen_order_ids:
                     seen_order_ids.add(oid)
-                    recorded_orders.append({
-                        "id": oid,
-                        "items_required": list(order["items_required"]),
-                    })
+                    recorded_orders.append(
+                        {
+                            "id": oid,
+                            "items_required": list(order["items_required"]),
+                        }
+                    )
 
             if round_num == 0:
                 game_meta.update(_build_game_meta(data, timestamp))
@@ -416,7 +439,7 @@ async def play():
     print(f"  Debug: {debug_path}")
 
 
-def _update_expected_positions(expected, data, actions):
+def _update_expected_positions(expected: dict, data: dict, actions: list) -> None:
     """Predict where each bot will be next round based on actions sent."""
     bots_by_id = {b["id"]: b for b in data["bots"]}
     for a in actions:
@@ -438,7 +461,7 @@ def _update_expected_positions(expected, data, actions):
             expected[bid] = (bx, by)
 
 
-def _update_expected_inventories(expected, data, actions):
+def _update_expected_inventories(expected: dict, data: dict, actions: list) -> None:
     """Predict inventory after actions (for desync detection).
 
     Note: drop_off only drops items matching the active order, not all items.
@@ -466,7 +489,7 @@ def _update_expected_inventories(expected, data, actions):
             expected[bid] = inv
 
 
-def _build_map_snapshot(data, timestamp):
+def _build_map_snapshot(data: dict, timestamp: str) -> dict:
     """Capture the round-0 game state for map recording."""
     return {
         "version": 1,
@@ -480,13 +503,12 @@ def _build_map_snapshot(data, timestamp):
         "max_rounds": data["max_rounds"],
         "total_orders": data.get("total_orders"),
         "items": [
-            {"id": it["id"], "type": it["type"], "position": it["position"]}
-            for it in data["items"]
+            {"id": it["id"], "type": it["type"], "position": it["position"]} for it in data["items"]
         ],
     }
 
 
-def _save_recorded_map(map_snapshot, recorded_orders, timestamp):
+def _save_recorded_map(map_snapshot: dict, recorded_orders: list, timestamp: str) -> None:
     """Write recorded map + orders to maps/ directory."""
     if not map_snapshot:
         return
@@ -547,11 +569,7 @@ def _build_game_meta(data, timestamp):
 
 def _log_round(data, actions, log_rows):
     active_o = next(
-        (
-            o
-            for o in data["orders"]
-            if o.get("status") == "active" and not o["complete"]
-        ),
+        (o for o in data["orders"] if o.get("status") == "active" and not o["complete"]),
         None,
     )
     preview_o = next((o for o in data["orders"] if o.get("status") == "preview"), None)
@@ -572,9 +590,7 @@ def _log_round(data, actions, log_rows):
                     if active_o
                     else ""
                 ),
-                "active_delivered": (
-                    ";".join(active_o["items_delivered"]) if active_o else ""
-                ),
+                "active_delivered": (";".join(active_o["items_delivered"]) if active_o else ""),
                 "preview_needed": (
                     ";".join(f"{k}:{v}" for k, v in get_needed_items(preview_o).items())
                     if preview_o

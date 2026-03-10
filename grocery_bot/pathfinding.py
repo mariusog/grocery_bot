@@ -1,7 +1,6 @@
 """Pure pathfinding functions and movement helpers."""
 
 from collections import deque
-from typing import Optional
 
 from grocery_bot.constants import BFS_MAX_CELLS, TEMPORAL_BFS_MAX_CELLS
 
@@ -44,7 +43,7 @@ def bfs(
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
     max_cells: int = BFS_MAX_CELLS,
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     """BFS pathfinding from start to goal. Returns next position to move to.
 
     Searches backwards from goal so the returned position is the first step
@@ -101,7 +100,7 @@ def bfs_full_path(
     """
     if start == goal:
         return [start]
-    parent: dict[tuple[int, int], Optional[tuple[int, int]]] = {start: None}
+    parent: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
     queue = deque([start])
     while queue:
         if len(parent) >= max_cells:
@@ -113,7 +112,7 @@ def bfs_full_path(
                 parent[npos] = pos
                 if npos == goal:
                     path: list[tuple[int, int]] = []
-                    cur: Optional[tuple[int, int]] = goal
+                    cur: tuple[int, int] | None = goal
                     while cur is not None:
                         path.append(cur)
                         cur = parent[cur]
@@ -128,7 +127,7 @@ def bfs_temporal(
     goal: tuple[int, int],
     blocked_static: set[tuple[int, int]],
     moving_obstacles: list[tuple[tuple[int, int], tuple[int, int]]],
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     """BFS pathfinding that avoids both current and predicted positions of
     moving obstacles (other bots).
 
@@ -175,9 +174,7 @@ def bfs_temporal(
 
     # Forward BFS from start
     visited: set[tuple[tuple[int, int], int]] = {(start, 0)}
-    queue: deque[tuple[tuple[int, int], int, Optional[tuple[int, int]]]] = deque(
-        [(start, 0, None)]
-    )
+    queue: deque[tuple[tuple[int, int], int, tuple[int, int] | None]] = deque([(start, 0, None)])
 
     while queue:
         if len(visited) >= TEMPORAL_BFS_MAX_CELLS:
@@ -213,7 +210,7 @@ def bfs_toward(
     goal: tuple[int, int],
     blocked: set[tuple[int, int]],
     max_steps: int = 50,
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     """BFS that gets as close to goal as possible, even if goal is unreachable.
 
     Unlike standard bfs(), this returns the first step toward the closest
@@ -233,10 +230,12 @@ def bfs_toward(
         return None
 
     # Standard forward BFS tracking first-move and best distance to goal
-    visited: dict[tuple[int, int], Optional[tuple[int, int]]] = {start: None}
-    queue = deque([(start, None, 0)])  # (pos, first_move, depth)
+    visited: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
+    queue: deque[tuple[tuple[int, int], tuple[int, int] | None, int]] = deque(
+        [(start, None, 0)]
+    )  # (pos, first_move, depth)
     best_dist = abs(goal[0] - start[0]) + abs(goal[1] - start[1])
-    best_first_move: Optional[tuple[int, int]] = None
+    best_first_move: tuple[int, int] | None = None
 
     while queue:
         pos, first_move, depth = queue.popleft()
