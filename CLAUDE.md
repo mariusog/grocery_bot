@@ -1,5 +1,87 @@
 # Grocery Bot
 
+## Project Tooling
+
+| Tool | Command | Notes |
+|------|---------|-------|
+| **Test (fast)** | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 \| tail -20` | Pipe through tail. Use quiet mode. |
+| **Test (debug)** | `python -m pytest tests/path/file.py::test_name -q --tb=short 2>&1 \| tail -40` | Only for investigating a specific failure. |
+| **Lint** | `ruff check <files>` | Auto-fix: `ruff check --fix <files>` |
+| **Format** | `ruff format <files>` | Check only: `ruff format --check <files>` |
+| **Type check** | `mypy <files>` | |
+| **Security scan** | `bandit -r grocery_bot/ -ll` | Dependencies: `pip-audit` |
+| **Log analysis** | `python analyze_replay.py <log> --problems 2>&1 \| tail -20` | See Analyzing Game Runs below. |
+| **Benchmark** | `python benchmark.py --diagnostics` | Results go to `docs/benchmark_results.md`. |
+| **Constants file** | `grocery_bot/constants.py` | All magic numbers and tuning parameters. |
+| **Test fixtures** | `tests/conftest.py` | Shared factories and setup/teardown. |
+
+## AI Agent Ground Rules
+
+Read this section FIRST. These rules save you from wasting tokens and making common mistakes.
+
+### NEVER Do These
+
+- **NEVER use verbose test output** -- use quiet mode and pipe through `tail`
+- **NEVER read raw CSV log files** -- read `docs/benchmark_results.md` first, use `analyze_replay.py` for drill-down
+- **NEVER parse stdout to extract results** -- read the generated report files instead
+- **NEVER use JSON lines for high-volume data** -- use CSV (4x more token-efficient)
+- **NEVER dump full file contents when a summary exists** -- read summaries first, drill down on demand
+- **NEVER use unseeded randomness** -- all randomized code MUST accept a `seed` parameter
+- **NEVER modify files owned by another agent** -- add a task to `TASKS.md` instead
+
+### ALWAYS Do These
+
+- **ALWAYS pipe command output through `tail`** -- bound your token consumption
+- **ALWAYS read TASKS.md before starting work** -- claim a task, set it to `in-progress`
+- **ALWAYS run tests before committing** -- zero tolerance for test failures
+- **ALWAYS include before/after metrics** when reporting optimization results
+- **ALWAYS log the seed** in every run so results can be replicated
+
+### Token Budget Awareness
+
+You are an AI agent with a finite context window. Optimize for it:
+
+| Action | Token-Efficient Way | Token-Wasteful Way |
+|--------|--------------------|--------------------|
+| Check test results | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 \| tail -20` | Verbose test output (unbounded) |
+| Read benchmark results | `cat docs/benchmark_results.md` | Parse stdout from benchmark run |
+| Inspect a log | `python analyze_replay.py <log> --problems` | Read the raw CSV file |
+| Compare two runs | `python analyze_replay.py <log> --compare <other>` | Read both files and diff manually |
+| Understand bot behavior | `python analyze_replay.py <log> --bot <id>` | Read 200 rows of per-round data |
+| Check for problems | `python analyze_replay.py <log> --problems` | Read full summary + all data |
+
+### Codebase Orientation (when starting)
+
+When dropped into this codebase, read in this order:
+
+1. **CLAUDE.md** -- this file (project rules, structure, conventions)
+2. **TASKS.md** -- what work is in progress, what's done, what's open
+3. **Project structure** -- `ls` the source and test directories
+4. **`grocery_bot/constants.py`** -- all tuning parameters and configuration values
+5. **`tests/conftest.py`** -- understand the shared setup and factory functions
+6. **The specific files related to your task** -- only then dive into source code
+
+Do NOT read every file. Read the minimum needed for your task.
+
+### Skill Selection Guide
+
+After writing or modifying code, use this decision tree:
+
+```
+Did you write new code?
++-- Yes: Run /test-coverage (verify tests exist for new public methods)
++-- Did tests fail?
+|   +-- Yes: Run /debugging skill. Do NOT proceed until green.
++-- Is this a performance-sensitive change?
+|   +-- Yes: Run /performance-optimization
++-- Ready to ship?
+|   +-- Yes: Run /production-quality (orchestrates all quality skills)
++-- Quick quality check only?
+    +-- Yes: Run /lint + /code-review
+```
+
+For new features, use `/tdd-cycle` (write tests first, then implement).
+
 ## Project Structure
 
 ```
@@ -137,6 +219,37 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 
 The lead-agent has cross-cutting authority — it may modify any file when a fix spans multiple agents' boundaries. Other agents treat `bot.py` and `grocery_bot/constants.py` as read-only.
 
+## Testing Standards
+
+### Coverage Requirements
+
+**Every public method and function MUST have at least one dedicated test.** Non-negotiable.
+
+Test naming: `test_<method_name>_<scenario>` -- e.g., `test_calculate_score_empty_input_returns_zero`
+
+### Unit Test Checklist (per method)
+
+1. **Happy path** -- normal input, expected output
+2. **Edge cases** -- empty inputs, zero values, boundary conditions
+3. **Error conditions** -- invalid input, unreachable targets, overflow
+4. **State mutations** -- verify side effects
+
+### Test Quality Rules
+
+- **Arrange-Act-Assert** pattern in every test
+- **One assertion per concept** -- test one behavior, not five
+- **No test interdependence** -- each test creates its own state via fixtures/factories
+- **Deterministic** -- no random inputs without fixed seeds
+- **Descriptive names** -- `test_search_stops_at_max_depth` not `test_search_1`
+
+### When Tests Fail
+
+1. Read the failure output (the `tail` you already have)
+2. If the error is clear, fix it and rerun
+3. If unclear, rerun the single failing test with more detail (see Test debug command)
+4. If the failure is in another agent's code, do NOT fix it -- add a task to TASKS.md
+5. If a test is flaky (passes sometimes, fails sometimes), it has a non-determinism bug -- fix the seed
+
 ## Running Tests
 
 ```sh
@@ -204,3 +317,23 @@ python analyze_replay.py <log> --problems
 3. Run `python analyze_replay.py <log>` to verify problem count and idle% improved
 4. Use `--bot <id>` to check that previously-problematic bots improved
 5. Include before/after scores and problem counts in the task result notes
+
+## Git Conventions
+
+### Commit Messages
+
+- Short, single-sentence, present tense: `Fix cache invalidation on round reset`
+- Focus on WHY, not WHAT: `Prevent stale distances after entity moves` not `Change line 42 in distance.py`
+- One logical change per commit
+
+### Staging
+
+- **Stage specific files by name** -- never use `git add .` or `git add -A` (risks committing secrets, logs, cache files)
+- Check `git status` before committing -- verify only intended files are staged
+- Never commit files matching `.gitignore` patterns
+
+### Branches
+
+- `main` is the stable branch -- all tests pass, benchmarks meet baselines
+- Feature branches: `<agent>/<task-id>-<short-description>` e.g. `pathfinding/T12-cache-invalidation`
+- Never force-push to `main`
