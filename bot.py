@@ -17,6 +17,7 @@ from grocery_bot.constants import MAX_INVENTORY
 from grocery_bot.game_log import (
     build_game_meta,
     build_map_snapshot,
+    load_matching_map_orders,
     log_game_over,
     log_round,
     save_recorded_map,
@@ -368,6 +369,13 @@ async def play() -> None:
                                     f"R{round_num} ILLEGAL_MOVE bot{bid}: "
                                     f"{action} target {target} is a SHELF!"
                                 )
+
+            # On round 0, try to load recorded orders from matching map files
+            if round_num == 0:
+                recorded = load_matching_map_orders(data)
+                if recorded:
+                    data["all_orders"] = recorded
+                    dbg(f"R0 ORACLE: injected {len(recorded)} recorded orders")
 
             actions = decide_actions(data)
             # Actions are already validated by _validate_actions() inside

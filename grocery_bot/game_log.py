@@ -8,9 +8,11 @@ Public functions:
 - ``build_game_meta`` — build game-level metadata dict for logging
 - ``log_round`` — append one round's data to the CSV/JSON log files
 - ``log_game_over`` — write final summary row and close the game log
+- ``load_matching_map_orders`` — load recorded orders from a matching map file
 """
 
 import csv
+import glob
 import json
 import os
 from datetime import datetime
@@ -233,3 +235,48 @@ def log_game_over(
         json.dump(game_meta, f, indent=2)
     print(f"  Log: {log_path}")
     print(f"  Meta: {meta_path}")
+
+
+def load_matching_map_orders(data: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Match round-0 game state against recorded maps and return orders.
+
+    Matches by grid dimensions, item count, and first-order items (if visible).
+    Returns the recorded order list if a match is found, None otherwise.
+    """
+    grid = data["grid"]
+    w, h = grid["width"], grid["height"]
+    num_bots = len(data["bots"])
+
+    # Build a fingerprint from item positions + types for exact matching
+    game_items = sorted((it["position"][0], it["position"][1], it["type"]) for it in data["items"])
+
+    map_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "maps")
+    if not os.path.isdir(map_dir):
+        return None
+
+    pattern = os.path.join(map_dir, f"*_{w}x{h}_{num_bots}bot.json")
+    best_match: list[dict[str, Any]] | None = None
+    best_count = 0
+
+    for path in sorted(glob.glob(pattern)):
+        try:
+            with open(path) as f:
+                recorded = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        # Verify item layout matches (same map)
+        rec_items = sorted(
+            (it["position"][0], it["position"][1], it["type"]) for it in recorded.get("items", [])
+        )
+        if rec_items != game_items:
+            continue
+
+        orders = recorded.get("orders", [])
+        if len(orders) > best_count:
+            best_count = len(orders)
+            best_match = orders
+
+    if best_match:
+        print(f"  Oracle: loaded {len(best_match)} recorded orders from maps/")
+    return best_match
