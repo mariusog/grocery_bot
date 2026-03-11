@@ -29,7 +29,7 @@ class SpawnMixin(PlannerBase):
         if not counts:
             return None
 
-        spawn, count = max(counts.items(), key=lambda entry: entry[1])
+        spawn, count = max(counts.items(), key=lambda entry: (entry[1], entry[0]))
         if count >= 2:
             self.gs.spawn_origin = spawn
             return spawn
