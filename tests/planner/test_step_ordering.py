@@ -8,8 +8,7 @@ class TestStepChainStructure:
         chain = RoundPlanner._STEP_CHAIN
         clear_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_clear_dropoff")
         idle_idx = next(
-            i for i, s in enumerate(chain)
-            if s.__name__ == "_step_idle_nonactive_deliver"
+            i for i, s in enumerate(chain) if s.__name__ == "_step_idle_nonactive_deliver"
         )
         assert clear_idx < idle_idx
 
@@ -33,27 +32,48 @@ class TestStepChainStructure:
     def test_idle_positioning_is_last(self):
         assert RoundPlanner._STEP_CHAIN[-1].__name__ == "_step_idle_positioning"
 
-    def test_chain_has_21_steps(self):
-        assert len(RoundPlanner._STEP_CHAIN) == 21
+    def test_chain_has_22_steps(self):
+        assert len(RoundPlanner._STEP_CHAIN) == 22
 
     def test_all_expected_steps_present(self):
         expected = {
             "_step_spawn_dispersal",
-            "_step_preview_bot", "_step_deliver_at_dropoff",
-            "_step_deliver_completes_order", "_step_rush_deliver",
-            "_step_wave_rush_deliver", "_step_batch_b_preview",
-            "_step_opportunistic_preview", "_step_inventory_full_deliver",
-            "_step_zero_cost_delivery", "_step_early_delivery",
+            "_step_preview_bot",
+            "_step_deliver_at_dropoff",
+            "_step_deliver_completes_order",
+            "_step_rush_deliver",
+            "_step_wave_rush_deliver",
+            "_step_batch_b_preview",
+            "_step_opportunistic_preview",
+            "_step_inventory_full_deliver",
+            "_step_zero_cost_delivery",
+            "_step_early_delivery",
             "_step_endgame",
-            "_step_active_pickup", "_step_deliver_active",
-            "_step_clear_nonactive_inventory", "_step_preview_prepick",
+            "_step_active_pickup",
+            "_step_deliver_active",
+            "_step_clear_nonactive_inventory",
+            "_step_shadow_deliver",
+            "_step_preview_prepick",
             "_step_speculative_pickup",
             "_step_break_oscillation",
-            "_step_clear_dropoff", "_step_idle_nonactive_deliver",
+            "_step_clear_dropoff",
+            "_step_idle_nonactive_deliver",
             "_step_idle_positioning",
         }
         actual = {s.__name__ for s in RoundPlanner._STEP_CHAIN}
         assert actual == expected
+
+    def test_shadow_deliver_before_preview_prepick(self):
+        chain = RoundPlanner._STEP_CHAIN
+        shadow_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_shadow_deliver")
+        prepick_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_preview_prepick")
+        assert shadow_idx < prepick_idx
+
+    def test_shadow_deliver_before_clear_dropoff(self):
+        chain = RoundPlanner._STEP_CHAIN
+        shadow_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_shadow_deliver")
+        clear_idx = next(i for i, s in enumerate(chain) if s.__name__ == "_step_clear_dropoff")
+        assert shadow_idx < clear_idx
 
     def test_speculative_after_preview_prepick(self):
         chain = RoundPlanner._STEP_CHAIN
