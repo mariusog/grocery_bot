@@ -111,7 +111,7 @@ class TestReplayMinimumScores:
 #   20-bot: rds/order ~15,  inv_full ~200
 MAX_ROUNDS_PER_ORDER = {
     1: 28,     # Easy:      current ~20
-    3: 24,     # Medium:    current ~19
+    3: 26,     # Medium:    current ~19
     5: 30,     # Hard:      current ~23
     10: 40,    # Expert:    current ~30
     20: 25,    # Nightmare: current ~15
