@@ -123,8 +123,8 @@ class TestSpeculativePickup:
         result = planner._step_speculative_pickup(ctx)
         assert result is False, "Should not fill last slot with speculative"
 
-    def test_last_slot_guard_skipped_for_small_teams(self):
-        """Teams < 15 should still speculate even on last slot."""
+    def test_last_slot_guard_blocks_large_teams(self):
+        """Teams >= 8 should reserve last slot for active items."""
         bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
         bots[0]["inventory"] = ["bread", "butter"]  # 2/3, 1 free
         planner = make_planner(
@@ -143,8 +143,8 @@ class TestSpeculativePickup:
         planner._spec_types_claimed = set()
         ctx = planner._build_bot_context(planner.bots[0])
         result = planner._step_speculative_pickup(ctx)
-        # 10-bot team should NOT be blocked by the 15+ guard
-        assert result is True
+        # 10-bot team should be blocked by the 8+ guard (last slot reserved)
+        assert result is False
 
     def test_speculative_allowed_with_two_free_slots(self):
         """Allow speculative pickup when bot has 2+ free slots on huge teams."""

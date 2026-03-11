@@ -86,6 +86,7 @@ class TeamConfig:
     prefer_preview_spec: bool  # prefer preview-needed types in speculative pickup
     reserve_last_slot_for_spec: bool  # keep 1 slot free for active when speculating
     use_multi_preview_bots: bool  # allow multiple simultaneous preview bots
+    reserve_unassigned_slot: bool  # unassigned bots reserve 1 slot for active items
 
     # --- Methods for runtime-dependent values ---
 
@@ -199,6 +200,7 @@ def get_team_config(num_bots: int) -> TeamConfig:
         use_spawn_dispersal=num_bots >= 10,
         use_idle_shelf_targeting=num_bots >= 3,
         prefer_preview_spec=num_bots < 16,
-        reserve_last_slot_for_spec=num_bots >= 15,
+        reserve_last_slot_for_spec=num_bots >= 8,
         use_multi_preview_bots=num_bots >= 5,
+        reserve_unassigned_slot=8 <= num_bots < 15,
     )

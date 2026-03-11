@@ -282,6 +282,9 @@ class RoundPlanner(
         if bid >= 0 and len(self.bots) >= 2 and hasattr(self, "bot_assignments"):
             my_assigned = len(self.bot_assignments.get(bid, []))
             reserve = min(self.active_on_shelves, my_assigned)
+            # Expert-range teams (8-14): unassigned bots reserve 1 slot
+            if self.cfg.reserve_unassigned_slot and my_assigned == 0 and self.active_on_shelves > 0:
+                reserve = max(reserve, 1)
         else:
             reserve = self.active_on_shelves
         return (MAX_INVENTORY - len(inv)) - reserve
