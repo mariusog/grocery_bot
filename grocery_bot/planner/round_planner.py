@@ -180,6 +180,9 @@ class RoundPlanner(
         self.batch_b_bots: set[int] = set()
         self.active_types: set[str] = set(self.active_needed.keys())
         self.order_nearly_complete: bool = 0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
+        # Oracle: needs for orders beyond preview (N+2..N+3)
+        self.oracle_needs: dict[str, int] = {}
+        self._compute_oracle_needs()
         idle_bots = sum(1 for bot in self.bots if not self._is_delivering(bot))
         total = self.active_on_shelves
         self.max_claim: int = (
@@ -288,6 +291,20 @@ class RoundPlanner(
         else:
             reserve = self.active_on_shelves
         return (MAX_INVENTORY - len(inv)) - reserve
+
+    def _compute_oracle_needs(self) -> None:
+        """Compute item needs for future orders N+2..N+3 from oracle knowledge."""
+        if not self.gs.future_orders:
+            return
+        idx = self.gs._demand_order_idx
+        if idx < 0:
+            return
+        for off in range(2, 4):
+            oidx = idx + off
+            if oidx >= len(self.gs.future_orders):
+                break
+            for t in self.gs.future_orders[oidx].get("items_required", []):
+                self.oracle_needs[t] = self.oracle_needs.get(t, 0) + 1
 
     def _claim(self, item: dict[str, Any], needed_dict: dict[str, int]) -> None:
         self.claimed.add(item["id"])
