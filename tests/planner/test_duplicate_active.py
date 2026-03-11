@@ -80,7 +80,7 @@ class TestMatchingItemsSkipThrottle:
         p = _planner(bots, [], [_order(["yogurt", "pasta", "cheese"])])
         assert p.active_on_shelves == 0
 
-        p._nonactive_delivering = 1  # throttle consumed
+        p._nonactive_delivering = p.cfg.max_nonactive_deliverers  # throttle consumed
         ctx = p._build_bot_context(p.bots_by_id[2])
         result = p._step_idle_nonactive_deliver(ctx)
         assert result is False, (

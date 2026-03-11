@@ -160,7 +160,7 @@ def get_team_config(num_bots: int) -> TeamConfig:
         max_nonactive = max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
     elif num_bots >= 5:
         max_concurrent = 2
-        max_nonactive = MAX_NONACTIVE_DELIVERERS
+        max_nonactive = 2
     else:
         max_concurrent = MAX_CONCURRENT_DELIVERERS
         max_nonactive = MAX_NONACTIVE_DELIVERERS

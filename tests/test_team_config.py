@@ -40,7 +40,7 @@ class TestMediumTeam:
         assert cfg.use_dropoff_weight is True
         assert cfg.preview_stage_weight == 0.5
         assert cfg.max_concurrent_deliverers == 2
-        assert cfg.max_nonactive_deliverers == 1
+        assert cfg.max_nonactive_deliverers == 2
 
 
 class TestLargeTeam:
