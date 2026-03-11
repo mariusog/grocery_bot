@@ -73,21 +73,15 @@ Status: `open` | `in-progress` | `done` | `blocked`
   3. Start with generous thresholds (current values + 20% headroom), then tighten as T59/T60/T43 land improvements.
 - **Why**: Each optimization task (T59, T60, T43) can then tighten these thresholds as proof of progress, and any regression is caught automatically.
 
-### T59: Wire `_should_deliver_early()` for Small Teams
-- **Status**: open
-- **Priority**: 1 (highest impact for Medium/Hard)
-- **Difficulty**: Easy (1-2 hours)
-- **Files**: `grocery_bot/planner/steps.py`
-- **Root cause**: `_should_deliver_early()` in `delivery.py` is dead code. On 3-5 bot teams, bots with 1 active item walk to far items when delivering immediately would be cheaper. This inflates rounds-per-order.
-- **How to fix**: In `_step_deliver_active`, before the `d_to_drop <= DELIVER_WHEN_CLOSE_DIST` check, add early delivery gated on `self.cfg.enable_early_delivery`:
-  ```python
-  if self.cfg.enable_early_delivery and self._should_deliver_early(ctx.pos, ctx.inv):
-      self._emit_delivery_move_or_wait(...)
-      return True
-  ```
-- **Gate**: `cfg.enable_early_delivery` is True for 4 ≤ num_bots < 8 (T33 showed it regresses Expert).
-- **Expected gain**: +5-10 Medium, +5-10 Hard.
-- **TDD**: Write test that verifies early delivery triggers for 3-bot team when cost comparison favors it. Tighten T61 rounds-per-order thresholds for 3-bot and 5-bot maps.
+### T59: ~~Wire `_should_deliver_early()` for Small Teams~~ (resolved — not dead code)
+- **Status**: done (no code change needed)
+- **Priority**: was 1
+- **Investigation result**: `_should_deliver_early()` is NOT dead code. It IS wired into the step chain via `_step_early_delivery` at position 6. On the Hard replay map (5 bots, 22x14), it is called 206 times and triggers delivery 19 times. Tested 4 variants:
+  - Current (-2 slack): score=124, orders=13
+  - Disabled: score=123, orders=13 (-1 point)
+  - No slack (0): score=123, orders=13
+  - Always deliver: score=121, orders=13 (-3 points)
+- **Conclusion**: The function works correctly. The `-2` slack is appropriate — relaxing it doesn't help, and always-deliver is harmful. Impact is +1 point on Hard. The real bottleneck is non-active inventory clogging (T60), not delivery timing.
 
 ### T60: Lower Non-Active Clear Threshold for Medium Teams
 - **Status**: open
