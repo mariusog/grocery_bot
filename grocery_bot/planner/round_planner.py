@@ -82,6 +82,7 @@ class RoundPlanner(
         self.claimed: set[str] = set()
         self._yield_to: set[tuple[int, int]] = set()
         self._nonactive_delivering: int = 0
+        self._shadow_delivering: int = 0
         self._preview_walkers: int = 0
         self._speculative_pickers: int = 0
         self._spec_types_claimed: set[str] = set()
@@ -311,6 +312,7 @@ RoundPlanner._STEP_CHAIN = [
     RoundPlanner._step_active_pickup,
     RoundPlanner._step_deliver_active,
     RoundPlanner._step_clear_nonactive_inventory,
+    RoundPlanner._step_shadow_deliver,
     RoundPlanner._step_preview_prepick,
     RoundPlanner._step_speculative_pickup,
     RoundPlanner._step_break_oscillation,

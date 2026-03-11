@@ -61,6 +61,7 @@ class PlannerBase:
     claimed: set[str]
     _yield_to: set[tuple[int, int]]
     _nonactive_delivering: int
+    _shadow_delivering: int
     _preview_walkers: int
     _speculative_pickers: int
     _spec_types_claimed: set[str]
@@ -78,8 +79,8 @@ class PlannerBase:
     active_needed: dict[str, int]
     net_active: dict[str, int]
     net_preview: dict[str, int]
-    preview_types: set[str]       # all types the preview order needs
-    preview_order_total: int      # total items the preview order needs
+    preview_types: set[str]  # all types the preview order needs
+    preview_order_total: int  # total items the preview order needs
     bot_carried_active: dict[int, dict[str, int]]
     bot_has_active: dict[int, bool]
     active_on_shelves: int

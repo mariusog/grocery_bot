@@ -5,6 +5,7 @@ from typing import Any
 from grocery_bot.constants import (
     CASCADE_DETOUR_STEPS,
     DELIVER_WHEN_CLOSE_DIST,
+    DROPOFF_CLEAR_RADIUS,
     MAX_DETOUR_STEPS,
     MAX_INVENTORY,
     WAVE_SYNC_THRESHOLD,
@@ -266,6 +267,43 @@ class StepsMixin(PlannerBase):
             return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
+        self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
+        return True
+
+    def _step_shadow_deliver(self, ctx: Any) -> bool:
+        """Shadow-deliver: route a preview-carrying bot toward the dropoff when active items are
+        in-flight and the bot is FAR from the dropoff.
+
+        Fires when active_on_shelves==0 (all active items carried by deliverers) and this bot
+        carries only preview items.  Reduces oscillation for bots far from the dropoff by
+        routing them back toward it instead of letting _step_preview_prepick send them further
+        away to pick up more preview items.
+
+        Only fires at d > DROPOFF_CLEAR_RADIUS to avoid interfering with the approach zone.
+        At d <= DROPOFF_CLEAR_RADIUS the bot falls through — existing clear/idle steps manage
+        close-range behavior, and letting the bot leave via preview_prepick unblocks active
+        deliverers approaching through the same corridor.
+        Capped at 1 staging bot to prevent multiple bots converging on the dropoff.
+        """
+        if self.cfg.use_predictions:
+            return False
+        if self.active_on_shelves > 0:
+            return False
+        if not ctx.inv or ctx.has_active:
+            return False
+        if not self.preview:
+            return False
+        if not any(t in self.preview_types for t in ctx.inv):
+            return False
+        nd = self._nearest_dropoff(ctx.pos)
+        d = self.gs.dist_static(ctx.pos, nd)
+        # Within approach zone or at dropoff: fall through to avoid approach-path deadlocks.
+        if d <= DROPOFF_CLEAR_RADIUS:
+            return False
+        # Cap: only 1 staging bot routing toward dropoff at a time.
+        if self._shadow_delivering >= 1:
+            return False
+        self._shadow_delivering += 1
         self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
         return True
 
