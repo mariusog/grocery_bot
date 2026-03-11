@@ -10,6 +10,7 @@ from grocery_bot.constants import (
     IDLE_DROPOFF_PENALTY_RADIUS,
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
     IDLE_STAY_TEAM_SCALE,
+    IDLE_TARGET_DISTANCE_WEIGHT,
 )
 from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.planner._base import PlannerBase
@@ -230,6 +231,16 @@ class IdleMixin(PlannerBase):
         )
 
         target_weight = self.cfg.target_attraction_weight
+
+        # Stale empty-inventory bots on huge teams (15+): add item centroid
+        # attraction to pull them out of dead zones
+        inv = self.bots_by_id[bid]["inventory"]
+        if is_stale and not inv and target_weight == 0.0 and self.cfg.num_bots >= 15 and self.items:
+            item_positions = [tuple(it["position"]) for it in self.items]
+            cx = sum(p[0] for p in item_positions) // len(item_positions)
+            cy = sum(p[1] for p in item_positions) // len(item_positions)
+            item_target = (cx, cy)
+            target_weight = IDLE_TARGET_DISTANCE_WEIGHT
 
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
