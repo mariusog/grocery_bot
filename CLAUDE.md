@@ -15,6 +15,86 @@
 | **Constants file** | `grocery_bot/constants.py` | All magic numbers and tuning parameters. |
 | **Test fixtures** | `tests/conftest.py` | Shared factories and setup/teardown. |
 
+## Game Rules
+
+This bot competes in the NM i AI 2026 warm-up challenge. Understanding these rules is **mandatory** before writing any game logic.
+
+### Overview
+
+Control a swarm of workers in a procedurally generated grocery store via WebSocket. Bots navigate a grid, pick items from shelves, and deliver them to drop-off zones to fulfill sequential orders. **Goal: maximize score within the round limit.**
+
+### Difficulty Levels
+
+| Level | Grid | Bots | Aisles | Item Types | Order Size | Drop Zones | Rounds |
+|-------|------|------|--------|------------|------------|------------|--------|
+| Easy | 12x10 | 1 | 2 | 4 | 3-4 | 1 | 300 |
+| Medium | 16x12 | 3 | 3 | 8 | 3-5 | 1 | 300 |
+| Hard | 22x14 | 5 | 4 | 12 | 3-5 | 1 | 300 |
+| Expert | 28x18 | 10 | 5 | 16 | 4-6 | 1 | 300 |
+| Nightmare | 30x18 | 20 | 6 | 21 | 4-7 | 3 | 500 |
+
+One map per difficulty. Item placement and orders change daily -- same day, same game (**deterministic**).
+
+### Scoring
+
+| Event | Points |
+|-------|--------|
+| Item delivered | +1 |
+| Order completed | +5 bonus |
+
+Leaderboard score = sum of best score on each of the 5 maps.
+
+### Sequential Orders (CRITICAL)
+
+- **Active order** -- the current order. You can deliver items for it.
+- **Preview order** -- the next order. Visible but you **cannot deliver to it yet**. You can pre-pick items.
+- **Infinite** -- when you complete an order, a new one appears. Orders never run out. Rounds are the only limit.
+- Only 2 orders visible at a time (active + preview).
+
+### Actions (one per bot per round)
+
+| Action | Description |
+|--------|-------------|
+| `move_up/down/left/right` | Move one cell in that direction |
+| `pick_up` (+ `item_id`) | Pick up item from adjacent shelf (Manhattan distance 1) |
+| `drop_off` | Deliver matching items at drop-off zone |
+| `wait` | Do nothing |
+
+**Invalid actions are treated as `wait`** (no penalty, but wastes a round).
+
+### Pickup Rules
+
+- Bot must be **adjacent** (Manhattan distance 1) to the shelf with the item
+- Bot inventory must not be full (**max 3 items**)
+- `item_id` must match an item on the map
+
+### Dropoff Rules (CRITICAL -- most common source of bugs)
+
+- Bot must be **standing on** the drop-off cell
+- **Only items matching the active order are delivered** -- non-matching items stay in inventory
+- When an order completes, the next order activates and remaining items are **re-checked against the new active order**
+- Multiple drop-off zones (Nightmare has 3) are interchangeable
+
+### Constraints
+
+- **300 rounds** max per game (500 Nightmare), **120 seconds** wall-clock (300s Nightmare)
+- **3 items** per bot inventory
+- **Collision** -- bots block each other (no two on same tile, except spawn)
+- **Full visibility** -- entire map visible every round
+- **2-second timeout** per round for response
+- Disconnect = game over (no reconnect)
+
+### Coordinate System
+
+- Origin (0, 0) is top-left
+- X increases right, Y increases down
+
+### Oracle Knowledge
+
+Games are **deterministic per day** -- same map, same order sequence. Each game has 50 orders (500 on Nightmare) but only 2 are visible at a time (active + preview). **New orders are only revealed by completing orders** -- completing order N promotes the preview to active and reveals order N+2 as the new preview. So faster completion = more orders discovered per run.
+
+We record every order seen during live play and save to `maps/` directory. Across multiple runs on the same day, we accumulate the full order sequence. On subsequent runs, `bot.py` loads matching recorded orders on round 0, giving the planner knowledge of future orders beyond the 2 visible ones. This creates an **improve loop**: play -> record orders -> optimize with knowledge -> play faster -> record MORE orders -> repeat.
+
 ## AI Agent Ground Rules
 
 Read this section FIRST. These rules save you from wasting tokens and making common mistakes.
