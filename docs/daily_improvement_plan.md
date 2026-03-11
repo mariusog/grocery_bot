@@ -1,153 +1,170 @@
-# Daily Map Improvement Plan (2026-03-11)
+# Improvement Plan (2026-03-11 v2)
 
-## Current Live Scores
+## Key Insight
 
-| Difficulty | Score | Orders | Rounds/Order | Items |
-|-----------|-------|--------|-------------|-------|
-| Easy | 133 | 16 | 18.8 | 53 |
-| Medium | 173 | 19 | 15.8 | 78 |
-| Hard | 115 | 12 | 25.0 | 55 |
-| Expert | 114 | 11 | 27.3 | 59 |
-| Nightmare | 326 | 30 | 16.7 | 176 |
-| **Total** | **861** | | | |
+We already score the **theoretical maximum** for every order we complete:
+score = (completed_orders × 5) + items_delivered. The ONLY way to gain
+points is to **complete more orders**, which means completing each order
+faster so more fit in 300/500 rounds.
 
-## Diagnosis: Medium (3 bots, 16x12, 300 rounds)
+## Current Simulator Scores (recorded maps)
 
-### M1 — Scoring gaps from long delivery walks (113 wasted rounds)
-Five gaps of 20-26 rounds each where no points are scored. Root cause: all 3 bots are
-either walking to the dropoff or walking to distant items simultaneously. No bot is
-actively near items while others deliver.
+| Diff | Bots | Score | Done | Recorded | Missed | Avg rds/order | O1 time | Potential |
+|------|------|-------|------|----------|--------|---------------|---------|-----------|
+| Easy | 1 | 133 | 16 | 18 | 2 | 16.5 | 25 | +16 |
+| Medium | 3 | 148 | 16 | 20 | 4 | 17.4 | 25 | +36 |
+| Hard | 5 | 135 | 14 | 14 | 0 | 20.3 | 40 | 0 |
+| Expert | 10 | 124 | 12 | 13 | 1 | 22.8 | 70 | +9 |
+| Nightmare | 20 | 327 | 30 | 32 | 2 | 16.1 | 52 | +18 |
+| **Total** | | **867** | **88** | **97** | **9** | | | **+79** |
 
-**Evidence**: R33-R59 gap — B0 walks 8 rounds to deliver [milk,yogurt,yogurt], B2 walks
-8 rounds to deliver [eggs,pasta,cheese], B1 has [pasta,pasta,pasta] and oscillates near
-the dropoff waiting for its turn. All 3 bots converge on dropoff simultaneously.
+Hard is already perfect (14/14). The gains are in Medium (+36), Nightmare
+(+18), Easy (+16), and Expert (+9).
 
-**Impact**: ~113 rounds with no scoring = ~38% of the game.
+## Root Cause: Opening Round Waste
 
-### M2 — Oscillation near dropoff (R156, 6-7 rounds)
-Bots 0 and 2 oscillate at R156 for 6-7 rounds. B0 @(4,9) moves left, B2 @(4,3) moves
-down — they're heading to dropoff but getting bounced. B1 is the active deliverer at
-(1,5) heading down with [cheese,butter,butter].
+The single biggest bottleneck across ALL maps is the first order. Evidence:
 
-**Root cause**: B0 has [yogurt] (preview) and is being routed by `_step_preview_prepick`
-away then pulled back by `_step_shadow_deliver`, creating oscillation.
+- **Expert O1 takes 70 rounds** (23% of the entire 300-round game)
+- **Nightmare O1 takes 52 rounds** (10% of 500 rounds, with 20 bots!)
+- **Hard O1 takes 40 rounds** (13% of 300 rounds)
+- Every subsequent order averages 15-20 rounds
 
-### M3 — Late-game oscillation (R284-298, 14 rounds)
-B0 oscillates between (4,9)-(3,9)-(4,9) for 14 rounds at the end. Score stuck at 165
-from R282. B2 carries [butter,butter,cheese] heading to dropoff = 8 points on the last
-round. B0 has [milk] and oscillates instead of delivering or pre-picking.
+Why O1 is so slow:
+1. All bots spawn at ONE cell (bottom-right corner)
+2. Only 1-2 bots can move per round (rest blocked by each other)
+3. Spawn is 19-27 cells from the dropoff (opposite corners)
+4. No spawn dispersal for teams < 10 bots
 
-**Impact**: Lost ~1 order (8+ points) from endgame wasted motion.
+**On Expert R0: 8 of 10 bots WAIT doing nothing.** On Nightmare R0: 18 of
+20 bots WAIT. This is pure waste.
 
----
+## Improvement Tasks
 
-## Diagnosis: Hard (5 bots, 22x14, 300 rounds)
+### T1: Enable spawn dispersal for 3+ bot teams
+**Target**: Medium, Hard, Expert | **Mechanism**: change threshold
 
-### H1 — Full inventory waits (24+11+9+5 = 49 bot-rounds)
-Bot 4 waits 24 rounds with full inventory [oats,butter,rice] — none are active items.
-The `_step_clear_nonactive_inventory` throttle (`max_nonactive_deliverers`) limits to 1
-bot delivering non-active items. With 5 bots, multiple bots clog up waiting.
+Currently `use_spawn_dispersal` requires `num_bots >= 10`. Medium (3 bots)
+and Hard (5 bots) have no dispersal — bots stack at spawn and trickle out
+one per round. On Hard, this means R0-R3 has 3 of 5 bots doing nothing.
 
-Bot 2 waits 11 rounds, Bot 3 waits 9 rounds, Bot 0 waits 5 rounds — all with full
-inventories of non-active items blocking active item pickup.
+**Change**: Lower `use_spawn_dispersal` threshold from 10 to 3.
 
-### H2 — Multi-bot oscillation storms (R210: 12+11 rounds, R245+R255: 7+7 rounds)
-At R210, Bots 0 and 3 oscillate for 11-12 rounds simultaneously. At R245 and R255,
-Bot 1 oscillates for 7 rounds each time.
+**Files**: `grocery_bot/team_config.py` (line 199)
 
-**Root cause**: When `active_on_shelves` is low (1-2 items), multiple bots compete for
-the same item. They route toward it, find another bot closer, re-route away, then
-re-route back next round.
+**Benchmark**: Compare O1 completion time before/after. Target: -5 rounds
+on Hard O1 (40→35), -3 rounds on Medium O1 (25→22).
 
-### H3 — Dropoff congestion with 5 bots (R38-R46)
-Bot 4 picks up 3 items by R28, then spends R29-R46 (17 rounds!) navigating toward the
-dropoff through congestion. Bot 3 has a similar pattern — picks up by R28, doesn't
-deliver until R57+. The dropoff (1,12) is in a corner, creating a single-lane bottleneck.
+**Go/revert**: Keep if total score >= 867 AND no map drops > 5 points.
 
-### H4 — Endgame failure (R298-299)
-At R299: B2 has [eggs,eggs,eggs], B3 has [pasta,cream], B4 has [oats,flour]. Active
-order needs [eggs:1]. B2 is at (1,7) heading to dropoff at (1,12) = 5 rounds away.
-Game ends before delivery. Better endgame detection could have prioritized B2's rush.
+### T2: Reduce first-order time by skipping preview work until O1 completes
+**Target**: All maps | **Mechanism**: step chain guard
 
----
+During O1, bots waste rounds picking up preview items and doing speculative
+work instead of focusing 100% on active items. Evidence:
 
-## Improvement Tasks (Priority Order)
+- Medium R2: B0 picks up pasta (active) but B2 walks LEFT away from items
+- Hard R0-R5: B1/B2/B4 wait at spawn while B0/B3 disperse, then some bots
+  pick preview items before finishing O1
+- Expert: 10 bots, only ~3 work on O1's 5 items, rest speculate
 
-### P1: Raise non-active clearing throttle for medium teams
-**Target**: Medium M1, Hard H1 | **Est. impact**: +10-15 points each
+**Change**: In `_step_opportunistic_preview`, `_step_preview_prepick`, and
+`_step_speculative_pickup`: skip if `current_round <= first_order_deadline`
+where `first_order_deadline = items_in_first_order * 8` (heuristic: ~8
+rounds per item for first order).
 
-The `max_nonactive_deliverers` cap is too low for 3-5 bot teams. When all bots have
-non-active inventory, only 1 can deliver while the rest wait idle. For 3-bot teams,
-allow 2 simultaneous non-active deliverers. For 5-bot teams, allow 2-3.
+**Files**: `grocery_bot/planner/steps.py` (3 step methods)
 
-**Files**: `grocery_bot/team_config.py` (adjust `max_nonactive_deliverers` per team size)
+**Benchmark**: Compare O1 time and total orders across all maps.
 
-### P2: Fix oscillation when active_on_shelves is low
-**Target**: Medium M2/M3, Hard H2 | **Est. impact**: +8-12 points each
+**Go/revert**: Keep if total score >= 867. Revert if Medium or Nightmare
+drop > 5 points (they rely on preview prepicking).
 
-When `active_on_shelves <= 2`, multiple bots route toward the same remaining items and
-oscillate. Fix: when `active_on_shelves` is low and the bot has NO assignment for the
-remaining items, it should prefer delivering or pre-picking preview items instead of
-oscillating toward an item another bot is closer to.
+### T3: Faster spawn exit — pick any adjacent item immediately
+**Target**: All multi-bot maps | **Mechanism**: pickup step
 
-**Files**: `grocery_bot/planner/steps.py` (add low-active-on-shelves guard to
-`_step_active_pickup` or add a new step), `grocery_bot/planner/pickup.py`
+When bots are stacked at spawn, they wait for space to move. But if there's
+an item adjacent to the spawn cell, ANY bot could pick it up instead of
+waiting. Currently `_step_active_pickup` requires net_active > 0 for the
+item type, which is true — but the bot might not have an assignment and
+the greedy route fails because it's blocked.
 
-### P3: Stagger delivery timing to maintain continuous scoring
-**Target**: Medium M1 | **Est. impact**: +5-8 points
+**Change**: In the first N rounds (while bots are still stacked at spawn),
+allow any bot to pick up any adjacent item regardless of assignment. This
+turns idle wait rounds into productive pickup rounds.
 
-All 3 bots converge on the dropoff simultaneously, creating 20-26 round gaps. If one
-bot delivers while others pick, scoring is continuous. The `_step_deliver_active` detour
-logic exists but doesn't trigger often enough for 3-bot teams.
+**Files**: `grocery_bot/planner/steps.py` (new early-round guard in
+`_step_active_pickup`)
 
-**Files**: `grocery_bot/planner/steps.py` (`_step_deliver_active`),
-`grocery_bot/planner/delivery.py`
+**Benchmark**: Check if bots pick items earlier in R0-R5.
 
-### P4: Improve endgame rush for last-order completion
-**Target**: Medium M3, Hard H4 | **Est. impact**: +5-8 points each
+**Go/revert**: Keep if total >= 867 and O1 time improves by >= 2 rounds.
 
-At R282+ (Medium) and R295+ (Hard), bots oscillate or pick up unnecessary items instead
-of rushing the final delivery. The `_step_endgame` fires at `ENDGAME_ROUNDS_LEFT` but
-may not be aggressive enough about dropping everything to deliver.
+### T4: Fix Nightmare idle bots (B18/B19 do almost nothing)
+**Target**: Nightmare | **Mechanism**: role rebalancing
 
-**Files**: `grocery_bot/planner/steps.py` (`_step_endgame`),
-`grocery_bot/constants.py` (`ENDGAME_ROUNDS_LEFT`)
+On the Nightmare map, bot distribution is wildly unbalanced:
+- B0: 17 pickups, B6: 5 pickups, B16: 3, B18: 3, B19: 1 pickup
+- B19 idles 91 consecutive rounds (R270-R360), then 80 more (R178-R257)
+- B18 has 22% utilization (78% idle)
 
-### P5: Reduce dropoff congestion for corner dropoffs
-**Target**: Hard H3 | **Est. impact**: +3-5 points
+These bots are assigned to dead zones with no items. They walk to corners
+and starve. With 20 bots, having 2-3 completely idle costs ~20 points.
 
-Corner dropoffs (1,12) have only 2 approach cells. With 5 bots, this creates a
-permanent bottleneck. Better spread of delivery timing (P3) partially helps, but the
-`_try_clear_dropoff` radius may need to be more aggressive at evicting idle bots from
-the approach corridor.
+**Change**: Add an idle-timeout mechanism — if a bot has been idle for
+>= 15 rounds, reassign it to a zone with active items. Implementation:
+track `rounds_since_last_pickup` per bot, force re-routing when threshold
+exceeded.
 
-**Files**: `grocery_bot/planner/idle.py` (`_try_clear_dropoff`),
-`grocery_bot/constants.py` (`DROPOFF_CLEAR_RADIUS`)
+**Files**: `grocery_bot/planner/idle.py` (new method),
+`grocery_bot/planner/steps.py` (new step or guard)
 
----
+**Benchmark**: Check B18/B19 utilization rises from 22-26% to >= 50%.
 
-## Scoring Targets
+**Go/revert**: Keep if Nightmare >= 327 and idle bot pickups increase.
 
-| Difficulty | Current | Target | Delta | Key Tasks |
-|-----------|---------|--------|-------|-----------|
-| Medium | 173 | 190+ | +17 | P1, P2, P3, P4 |
-| Hard | 115 | 135+ | +20 | P1, P2, P4, P5 |
-| Expert | 114 | 125+ | +11 | Benefits from P1, P2 |
-| Nightmare | 326 | 340+ | +14 | Benefits from P1 |
-| **Total** | **861** | **923+** | **+62** | |
+### T5: Deliver non-active items at dropoff for free points
+**Target**: Expert, Nightmare | **Mechanism**: step guard
+
+Bots that arrive at the dropoff with non-active items currently walk away
+without delivering. Each item is worth +1 point. Delivering costs 1 round
+(the drop_off action) which is cheap when already at the cell.
+
+BUT: naive "deliver any items at dropoff" caused -100 regression in testing
+because bots CHOSE to go to dropoff to deliver junk instead of picking
+active items.
+
+**Change**: Only deliver non-active items IF the bot is already AT the
+dropoff (distance == 0) AND has no active assignment. This is truly free —
+the bot was there anyway and has nothing better to do.
+
+**Files**: `grocery_bot/planner/steps.py` (`_step_deliver_at_dropoff`)
+
+**Benchmark**: Check for score gain without regression.
+
+**Go/revert**: Keep if total >= 867 and no map drops > 2 points.
 
 ## Implementation Order
 
-1. **P1** first — simplest change (config tuning), biggest bang for buck
-2. **P2** next — fixes the most common problem across both Medium and Hard
-3. **P4** then — endgame points are "free" once detected properly
-4. **P3** and **P5** last — more architectural, may need careful testing
+1. **T5** first — smallest change, safest, potentially free points
+2. **T1** next — simple config change, enables faster starts
+3. **T2** then — focused first-order improvement
+4. **T3** after — complements T1/T2 for opening efficiency
+5. **T4** last — most complex, Nightmare-only
 
 ## Verification Protocol
 
 After each change:
 1. `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20`
 2. `python benchmark.py --diagnostics` (replay maps)
-3. `cat docs/benchmark_results.md` — check no regression
-4. `python analyze_replay.py <medium-log> --problems` — verify problem count reduced
-5. `python analyze_replay.py <hard-log> --problems` — verify problem count reduced
+3. Compare total score (must be >= 867)
+4. Compare O1 completion round per map
+5. If score drops on ANY map by > 5, revert immediately
+
+## What NOT To Do (learned from v1 failures)
+
+- Do NOT raise `max_nonactive_deliverers` for 8+ bots (causes dropoff gridlock)
+- Do NOT skip `_step_active_pickup` for unassigned bots (starves item pickup)
+- Do NOT deliver non-active items by routing bots TO the dropoff (wastes rounds)
+- Do NOT move `_step_break_oscillation` earlier in the chain (large-team regression)
+- Do NOT lower `nonactive_clear_min_inv` for medium teams (tested: -95 regression)
