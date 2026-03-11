@@ -634,6 +634,81 @@
       ]
     },
     {
+      "id": "order_2",
+      "items_required": [
+        "yogurt",
+        "cheese",
+        "bread",
+        "yogurt",
+        "butter"
+      ]
+    },
+    {
+      "id": "order_3",
+      "items_required": [
+        "pasta",
+        "cream",
+        "milk"
+      ]
+    },
+    {
+      "id": "order_4",
+      "items_required": [
+        "yogurt",
+        "cheese",
+        "cream"
+      ]
+    },
+    {
+      "id": "order_5",
+      "items_required": [
+        "butter",
+        "eggs",
+        "milk",
+        "yogurt"
+      ]
+    },
+    {
+      "id": "order_6",
+      "items_required": [
+        "pasta",
+        "bread",
+        "pasta",
+        "cheese",
+        "bread"
+      ]
+    },
+    {
+      "id": "order_7",
+      "items_required": [
+        "cream",
+        "pasta",
+        "pasta",
+        "butter",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_8",
+      "items_required": [
+        "cheese",
+        "cream",
+        "bread",
+        "cheese",
+        "cream"
+      ]
+    },
+    {
+      "id": "order_9",
+      "items_required": [
+        "cheese",
+        "cheese",
+        "bread",
+        "eggs",
+        "cream"
+      ]
+    },
+    {
       "id": "order_10",
       "items_required": [
         "yogurt",
@@ -708,81 +783,6 @@
         "eggs",
         "cheese",
         "eggs"
-      ]
-    },
-    {
-      "id": "order_2",
-      "items_required": [
-        "yogurt",
-        "cheese",
-        "bread",
-        "yogurt",
-        "butter"
-      ]
-    },
-    {
-      "id": "order_3",
-      "items_required": [
-        "pasta",
-        "cream",
-        "milk"
-      ]
-    },
-    {
-      "id": "order_4",
-      "items_required": [
-        "yogurt",
-        "cheese",
-        "cream"
-      ]
-    },
-    {
-      "id": "order_5",
-      "items_required": [
-        "butter",
-        "eggs",
-        "milk",
-        "yogurt"
-      ]
-    },
-    {
-      "id": "order_6",
-      "items_required": [
-        "pasta",
-        "bread",
-        "pasta",
-        "cheese",
-        "bread"
-      ]
-    },
-    {
-      "id": "order_7",
-      "items_required": [
-        "cream",
-        "pasta",
-        "pasta",
-        "butter",
-        "eggs"
-      ]
-    },
-    {
-      "id": "order_8",
-      "items_required": [
-        "cheese",
-        "cream",
-        "bread",
-        "cheese",
-        "cream"
-      ]
-    },
-    {
-      "id": "order_9",
-      "items_required": [
-        "cheese",
-        "cheese",
-        "bread",
-        "eggs",
-        "cream"
       ]
     }
   ]

@@ -1643,45 +1643,6 @@
       ]
     },
     {
-      "id": "order_10",
-      "items_required": [
-        "flour",
-        "milk",
-        "pasta",
-        "tomatoes"
-      ]
-    },
-    {
-      "id": "order_11",
-      "items_required": [
-        "bananas",
-        "bananas",
-        "milk",
-        "cereal",
-        "butter",
-        "flour"
-      ]
-    },
-    {
-      "id": "order_12",
-      "items_required": [
-        "cheese",
-        "bananas",
-        "milk",
-        "cereal",
-        "flour"
-      ]
-    },
-    {
-      "id": "order_13",
-      "items_required": [
-        "cream",
-        "apples",
-        "cream",
-        "onions"
-      ]
-    },
-    {
       "id": "order_2",
       "items_required": [
         "bananas",
@@ -1755,6 +1716,45 @@
         "oats",
         "pasta",
         "oats"
+      ]
+    },
+    {
+      "id": "order_10",
+      "items_required": [
+        "flour",
+        "milk",
+        "pasta",
+        "tomatoes"
+      ]
+    },
+    {
+      "id": "order_11",
+      "items_required": [
+        "bananas",
+        "bananas",
+        "milk",
+        "cereal",
+        "butter",
+        "flour"
+      ]
+    },
+    {
+      "id": "order_12",
+      "items_required": [
+        "cheese",
+        "bananas",
+        "milk",
+        "cereal",
+        "flour"
+      ]
+    },
+    {
+      "id": "order_13",
+      "items_required": [
+        "cream",
+        "apples",
+        "cream",
+        "onions"
       ]
     }
   ]
