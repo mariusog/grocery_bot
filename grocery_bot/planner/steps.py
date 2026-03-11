@@ -186,6 +186,10 @@ class StepsMixin(PlannerBase):
                 ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked
             ):
                 return True
+        # Non-active inventory: deliver for +1/item in late endgame only
+        if not ctx.has_active and self.rounds_left <= 15 and d + 1 < self.rounds_left:
+            self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
+            return True
         return False
 
     def _step_batch_b_preview(self, ctx: Any) -> bool:
