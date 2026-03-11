@@ -123,34 +123,12 @@ exceeded.
 
 **Go/revert**: Keep if Nightmare >= 327 and idle bot pickups increase.
 
-### T5: Deliver non-active items at dropoff for free points
-**Target**: Expert, Nightmare | **Mechanism**: step guard
-
-Bots that arrive at the dropoff with non-active items currently walk away
-without delivering. Each item is worth +1 point. Delivering costs 1 round
-(the drop_off action) which is cheap when already at the cell.
-
-BUT: naive "deliver any items at dropoff" caused -100 regression in testing
-because bots CHOSE to go to dropoff to deliver junk instead of picking
-active items.
-
-**Change**: Only deliver non-active items IF the bot is already AT the
-dropoff (distance == 0) AND has no active assignment. This is truly free —
-the bot was there anyway and has nothing better to do.
-
-**Files**: `grocery_bot/planner/steps.py` (`_step_deliver_at_dropoff`)
-
-**Benchmark**: Check for score gain without regression.
-
-**Go/revert**: Keep if total >= 867 and no map drops > 2 points.
-
 ## Implementation Order
 
-1. **T5** first — smallest change, safest, potentially free points
-2. **T1** next — simple config change, enables faster starts
-3. **T2** then — focused first-order improvement
-4. **T3** after — complements T1/T2 for opening efficiency
-5. **T4** last — most complex, Nightmare-only
+1. **T1** first — simple config change, enables faster starts
+2. **T2** next — focused first-order improvement
+3. **T3** then — complements T1/T2 for opening efficiency
+4. **T4** last — most complex, Nightmare-only
 
 ## Verification Protocol
 
@@ -163,6 +141,7 @@ After each change:
 
 ## What NOT To Do (learned from v1 failures)
 
+- Do NOT try to deliver non-active items at dropoff (game rule: only active-order items are removed)
 - Do NOT raise `max_nonactive_deliverers` for 8+ bots (causes dropoff gridlock)
 - Do NOT skip `_step_active_pickup` for unassigned bots (starves item pickup)
 - Do NOT deliver non-active items by routing bots TO the dropoff (wastes rounds)
