@@ -74,7 +74,11 @@ class StepsMixin(PlannerBase):
             queue_front = set(gs.delivery_queue[:max_deliverers])
             is_queue_front = ctx.bid in queue_front
 
-        if self.preview and len(ctx.inv) < MAX_INVENTORY:
+        nd = self._nearest_dropoff(ctx.pos)
+        d_to_drop = self.gs.dist_static(ctx.pos, nd)
+        # Skip preview detours when delivery is time-critical.
+        skip_detour = self.endgame and d_to_drop + 2 >= self.rounds_left
+        if self.preview and len(ctx.inv) < MAX_INVENTORY and not skip_detour:
             adj = self._find_adjacent_needed(ctx.bx, ctx.by, self.net_preview, prefer_cascade=True)
             if adj:
                 self._claim(adj, self.net_preview)
@@ -240,7 +244,8 @@ class StepsMixin(PlannerBase):
             return True
 
         spare = self._spare_slots(ctx.inv, ctx.bid)
-        if self.preview and spare > 0 and not self.order_nearly_complete:
+        skip_detour = self.endgame and d_to_drop + 2 >= self.rounds_left
+        if self.preview and spare > 0 and not self.order_nearly_complete and not skip_detour:
             item, cell = self._find_detour_item(ctx.pos, self.net_preview)
             if item and cell is not None:
                 self._claim(item, self.net_preview)
