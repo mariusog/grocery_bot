@@ -72,7 +72,7 @@ class GameState(
 
         # Bot history (oscillation detection)
         self.bot_history: dict[int, Any] = {}
-        self._history_gen: int | None = None
+        self._history_gen: int = 0
         self.spawn_origin: tuple[int, int] | None = None
         self.spawn_dispersal_targets: dict[int, tuple[int, int]] | None = None
 
@@ -108,7 +108,7 @@ class GameState(
         self.bot_tasks = {}
         self.last_active_order_id = None
         self.bot_history = {}
-        self._history_gen = None
+        self._history_gen = 0
         self.spawn_origin = None
         self.spawn_dispersal_targets = None
 
@@ -116,6 +116,7 @@ class GameState(
         """Compute static blocked set and caches on round 0."""
         self.dist_cache = {}
         self.adj_cache = {}
+        self._history_gen += 1
 
         walls = {tuple(w) for w in state["grid"]["walls"]}
         width: int = state["grid"]["width"]

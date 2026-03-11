@@ -53,7 +53,7 @@ class GameStateBase:
 
     # --- Bot history ---
     bot_history: dict[int, Any]
-    _history_gen: int | None
+    _history_gen: int
     spawn_origin: tuple[int, int] | None
     spawn_dispersal_targets: dict[int, tuple[int, int]] | None
 

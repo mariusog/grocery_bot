@@ -15,15 +15,6 @@ class BlacklistMixin(PlannerBase):
 
     def _init_bot_history(self) -> None:
         """Initialize or validate bot history tracking."""
-        gen = id(self.gs.dist_cache)
-        needs_reset = (
-            not hasattr(self.gs, "bot_history")
-            or not hasattr(self.gs, "_history_gen")
-            or self.gs._history_gen != gen
-        )
-        if needs_reset:
-            self.gs.bot_history = {}
-            self.gs._history_gen = gen
 
         for b in self.bots:
             bid: int = b["id"]
@@ -74,4 +65,3 @@ class BlacklistMixin(PlannerBase):
             gs.blacklisted_items.discard(item_id)
             del gs.blacklist_round[item_id]
             gs.pickup_fail_count.pop(item_id, None)
-
