@@ -217,7 +217,12 @@ class TestSpeculativePickup:
         ctx = planner._build_bot_context(planner.bots[5])
         if not ctx.has_active and len(ctx.inv) == 0:
             result = planner._try_speculative_pickup(
-                ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked,
+                ctx.bid,
+                ctx.bx,
+                ctx.by,
+                ctx.pos,
+                ctx.inv,
+                ctx.blocked,
             )
             if result:
                 # Claimed type should NOT be milk
@@ -227,8 +232,7 @@ class TestSpeculativePickup:
         """Should not exceed the per-round speculative picker limit."""
         bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
         items = [
-            {"id": f"i{j}", "type": f"type_{j}", "position": [4 + j * 2, 2]}
-            for j in range(10)
+            {"id": f"i{j}", "type": f"type_{j}", "position": [4 + j * 2, 2]} for j in range(10)
         ]
         planner = make_planner(
             bots=bots,
@@ -246,3 +250,93 @@ class TestSpeculativePickup:
         ctx = planner._build_bot_context(planner.bots[9])
         result = planner._step_speculative_pickup(ctx)
         assert result is False
+
+
+class TestOracleSpeculative:
+    """Tests for oracle-informed speculative pickup."""
+
+    def test_oracle_needs_prefers_future_items_at_same_distance(self):
+        """Oracle-needed items should be preferred as tiebreaker at same distance."""
+        planner = _make_large_team(
+            10,
+            items=[
+                {"id": "active_0", "type": "cheese", "position": [4, 2]},
+                # Both items equidistant from bot at (18, 4)
+                {"id": "random_0", "type": "coffee", "position": [20, 4]},
+                {"id": "oracle_0", "type": "bread", "position": [16, 4]},
+            ],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.claimed = set()
+        planner.net_preview = {}
+        planner.oracle_needs = {"bread": 2}
+        planner._spec_types_claimed = set()
+        item, _cell = planner._find_spec_target((18, 4), set(), {})
+        assert item is not None
+        assert item["type"] == "bread"
+
+    def test_oracle_does_not_affect_adjacent(self):
+        """Oracle preference should not change zero-cost adjacent pickup."""
+        planner = _make_large_team(
+            10,
+            items=[
+                {"id": "active_0", "type": "cheese", "position": [4, 2]},
+                {"id": "random_adj", "type": "coffee", "position": [11, 4]},
+                {"id": "oracle_adj", "type": "bread", "position": [12, 4]},
+            ],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.claimed = set()
+        planner.net_preview = {}
+        planner.oracle_needs = {"bread": 1}
+        planner._spec_types_claimed = set()
+        # Adjacent picks should use fallback order, not oracle preference
+        item = planner._find_spec_adjacent(11, 4, set(), {})
+        assert item is not None
+        # Either item is fine — oracle doesn't affect adjacent selection
+
+    def test_no_oracle_falls_back_to_any(self):
+        """With empty oracle_needs and no preview, fallback picks any item."""
+        planner = _make_large_team(
+            10,
+            items=[
+                {"id": "active_0", "type": "cheese", "position": [4, 2]},
+                {"id": "fallback_0", "type": "coffee", "position": [18, 4]},
+            ],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.claimed = set()
+        planner.net_preview = {}
+        planner.oracle_needs = {}
+        planner._spec_types_claimed = set()
+        item, _cell = planner._find_spec_target((18, 4), set(), {})
+        assert item is not None
+        assert item["type"] == "coffee"
+
+    def test_preview_beats_oracle_in_find_spec_target(self):
+        """Preview items (tier 0) should outrank oracle items (tier 1)."""
+        planner = _make_large_team(
+            10,
+            items=[
+                {"id": "active_0", "type": "cheese", "position": [4, 2]},
+                {"id": "oracle_0", "type": "milk", "position": [18, 4]},
+                {"id": "preview_0", "type": "bread", "position": [20, 4]},
+            ],
+            orders=[
+                _active_order(["cheese"]),
+                {
+                    "id": "preview_1",
+                    "items_required": ["bread"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "preview",
+                },
+            ],
+        )
+        planner.claimed = set()
+        planner.net_preview = {"bread": 1}
+        planner.oracle_needs = {"milk": 2}
+        planner._spec_types_claimed = set()
+        item, _cell = planner._find_spec_target((18, 4), set(), {})
+        assert item is not None
+        assert item["type"] == "bread"
