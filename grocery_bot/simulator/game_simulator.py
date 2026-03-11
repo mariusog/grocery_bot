@@ -117,6 +117,7 @@ class GameSimulator(PhysicsMixin):
             "score": self.score,
             "active_order_index": self.active_order_idx,
             "total_orders": len(self.orders),
+            "all_orders": self.orders,
         }
 
     def is_over(self) -> bool:

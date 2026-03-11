@@ -76,6 +76,11 @@ class GameState(
         self.spawn_origin: tuple[int, int] | None = None
         self.spawn_dispersal_targets: dict[int, tuple[int, int]] | None = None
 
+        # Future order knowledge (from recorded maps)
+        self.future_orders: list[dict[str, Any]] = []
+        self.future_demand: dict[str, int] = {}
+        self._demand_order_idx: int = -1
+
     def reset(self) -> None:
         """Reset all state for a new game."""
         self.blocked_static = set()
@@ -111,6 +116,9 @@ class GameState(
         self._history_gen = 0
         self.spawn_origin = None
         self.spawn_dispersal_targets = None
+        self.future_orders = []
+        self.future_demand = {}
+        self._demand_order_idx = -1
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
@@ -146,6 +154,32 @@ class GameState(
             self.drop_off_pos = drop_off
             self._precompute_dropoff_zones(drop_off)
             self._precompute_route_tables(state["items"], drop_off)
+
+    def set_future_orders(self, orders: list[dict[str, Any]]) -> None:
+        """Store the full order list for demand forecasting."""
+        self.future_orders = orders
+        self._demand_order_idx = -1
+
+    def update_demand(self, active_order_idx: int, lookahead: int = 3) -> None:
+        """Recompute item demand from the next few orders (active + lookahead).
+
+        Only counts the next ``lookahead`` orders beyond the active one so the
+        demand map is selective enough to distinguish valuable items from
+        dead weight.  With all remaining orders, every item type has demand.
+        """
+        if not self.future_orders or active_order_idx == self._demand_order_idx:
+            return
+        demand: dict[str, int] = {}
+        end = min(len(self.future_orders), active_order_idx + lookahead)
+        for order in self.future_orders[active_order_idx:end]:
+            for item_type in order.get("items_required", []):
+                demand[item_type] = demand.get(item_type, 0) + 1
+        self.future_demand = demand
+        self._demand_order_idx = active_order_idx
+
+    def item_future_demand(self, item_type: str) -> int:
+        """Return how many times this item type appears in remaining orders."""
+        return self.future_demand.get(item_type, 0)
 
     def _compute_idle_spots(
         self, width: int, height: int, item_positions: set[tuple[int, int]]
