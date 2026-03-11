@@ -75,7 +75,7 @@ class AssignmentMixin(PlannerBase):
             self.preview_bot_ids.add(bid)
 
         if self.preview_bot_ids:
-            self.preview_bot_id = next(iter(self.preview_bot_ids))
+            self.preview_bot_id = min(self.preview_bot_ids)
 
     def _bot_delivery_completes_order(self, bot: dict[str, Any]) -> bool:
         """Check if THIS bot's delivery alone completes the order."""
@@ -212,7 +212,7 @@ class AssignmentMixin(PlannerBase):
             if len(bots_in_col) < 2:
                 continue
 
-            bots_in_col.sort(key=lambda x: x[1], reverse=True)
+            bots_in_col.sort(key=lambda x: (x[1], -x[0]), reverse=True)
             furthest_bid = bots_in_col[0][0]
 
             current_items = self.bot_assignments.get(furthest_bid, [])

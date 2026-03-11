@@ -117,7 +117,7 @@ class CoordinationMixin(PlannerBase):
                 break
 
         if self.preview and self.net_preview:
-            for bid in self.preview_bot_ids:
+            for bid in sorted(self.preview_bot_ids):
                 if bid not in self.bot_roles:
                     self.bot_roles[bid] = "preview"
             if self.cfg.extra_preview_roles:
