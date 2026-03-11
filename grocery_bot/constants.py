@@ -141,6 +141,7 @@ DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING
 # Speculative pickup (planner/speculative.py)
 # ---------------------------------------------------------------------------
 SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots
+ORACLE_SPEC_LOOKAHEAD = 2  # future orders beyond preview to consider for speculation
 
 # ---------------------------------------------------------------------------
 # Spawn dispersal (planner/spawn.py)

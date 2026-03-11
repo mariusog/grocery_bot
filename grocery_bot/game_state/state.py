@@ -78,6 +78,7 @@ class GameState(
 
         # Future order knowledge (from recorded maps)
         self.future_orders: list[dict[str, Any]] = []
+        self.future_orders_recorded: int = 0
         self.future_demand: dict[str, int] = {}
         self._demand_order_idx: int = -1
 
@@ -117,6 +118,7 @@ class GameState(
         self.spawn_origin = None
         self.spawn_dispersal_targets = None
         self.future_orders = []
+        self.future_orders_recorded = 0
         self.future_demand = {}
         self._demand_order_idx = -1
 
@@ -155,9 +157,12 @@ class GameState(
             self._precompute_dropoff_zones(drop_off)
             self._precompute_route_tables(state["items"], drop_off)
 
-    def set_future_orders(self, orders: list[dict[str, Any]]) -> None:
+    def set_future_orders(
+        self, orders: list[dict[str, Any]], recorded_count: int | None = None
+    ) -> None:
         """Store the full order list for demand forecasting."""
         self.future_orders = orders
+        self.future_orders_recorded = recorded_count if recorded_count is not None else len(orders)
         self._demand_order_idx = -1
 
     def update_demand(self, active_order_idx: int, lookahead: int = 3) -> None:

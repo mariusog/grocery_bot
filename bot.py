@@ -87,7 +87,10 @@ def decide_actions(state: dict) -> list:
 
     # Load future orders when available (recorded maps / simulator)
     if "all_orders" in state and not _gs.future_orders:
-        _gs.set_future_orders(state["all_orders"])
+        _gs.set_future_orders(
+            state["all_orders"],
+            recorded_count=state.get("recorded_order_count"),
+        )
     _gs.update_demand(state.get("active_order_index", 0))
 
     planner = RoundPlanner(_gs, state, full_state=state)
