@@ -120,7 +120,7 @@ def save_recorded_map(
                     existing_orders.append(order)
                     existing_ids.add(order["id"])
                     new_count += 1
-            existing_orders.sort(key=lambda o: o["id"])
+            existing_orders.sort(key=lambda o: int(o["id"].split("_")[1]))
             map_snapshot["orders"] = existing_orders
             print(f"  Map merged: {new_count} new orders added (total: {len(existing_orders)})")
         except (json.JSONDecodeError, KeyError):
