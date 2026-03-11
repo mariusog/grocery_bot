@@ -224,7 +224,7 @@ class SpeculativeMixin(PlannerBase):
         """Find the nearest walkable item of an uncovered type."""
         best_item: dict[str, Any] | None = None
         best_cell: tuple[int, int] | None = None
-        best_key: tuple[int, float] = (2, float("inf"))
+        best_key: tuple[int, float, int] = (1, float("inf"), 1)
         for it in self.items:
             if not self._is_available(it):
                 continue
@@ -236,7 +236,12 @@ class SpeculativeMixin(PlannerBase):
             if team_type_count.get(t, 0) >= SPEC_MAX_TEAM_COPIES:
                 continue
             cell, d = self.gs.find_best_item_target(pos, it)
-            key = (0 if self._is_preferred_spec_type(t) else 1, d)
+            is_preview = (
+                self.cfg.prefer_preview_spec and self.preview and self.net_preview.get(t, 0) > 0
+            )
+            is_oracle = self.oracle_needs.get(t, 0) > 0
+            # Preview: strong preference (tier 0). Oracle: tiebreaker at same distance.
+            key = (0, d, 0) if is_preview else (1, d, 0 if is_oracle else 1)
             if cell and key < best_key:
                 best_key = key
                 best_item = it

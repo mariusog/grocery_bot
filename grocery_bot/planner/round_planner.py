@@ -8,6 +8,7 @@ from grocery_bot.constants import (
     DROPOFF_CLEAR_RADIUS,
     ENDGAME_ROUNDS_LEFT,
     MAX_INVENTORY,
+    ORACLE_SPEC_LOOKAHEAD,
     ORDER_NEARLY_COMPLETE_MAX,
     ZONE_CONGESTION_WEIGHT,
 )
@@ -293,15 +294,17 @@ class RoundPlanner(
         return (MAX_INVENTORY - len(inv)) - reserve
 
     def _compute_oracle_needs(self) -> None:
-        """Compute item needs for future orders N+2..N+3 from oracle knowledge."""
+        """Compute item needs for future orders N+2..N+K from oracle knowledge."""
         if not self.gs.future_orders:
             return
         idx = self.gs._demand_order_idx
         if idx < 0:
             return
-        for off in range(2, 4):
+        # Only consider recorded (real) orders, not synthetic padding
+        limit = self.gs.future_orders_recorded
+        for off in range(2, 2 + ORACLE_SPEC_LOOKAHEAD):
             oidx = idx + off
-            if oidx >= len(self.gs.future_orders):
+            if oidx >= limit:
                 break
             for t in self.gs.future_orders[oidx].get("items_required", []):
                 self.oracle_needs[t] = self.oracle_needs.get(t, 0) + 1
