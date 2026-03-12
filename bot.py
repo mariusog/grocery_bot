@@ -26,7 +26,7 @@ from grocery_bot.game_log import (
     update_expected_positions,
 )
 from grocery_bot.game_state import GameState
-from grocery_bot.orders import get_needed_items  # noqa: F401 — re-exported for tests
+from grocery_bot.orders import get_needed_items
 
 # Re-export everything tests and simulator access via `bot.xxx`
 from grocery_bot.pathfinding import (  # noqa: F401
@@ -123,8 +123,15 @@ def _validate_actions(actions: list, state: dict) -> list:
     drop_off_set = set(tuple(z) for z in zones) if zones else {tuple(state["drop_off"])}
     bot_positions = {b["id"]: tuple(b["position"]) for b in state["bots"]}
     occupied_cells = set(bot_positions.values())
-    bot_inv_len = {b["id"]: len(b["inventory"]) for b in state["bots"]}
+    bot_inv = {b["id"]: list(b["inventory"]) for b in state["bots"]}
+    bot_inv_len = {bid: len(inv) for bid, inv in bot_inv.items()}
     items_by_id = {it["id"]: it for it in state["items"]}
+
+    # Active order matching set for drop_off validation
+    active_order = next((o for o in state.get("orders", []) if o.get("status") == "active"), None)
+    active_matching: set[str] = set()
+    if active_order:
+        active_matching = set(get_needed_items(active_order).keys())
 
     move_deltas = {
         "move_up": (0, -1),
@@ -194,6 +201,9 @@ def _validate_actions(actions: list, state: dict) -> list:
 
         elif act == "drop_off":
             if pos not in drop_off_set or bot_inv_len.get(bid, 0) == 0:
+                valid = False
+            elif not any(item_type in active_matching for item_type in bot_inv.get(bid, [])):
+                # No inventory items match the active order — drop_off is illegal
                 valid = False
 
         if valid:
@@ -306,8 +316,12 @@ async def play() -> None:
 
             # === ACTION STATUS: detect server-side timeout ===
             action_status = data.get("action_status")
+            if action_status and action_status != "ok":
+                dbg(
+                    f"R{round_num} ACTION_STATUS={action_status}: "
+                    f"server issue on R{round_num - 1} actions"
+                )
             if action_status == "timeout":
-                dbg(f"R{round_num} ACTION_TIMEOUT: server dropped our R{round_num - 1} actions!")
                 # Reset expectations — server didn't apply our moves
                 expected_positions.clear()
                 expected_inventories.clear()
@@ -403,8 +417,7 @@ async def play() -> None:
             # Actions are already validated by _validate_actions() inside
             # decide_actions() — illegal moves are replaced with "wait".
 
-            # Build the exact JSON we'll send (include round to prevent stale application)
-            response_json = json.dumps({"actions": actions, "round": round_num})
+            response_json = json.dumps({"actions": actions})
 
             await ws.send(response_json)
             send_time = time.perf_counter()
