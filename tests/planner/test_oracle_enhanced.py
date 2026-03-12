@@ -1,4 +1,4 @@
-"""Tests for OracleEnhancedPlanner — oracle knowledge enhancements."""
+"""Tests for OracleEnhancedPlanner — deep oracle lookahead."""
 
 import bot
 from grocery_bot.planner.oracle_enhanced import OracleEnhancedPlanner
@@ -64,7 +64,7 @@ def test_oracle_enhanced_identical_without_knowledge():
 
 
 def test_deep_oracle_needs_extends_lookahead():
-    """Oracle enhanced planner looks further ahead than base."""
+    """Oracle enhanced planner looks further ahead than base (6 vs 2)."""
     future = [
         {"id": "o0", "items_required": ["milk"]},
         {"id": "o1", "items_required": ["bread"]},
@@ -77,75 +77,61 @@ def test_deep_oracle_needs_extends_lookahead():
     ]
     items = [
         {"id": f"i{i}", "type": t, "position": [3, i]}
-        for i, t in enumerate(["milk", "bread", "cheese", "yogurt", "butter", "eggs"], start=1)
+        for i, t in enumerate(
+            ["milk", "bread", "cheese", "yogurt", "butter", "eggs"], start=1
+        )
     ]
     bots = [{"id": 0, "position": [2, 1], "inventory": []}]
     orders = [_active_order(["milk"]), _preview_order(["bread"])]
 
-    p = _make_oracle_planner(bots=bots, items=items, orders=orders, future_orders=future)
-    # Deep lookahead: should see orders N+2 through N+7 (up to 6 ahead)
-    # cheese, yogurt, butter, eggs should all appear in oracle_needs
+    p = _make_oracle_planner(
+        bots=bots, items=items, orders=orders, future_orders=future
+    )
+    # Deep lookahead: orders N+2 through N+7 (6 ahead)
     assert "cheese" in p.oracle_needs
     assert "yogurt" in p.oracle_needs
     assert "butter" in p.oracle_needs
     assert "eggs" in p.oracle_needs
 
 
-def test_oracle_item_value_computed():
-    """oracle_item_value is populated when oracle knowledge available."""
-    future = [
-        {"id": "o0", "items_required": ["milk"]},
-        {"id": "o1", "items_required": ["bread"]},
-        {"id": "o2", "items_required": ["milk", "cheese"]},
-        {"id": "o3", "items_required": ["milk", "bread"]},
-    ]
-    items = [
-        {"id": "i1", "type": "milk", "position": [3, 2]},
-        {"id": "i2", "type": "bread", "position": [3, 4]},
-        {"id": "i3", "type": "cheese", "position": [3, 6]},
-    ]
-    bots = [{"id": 0, "position": [2, 2], "inventory": []}]
-    orders = [_active_order(["milk"]), _preview_order(["bread"])]
-
-    p = _make_oracle_planner(bots=bots, items=items, orders=orders, future_orders=future)
-    # milk appears in orders o2 and o3 -> value 2.0
-    assert p.oracle_item_value.get("milk", 0) == 2.0
-    # cheese appears in o2 -> value 1.0
-    assert p.oracle_item_value.get("cheese", 0) == 1.0
-    # bread appears in o3 -> value 1.0
-    assert p.oracle_item_value.get("bread", 0) == 1.0
-
-
-def test_oracle_item_value_empty_without_knowledge():
-    """oracle_item_value is empty when no oracle knowledge."""
+def test_oracle_needs_empty_without_knowledge():
+    """oracle_needs is empty when no future orders available."""
     items = [{"id": "i1", "type": "milk", "position": [3, 2]}]
     bots = [{"id": 0, "position": [2, 2], "inventory": []}]
     orders = [_active_order(["milk"])]
 
     p = _make_oracle_planner(bots=bots, items=items, orders=orders)
-    assert p.oracle_item_value == {}
+    assert p.oracle_needs == {}
 
 
-def test_spec_target_prefers_oracle_high_demand():
-    """Speculative target selection prefers items with higher oracle demand."""
+def test_oracle_needs_includes_synthetic_orders():
+    """Oracle uses all orders including synthetic padding."""
     future = [
-        {"id": "o0", "items_required": ["cheese"]},
-        {"id": "o1", "items_required": ["yogurt"]},
-        {"id": "o2", "items_required": ["cheese", "cheese"]},
-        {"id": "o3", "items_required": ["cheese"]},
-        {"id": "o4", "items_required": ["yogurt"]},
+        {"id": "o0", "items_required": ["milk"]},
+        {"id": "o1", "items_required": ["bread"]},
+        {"id": "o2", "items_required": ["cheese"]},
+        {"id": "o3", "items_required": ["yogurt"]},
     ]
-    # cheese at (5,2) and yogurt at (5,4) — equidistant from bot at (4,3)
     items = [
-        {"id": "i1", "type": "cheese", "position": [5, 2]},
-        {"id": "i2", "type": "yogurt", "position": [5, 4]},
+        {"id": "i1", "type": "milk", "position": [3, 2]},
+        {"id": "i2", "type": "cheese", "position": [3, 4]},
+        {"id": "i3", "type": "yogurt", "position": [3, 6]},
     ]
-    bots = [{"id": 0, "position": [4, 3], "inventory": []}]
-    orders = [_active_order(["cheese"]), _preview_order(["yogurt"])]
+    bots = [{"id": 0, "position": [2, 2], "inventory": []}]
+    orders = [_active_order(["milk"]), _preview_order(["bread"])]
 
-    p = _make_oracle_planner(bots=bots, items=items, orders=orders, future_orders=future)
-    # cheese has higher oracle demand (3 vs 1)
-    assert p.oracle_item_value.get("cheese", 0) > p.oracle_item_value.get("yogurt", 0)
+    state = make_state(bots=bots, items=items, orders=orders)
+    bot.reset_state()
+    bot.decide_actions(state)
+    gs = bot._gs
+    # Set recorded_count=2 but provide 4 total (simulating synthetic padding)
+    gs.set_future_orders(future, recorded_count=2)
+    gs.update_demand(0)
+    planner = OracleEnhancedPlanner(gs, state, full_state=state)
+    planner.plan()
+    # Should see orders o2 and o3 (beyond preview), even though recorded=2
+    assert "cheese" in planner.oracle_needs
+    assert "yogurt" in planner.oracle_needs
 
 
 def test_oracle_idle_target_returns_centroid():
@@ -164,7 +150,9 @@ def test_oracle_idle_target_returns_centroid():
     bots = [{"id": 0, "position": [2, 2], "inventory": []}]
     orders = [_active_order(["milk"]), _preview_order(["bread"])]
 
-    p = _make_oracle_planner(bots=bots, items=items, orders=orders, future_orders=future)
+    p = _make_oracle_planner(
+        bots=bots, items=items, orders=orders, future_orders=future
+    )
     target = p._oracle_idle_target(0)
     assert target is not None
     # Centroid of cheese(5,2) and yogurt(5,6) = (5, 4)
@@ -181,22 +169,24 @@ def test_oracle_idle_target_none_without_knowledge():
     assert p._oracle_idle_target(0) is None
 
 
-def test_clear_nonactive_holds_oracle_valuable_items():
-    """Bot holds non-active items that are valuable for future orders."""
+def test_oracle_needs_count_reflects_frequency():
+    """Items needed by multiple future orders get higher counts."""
     future = [
         {"id": "o0", "items_required": ["milk"]},
         {"id": "o1", "items_required": ["bread"]},
-        {"id": "o2", "items_required": ["yogurt"]},
+        {"id": "o2", "items_required": ["cheese", "milk"]},
+        {"id": "o3", "items_required": ["milk", "cheese"]},
     ]
     items = [
         {"id": "i1", "type": "milk", "position": [3, 2]},
-        {"id": "i2", "type": "bread", "position": [3, 4]},
-        {"id": "i3", "type": "yogurt", "position": [5, 2]},
+        {"id": "i2", "type": "cheese", "position": [3, 4]},
     ]
-    bots = [{"id": 0, "position": [4, 4], "inventory": ["yogurt"]}]
+    bots = [{"id": 0, "position": [2, 2], "inventory": []}]
     orders = [_active_order(["milk"]), _preview_order(["bread"])]
 
-    p = _make_oracle_planner(bots=bots, items=items, orders=orders, future_orders=future)
-    # yogurt is in oracle_needs (order o2)
-    assert "yogurt" in p.oracle_needs
-    assert p.oracle_item_value.get("yogurt", 0) > 0
+    p = _make_oracle_planner(
+        bots=bots, items=items, orders=orders, future_orders=future
+    )
+    # milk in o2 and o3 = 2, cheese in o2 and o3 = 2
+    assert p.oracle_needs.get("milk", 0) == 2
+    assert p.oracle_needs.get("cheese", 0) == 2

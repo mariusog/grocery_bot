@@ -154,7 +154,7 @@ SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
 # ---------------------------------------------------------------------------
 # Oracle planner (planner/oracle_planner.py, oracle_scheduler.py)
 # ---------------------------------------------------------------------------
-ORACLE_PLANNER_ENABLED = False
+ORACLE_PLANNER_ENABLED = True
 ORACLE_MIN_KNOWN_ORDERS = 4  # min future orders to activate oracle planner
 ORACLE_PLANNING_HORIZON = 3  # max orders to plan ahead
 ORACLE_REPLAN_INTERVAL = 20  # rounds between schedule refreshes
