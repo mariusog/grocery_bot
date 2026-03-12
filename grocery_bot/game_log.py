@@ -96,6 +96,17 @@ def build_map_snapshot(data: dict[str, Any], timestamp: str) -> dict[str, Any]:
     }
 
 
+def _orders_same_seed(
+    existing: list[dict[str, Any]], new: list[dict[str, Any]]
+) -> bool:
+    """Check if two order lists come from the same game seed."""
+    if not existing or not new:
+        return True  # Can't compare, assume compatible
+    old_first = sorted(existing[0].get("items_required", []))
+    new_first = sorted(new[0].get("items_required", []))
+    return old_first == new_first
+
+
 def save_recorded_map(
     map_snapshot: dict[str, Any], recorded_orders: list[dict[str, Any]], timestamp: str
 ) -> None:
@@ -115,16 +126,27 @@ def save_recorded_map(
             with open(map_path) as f:
                 existing = json.load(f)
             existing_orders = existing.get("orders", [])
-            existing_ids = {o["id"] for o in existing_orders}
-            new_count = 0
-            for order in recorded_orders:
-                if order["id"] not in existing_ids:
-                    existing_orders.append(order)
-                    existing_ids.add(order["id"])
-                    new_count += 1
-            existing_orders.sort(key=lambda o: int(o["id"].split("_")[1]))
-            map_snapshot["orders"] = existing_orders
-            print(f"  Map merged: {new_count} new orders added (total: {len(existing_orders)})")
+            # Check if order sequences match (same game seed)
+            same_seed = _orders_same_seed(existing_orders, recorded_orders)
+            if same_seed:
+                existing_ids = {o["id"] for o in existing_orders}
+                new_count = 0
+                for order in recorded_orders:
+                    if order["id"] not in existing_ids:
+                        existing_orders.append(order)
+                        existing_ids.add(order["id"])
+                        new_count += 1
+                existing_orders.sort(key=lambda o: int(o["id"].split("_")[1]))
+                map_snapshot["orders"] = existing_orders
+                print(f"  Map merged: {new_count} new orders added (total: {len(existing_orders)})")
+            else:
+                # Different game seed — replace if we have more orders
+                if len(recorded_orders) >= len(existing_orders):
+                    map_snapshot["orders"] = recorded_orders
+                    print(f"  Map replaced: new seed ({len(recorded_orders)} orders, was {len(existing_orders)})")
+                else:
+                    map_snapshot["orders"] = existing_orders
+                    print(f"  Map kept: existing seed has more orders ({len(existing_orders)} vs {len(recorded_orders)})")
         except (json.JSONDecodeError, KeyError):
             pass
     with open(map_path, "w") as f:
@@ -246,6 +268,7 @@ def load_matching_map_orders(data: dict[str, Any]) -> list[dict[str, Any]] | Non
     grid = data["grid"]
     w, h = grid["width"], grid["height"]
     num_bots = len(data["bots"])
+    game_orders = data.get("orders", [])
 
     # Build a fingerprint from item positions + types for exact matching
     game_items = sorted((it["position"][0], it["position"][1], it["type"]) for it in data["items"])
@@ -273,10 +296,20 @@ def load_matching_map_orders(data: dict[str, Any]) -> list[dict[str, Any]] | Non
             continue
 
         orders = recorded.get("orders", [])
+
+        # Verify order sequence matches by checking first visible order
+        if orders and game_orders:
+            rec_first = sorted(orders[0].get("items_required", []))
+            live_first = sorted(game_orders[0].get("items_required", []))
+            if rec_first != live_first:
+                continue
+
         if len(orders) > best_count:
             best_count = len(orders)
             best_match = orders
 
     if best_match:
         print(f"  Oracle: loaded {len(best_match)} recorded orders from maps/")
+    else:
+        print("  Oracle: no matching order sequence found in recorded maps")
     return best_match
