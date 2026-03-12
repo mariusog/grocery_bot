@@ -32,8 +32,8 @@ class TestStepChainStructure:
     def test_idle_positioning_is_last(self):
         assert RoundPlanner._STEP_CHAIN[-1].__name__ == "_step_idle_positioning"
 
-    def test_chain_has_22_steps(self):
-        assert len(RoundPlanner._STEP_CHAIN) == 22
+    def test_chain_has_23_steps(self):
+        assert len(RoundPlanner._STEP_CHAIN) == 23
 
     def test_all_expected_steps_present(self):
         expected = {
@@ -54,6 +54,7 @@ class TestStepChainStructure:
             "_step_clear_nonactive_inventory",
             "_step_shadow_deliver",
             "_step_preview_prepick",
+            "_step_oracle_prepick",
             "_step_speculative_pickup",
             "_step_break_oscillation",
             "_step_clear_dropoff",
@@ -80,6 +81,13 @@ class TestStepChainStructure:
         prepick = next(i for i, s in enumerate(chain) if s.__name__ == "_step_preview_prepick")
         spec = next(i for i, s in enumerate(chain) if s.__name__ == "_step_speculative_pickup")
         assert prepick < spec
+
+    def test_oracle_prepick_between_preview_and_speculative(self):
+        chain = RoundPlanner._STEP_CHAIN
+        preview = next(i for i, s in enumerate(chain) if s.__name__ == "_step_preview_prepick")
+        oracle = next(i for i, s in enumerate(chain) if s.__name__ == "_step_oracle_prepick")
+        spec = next(i for i, s in enumerate(chain) if s.__name__ == "_step_speculative_pickup")
+        assert preview < oracle < spec
 
     def test_break_oscillation_before_idle(self):
         chain = RoundPlanner._STEP_CHAIN
