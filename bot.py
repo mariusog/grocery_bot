@@ -13,6 +13,7 @@ import sys
 import time
 from datetime import datetime
 
+import grocery_bot.constants as _constants
 from grocery_bot.constants import MAX_INVENTORY
 from grocery_bot.game_log import (
     build_game_meta,
@@ -36,6 +37,8 @@ from grocery_bot.pathfinding import (  # noqa: F401
     direction_to,
     find_adjacent_positions,
 )
+from grocery_bot.planner.oracle_enhanced import OracleEnhancedPlanner
+from grocery_bot.planner.oracle_planner import OraclePlanner
 from grocery_bot.planner.round_planner import RoundPlanner
 
 # ---------------------------------------------------------------------------
@@ -93,7 +96,15 @@ def decide_actions(state: dict) -> list:
         )
     _gs.update_demand(state.get("active_order_index", 0))
 
-    planner = RoundPlanner(_gs, state, full_state=state)
+    if (
+        _constants.ORACLE_PLANNER_ENABLED
+        and _gs.future_orders_recorded >= _constants.ORACLE_MIN_KNOWN_ORDERS
+    ):
+        planner: OracleEnhancedPlanner | OraclePlanner | RoundPlanner = OracleEnhancedPlanner(
+            _gs, state, full_state=state
+        )
+    else:
+        planner = RoundPlanner(_gs, state, full_state=state)
     actions = planner.plan()
     return _validate_actions(actions, state)
 

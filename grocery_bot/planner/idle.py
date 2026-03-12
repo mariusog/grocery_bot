@@ -11,6 +11,7 @@ from grocery_bot.constants import (
     IDLE_STAY_IMPROVEMENT_THRESHOLD,
     IDLE_STAY_TEAM_SCALE,
     IDLE_TARGET_DISTANCE_WEIGHT,
+    ORACLE_IDLE_ATTRACTION,
 )
 from grocery_bot.pathfinding import DIRECTIONS, direction_to
 from grocery_bot.planner._base import PlannerBase
@@ -140,14 +141,7 @@ class IdleMixin(PlannerBase):
         pos: tuple[int, int],
         blocked: set[tuple[int, int]],
     ) -> bool:
-        """Corridor-aware idle positioning with crowd avoidance.
-
-        For large teams, idle bots spread across precomputed walkable
-        aisle-entrance positions (idle spots on corridor rows) so they are
-        ready when the next order activates. Uses predicted positions for
-        active bots for better crowd avoidance, and biases toward staying
-        still when already at an idle spot to reduce oscillation.
-        """
+        """Corridor-aware idle positioning with crowd avoidance."""
         if not self.cfg.multi_bot:
             return False
 
@@ -242,6 +236,10 @@ class IdleMixin(PlannerBase):
             item_target = (cx, cy)
             target_weight = IDLE_TARGET_DISTANCE_WEIGHT
 
+        # Oracle: bias empty bots toward items needed by future orders
+        oracle_target = self._oracle_idle_target(bid) if not inv else None
+        oracle_wt = ORACLE_IDLE_ATTRACTION if oracle_target else 0.0
+
         def _score(p: tuple[int, int]) -> float:
             """Lower is better."""
             s = 0.0
@@ -261,6 +259,9 @@ class IdleMixin(PlannerBase):
             if item_target and target_weight > 0:
                 item_dist = abs(p[0] - item_target[0]) + abs(p[1] - item_target[1])
                 s += item_dist * target_weight
+            # Oracle: attract toward items needed by future orders
+            if oracle_target and oracle_wt > 0:
+                s += (abs(p[0] - oracle_target[0]) + abs(p[1] - oracle_target[1])) * oracle_wt
             return s
 
         stay_score = _score(pos)

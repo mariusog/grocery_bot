@@ -79,6 +79,8 @@ class PlannerBase:
     active_needed: dict[str, int]
     net_active: dict[str, int]
     net_preview: dict[str, int]
+    oracle_needs: dict[str, int]
+    oracle_item_value: dict[str, float]
     preview_types: set[str]  # all types the preview order needs
     preview_order_total: int  # total items the preview order needs
     bot_carried_active: dict[int, dict[str, int]]
@@ -262,6 +264,10 @@ class PlannerBase:
         raise NotImplementedError
 
     # -- IdleMixin (idle.py) --
+    def _oracle_idle_target(self, bid: int) -> tuple[int, int] | None:
+        """Override in OracleEnhancedPlanner for oracle-biased idle positioning."""
+        return None
+
     def _is_stuck_oscillating(self, bid: int) -> bool:
         raise NotImplementedError
 

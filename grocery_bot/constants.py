@@ -142,11 +142,25 @@ DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING
 # ---------------------------------------------------------------------------
 SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots
 ORACLE_SPEC_LOOKAHEAD = 2  # future orders beyond preview to consider for speculation
+ORACLE_DEEP_LOOKAHEAD = 6  # deep lookahead for oracle-enhanced planner
+ORACLE_ASSIGNMENT_BONUS = 0.3  # cost reduction per future-demand count in assignment
+ORACLE_IDLE_ATTRACTION = 0.4  # idle positioning weight toward oracle-needed items
 
 # ---------------------------------------------------------------------------
 # Spawn dispersal (planner/spawn.py)
 # ---------------------------------------------------------------------------
 SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
+
+# ---------------------------------------------------------------------------
+# Oracle planner (planner/oracle_planner.py, oracle_scheduler.py)
+# ---------------------------------------------------------------------------
+ORACLE_PLANNER_ENABLED = False
+ORACLE_MIN_KNOWN_ORDERS = 4  # min future orders to activate oracle planner
+ORACLE_PLANNING_HORIZON = 3  # max orders to plan ahead
+ORACLE_REPLAN_INTERVAL = 20  # rounds between schedule refreshes
+ORACLE_STUCK_THRESHOLD = 5  # rounds stuck before replanning a bot
+ORACLE_PIPELINE_DEPTH = 2  # orders worked simultaneously (active + preview)
+ORACLE_MAX_DELIVERY_SLOTS = 2  # max simultaneous deliverers at dropoff
 
 # ---------------------------------------------------------------------------
 # Preview bot cap (large teams)

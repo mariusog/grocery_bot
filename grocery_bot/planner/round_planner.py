@@ -183,6 +183,7 @@ class RoundPlanner(
         self.order_nearly_complete: bool = 0 < self.active_on_shelves <= ORDER_NEARLY_COMPLETE_MAX
         # Oracle: needs for orders beyond preview (N+2..N+3)
         self.oracle_needs: dict[str, int] = {}
+        self.oracle_item_value: dict[str, float] = {}
         self._compute_oracle_needs()
         idle_bots = sum(1 for bot in self.bots if not self._is_delivering(bot))
         total = self.active_on_shelves
