@@ -36,7 +36,7 @@ BLOCKING_RADIUS_HUGE_TEAM = 5  # radius for 15+ bot teams (replay-sweep validate
 # ---------------------------------------------------------------------------
 # Delivery / dropoff proximity
 # ---------------------------------------------------------------------------
-DELIVER_WHEN_CLOSE_DIST = 3  # d_to_drop <= this triggers early delivery
+DELIVER_WHEN_CLOSE_DIST = 4  # d_to_drop <= this triggers early delivery
 DROPOFF_CLEAR_RADIUS = 3  # idle bots clear dropoff within this distance
 
 # ---------------------------------------------------------------------------
