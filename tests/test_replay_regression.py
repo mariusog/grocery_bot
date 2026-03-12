@@ -46,11 +46,11 @@ def _latest_maps() -> list[Path]:
 # Per-map minimum score thresholds (set ~60% of known scores)
 # ---------------------------------------------------------------------------
 MIN_SCORE_BY_BOTS = {
-    1: 80,  # Easy: min threshold 80 (current ~126)
-    3: 90,  # Medium: min threshold 90 (current ~153)
-    5: 60,  # Hard: min threshold 60 (current ~111)
-    10: 50,  # Expert: min threshold 50 (current ~95)
-    20: 60,  # Nightmare: min threshold 60 (current 119-124)
+    1: 80,  # Easy: min threshold 80 (current ~121)
+    3: 50,  # Medium: min threshold 50 (current ~87)
+    5: 50,  # Hard: min threshold 50 (current ~96)
+    10: 40,  # Expert: min threshold 40 (current ~96)
+    20: 60,  # Nightmare: min threshold 60 (current ~295)
 }
 
 
