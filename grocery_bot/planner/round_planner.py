@@ -137,8 +137,13 @@ class RoundPlanner(
 
         urgency: dict[int, int] = {b["id"]: self._bot_urgency(b) for b in self.bots}
         self._decided: set[int] = set()
+        bot_iter = (
+            sorted(self.bots, key=lambda b: urgency[b["id"]])
+            if self.cfg.use_wave_mode
+            else self.bots
+        )
 
-        for bot in self.bots:
+        for bot in bot_iter:
             bid = bot["id"]
             self._yield_to = set()
             for b in self.bots:

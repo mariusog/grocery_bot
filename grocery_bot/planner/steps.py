@@ -245,12 +245,21 @@ class StepsMixin(PlannerBase):
 
         spare = self._spare_slots(ctx.inv, ctx.bid)
         skip_detour = self.endgame and d_to_drop + 2 >= self.rounds_left
-        if self.preview and spare > 0 and not self.order_nearly_complete and not skip_detour:
-            item, cell = self._find_detour_item(ctx.pos, self.net_preview)
-            if item and cell is not None:
-                self._claim(item, self.net_preview)
-                if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
-                    return True
+        if spare > 0 and not self.order_nearly_complete and not skip_detour:
+            # Preview detour first (higher priority)
+            if self.preview:
+                item, cell = self._find_detour_item(ctx.pos, self.net_preview)
+                if item and cell is not None:
+                    self._claim(item, self.net_preview)
+                    if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
+                        return True
+            # Oracle detour: grab future-needed items en route to dropoff
+            if self.oracle_needs:
+                item, cell = self._find_detour_item(ctx.pos, self.oracle_needs)
+                if item and cell is not None:
+                    self._claim(item, self.oracle_needs)
+                    if self._emit_move(ctx.bid, ctx.bx, ctx.by, ctx.pos, cell, ctx.blocked):
+                        return True
         self._emit_delivery_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)
         return True
 
