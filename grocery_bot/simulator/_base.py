@@ -30,3 +30,4 @@ class SimulatorBase:
     orders_completed: int
     active_order_idx: int
     _next_item_id: int
+    _illegal_dropoff_count: int

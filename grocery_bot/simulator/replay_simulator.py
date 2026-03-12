@@ -158,6 +158,7 @@ class ReplaySimulator(GameSimulator):
         self.items_delivered = 0
         self.orders_completed = 0
         self.active_order_idx = 0
+        self._illegal_dropoff_count = 0
 
         # Bots
         self.bots = []

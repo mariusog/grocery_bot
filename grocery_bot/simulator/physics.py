@@ -82,6 +82,14 @@ class PhysicsMixin(SimulatorBase):
                 return
             if not b["inventory"]:
                 return
+            # Illegal move: drop_off with no matching active-order items
+            # incurs a 10-second penalty on the live server (~2 lost rounds).
+            if self.active_order_idx < len(self.orders):
+                needed = _compute_needed(self.orders[self.active_order_idx])
+                if not any(needed.get(item, 0) > 0 for item in b["inventory"]):
+                    self._illegal_dropoff_count += 1
+                    self.round += 2  # penalty: skip 2 rounds
+                    return
             self._do_dropoff(b)
 
     def _apply_move(self, b: dict, act: str, bx: int, by: int) -> None:
