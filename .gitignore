@@ -4,3 +4,4 @@ logs/
 .claude/settings.local.json
 .claude/worktrees/
 .coverage
+node_modules/
