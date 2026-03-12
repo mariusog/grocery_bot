@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 import grocery_bot.constants as _constants
-from grocery_bot.constants import MAX_INVENTORY
+from grocery_bot.constants import MAX_INVENTORY  # noqa: F401
 from grocery_bot.game_log import (
     build_game_meta,
     build_map_snapshot,
@@ -110,22 +110,21 @@ def decide_actions(state: dict) -> list:
 
 
 def _validate_actions(actions: list, state: dict) -> list:
-    """Final safety net: replace illegal actions with wait.
+    """Final safety net: replace only penalty-causing actions with wait.
 
-    Catches edge cases the planner missed — critical for the live server
-    where illegal moves may incur 10-second penalties.
+    Only drop_off triggers a 10-second penalty when illegal. All other
+    invalid actions (bad moves, bad pickups) are treated as "wait" by
+    the server with NO penalty, so the planner's collision avoidance
+    suffices for those.
     """
-    blocked = _gs.blocked_static
-    if not blocked:
+    if not _gs.blocked_static:
         return actions
 
     zones = state.get("drop_off_zones")
     drop_off_set = set(tuple(z) for z in zones) if zones else {tuple(state["drop_off"])}
     bot_positions = {b["id"]: tuple(b["position"]) for b in state["bots"]}
-    occupied_cells = set(bot_positions.values())
     bot_inv = {b["id"]: list(b["inventory"]) for b in state["bots"]}
     bot_inv_len = {bid: len(inv) for bid, inv in bot_inv.items()}
-    items_by_id = {it["id"]: it for it in state["items"]}
 
     # Active order matching set for drop_off validation
     active_order = next((o for o in state.get("orders", []) if o.get("status") == "active"), None)
@@ -133,86 +132,20 @@ def _validate_actions(actions: list, state: dict) -> list:
     if active_order:
         active_matching = set(get_needed_items(active_order).keys())
 
-    move_deltas = {
-        "move_up": (0, -1),
-        "move_down": (0, 1),
-        "move_left": (-1, 0),
-        "move_right": (1, 0),
-    }
-
-    # Compute intended destinations for all bots
-    actions_by_bot = {a["bot"]: a for a in actions}
-    destinations = {}
-    for bid, a in actions_by_bot.items():
-        pos = bot_positions[bid]
-        act = a["action"]
-        if act in move_deltas:
-            dx, dy = move_deltas[act]
-            destinations[bid] = (pos[0] + dx, pos[1] + dy)
-        else:
-            destinations[bid] = pos
-
     validated = []
-    claimed_cells = set()
-
     for a in actions:
         bid = a["bot"]
-        pos = bot_positions[bid]
-        act = a["action"]
-        dest = destinations[bid]
-        valid = True
 
-        if act in move_deltas:
-            # Static obstacles (walls, shelves, boundaries)
-            if dest in blocked:
-                valid = False
-
-            # Live/simulator movement resolves against current occupancy:
-            # entering a cell another bot currently occupies is illegal,
-            # even if that bot also intends to move away this round.
-            if valid and dest in occupied_cells:
-                valid = False
-
-            # Swap collision (A→B and B→A)
-            if valid:
-                for other_bid in bot_positions:
-                    if other_bid == bid:
-                        continue
-                    if dest == bot_positions[other_bid] and destinations.get(other_bid) == pos:
-                        valid = False
-                        break
-
-            # Two of our own bots targeting the same cell
-            if valid and dest in claimed_cells:
-                valid = False
-
-        elif act == "pick_up":
-            item_id = a.get("item_id")
-            if not item_id or bot_inv_len.get(bid, 0) >= MAX_INVENTORY:
-                valid = False
-            else:
-                item = items_by_id.get(item_id)
-                if not item:
-                    valid = False
-                else:
-                    ix, iy = item["position"]
-                    if abs(pos[0] - ix) + abs(pos[1] - iy) != 1:
-                        valid = False
-
-        elif act == "drop_off":
+        if a["action"] == "drop_off":
+            pos = bot_positions[bid]
             if pos not in drop_off_set or bot_inv_len.get(bid, 0) == 0:
-                valid = False
-            elif not any(item_type in active_matching for item_type in bot_inv.get(bid, [])):
-                # No inventory items match the active order — drop_off is illegal
-                valid = False
+                validated.append({"bot": bid, "action": "wait"})
+                continue
+            if not any(item_type in active_matching for item_type in bot_inv.get(bid, [])):
+                validated.append({"bot": bid, "action": "wait"})
+                continue
 
-        if valid:
-            validated.append(a)
-            claimed_cells.add(dest)
-        else:
-            validated.append({"bot": bid, "action": "wait"})
-            claimed_cells.add(pos)
-            destinations[bid] = pos  # update so subsequent checks see corrected dest
+        validated.append(a)
 
     return validated
 
@@ -276,6 +209,7 @@ async def play() -> None:
             # After a network stall, the server may have queued multiple states.
             # Responding to stale states creates a permanent 1-round offset.
             stale_this_round = 0
+            first_drained_raw = message  # save first message before drain overwrites it
             while True:
                 try:
                     newer = await asyncio.wait_for(ws.recv(), timeout=0.002)
@@ -292,7 +226,24 @@ async def play() -> None:
                     break
             if stale_this_round > 0:
                 recv_time = time.perf_counter()
-                dbg(f"DRAINED {stale_this_round} stale messages (total drained: {drained_count})")
+                # Log penalty-critical fields from the DRAINED message (penalty round).
+                # first_drained_raw is the original message that got replaced.
+                try:
+                    stale_data = json.loads(first_drained_raw)
+                    stale_round = stale_data.get("round", "?")
+                    stale_status = stale_data.get("action_status", "none")
+                    stale_score = stale_data.get("score", "?")
+                    dbg(
+                        f"DRAINED {stale_this_round} stale messages "
+                        f"(total drained: {drained_count}) "
+                        f"stale_round=R{stale_round} "
+                        f"action_status={stale_status} score={stale_score}"
+                    )
+                except Exception:
+                    dbg(
+                        f"DRAINED {stale_this_round} stale messages "
+                        f"(total drained: {drained_count})"
+                    )
 
             msg_len = len(message)
             data = json.loads(message)
@@ -417,6 +368,13 @@ async def play() -> None:
             # Actions are already validated by _validate_actions() inside
             # decide_actions() — illegal moves are replaced with "wait".
 
+            n_bots = len(data["bots"])
+            if len(actions) != n_bots:
+                dbg(
+                    f"R{round_num} ACTION_COUNT_MISMATCH: "
+                    f"{len(actions)} actions for {n_bots} bots!"
+                )
+
             response_json = json.dumps({"actions": actions})
 
             await ws.send(response_json)
@@ -448,6 +406,17 @@ async def play() -> None:
             if desync_this_round:
                 dbg(f"R{round_num} SENT: {response_json[:300]}")
                 dbg(f"R{round_num} PREV_SENT: {prev_action_json[:300]}")
+            # Log response JSON when a penalty-like gap follows
+            # (checked retroactively on the NEXT round)
+            if recv_wait_ms > 5000:
+                dbg(
+                    f"R{round_num} PENALTY_GAP: {recv_wait_ms:.0f}ms — "
+                    f"prev response was: {prev_action_json[:500]}"
+                )
+                dbg(
+                    f"R{round_num} PENALTY_GAP: action_count={len(actions)} "
+                    f"bot_count={len(data['bots'])}"
+                )
             prev_send_time = send_time
 
             # Accumulate orders as they become visible
