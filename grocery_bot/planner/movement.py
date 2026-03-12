@@ -415,7 +415,8 @@ class MovementMixin(PlannerBase):
 
         The server processes bots sequentially by ID. Lower-ID bots have
         already moved (use predicted position), higher-ID bots haven't
-        moved yet (use current position).
+        moved yet (use current position). Both are radius-limited to
+        keep BFS tractable; _emit catches remaining edge cases.
         """
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
         max_dist: float = self.cfg.blocking_radius
@@ -424,9 +425,6 @@ class MovementMixin(PlannerBase):
         for b in self.bots:
             if b["id"] == bid:
                 continue
-            # Server processes lower IDs first: they're at predicted pos.
-            # Higher IDs haven't moved: they're at current pos.
-            # Only trust predictions for bots the planner has decided.
             if b["id"] < bid and b["id"] in decided:
                 bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
             else:
