@@ -144,9 +144,16 @@ class RoundPlanner(
 
         urgency: dict[int, int] = {b["id"]: self._bot_urgency(b) for b in self.bots}
         self._decided: set[int] = set()
+        # Plan bots by urgency for small teams (2-4 bots) so active
+        # deliverers get cell priority over idle bots.  Larger teams keep
+        # ID-order because _build_blocked and _pre_predict model the
+        # server's ID-order execution more accurately at scale.
+        use_urgency = (
+            self.cfg.multi_bot and self.cfg.num_bots < 5
+        ) or self.cfg.use_wave_mode
         bot_iter = (
             sorted(self.bots, key=lambda b: urgency[b["id"]])
-            if self.cfg.use_wave_mode
+            if use_urgency
             else self.bots
         )
 
