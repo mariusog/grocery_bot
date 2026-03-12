@@ -291,10 +291,10 @@ class TestExpectedPositionTracking:
 
 
 class TestCollisionValidation:
-    """Validator should reject moves the live server will silently block."""
+    """Validator only blocks penalty-causing actions (illegal drop_off)."""
 
-    def test_move_into_occupied_cell_becomes_wait_even_if_other_bot_moves(self):
-        """A bot may not step into another bot's current cell that round."""
+    def test_move_into_occupied_cell_passes_through(self):
+        """Moves into occupied cells pass through — server treats as wait, no penalty."""
         state = make_state(
             bots=[
                 {"id": 0, "position": [5, 5], "inventory": []},
@@ -313,8 +313,9 @@ class TestCollisionValidation:
             state,
         )
 
+        # Validator only blocks drop_off; moves pass through to server
         assert validated == [
-            {"bot": 0, "action": "wait"},
+            {"bot": 0, "action": "move_left"},
             {"bot": 1, "action": "move_up"},
         ]
 

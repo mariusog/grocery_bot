@@ -80,16 +80,14 @@ class TestAntiCollision:
         assert a1["action"] != "wait", f"Bot 1 should be moving, got {a1}"
 
     def test_higher_bot_plans_around_lower_bot_move(self):
-        """Bot 1 must not move into bot 0's currently occupied cell.
+        """Bot 1 may follow bot 0 through a corridor.
 
-        The live server and local simulator both resolve movement against
-        round-start occupancy, so bot 1 has to wait here instead of stepping
-        into a cell bot 0 is vacating this round.
+        The validator no longer blocks moves into occupied cells — the
+        server resolves simultaneous moves and treats invalid ones as wait
+        (no penalty).  The planner may choose move_left or wait.
         """
         reset_bot()
         # Single-width corridor along y=5. Bot 0 at (3,5) moving left, Bot 1 at (4,5).
-        # Bot 0 will move to (2,5), but bot 1 still may not move left into (3,5)
-        # during the same round because (3,5) starts occupied.
         state = make_state(
             walls=[[3, 4], [4, 4], [5, 4], [3, 6], [4, 6], [5, 6]],
             bots=[
@@ -126,8 +124,8 @@ class TestAntiCollision:
         a1 = get_action(actions, 1)
         # Bot 0 should move left (toward cheese at (2,4)).
         assert a0["action"] == "move_left", f"Bot 0 should move left, got {a0}"
-        # Bot 1 should not attempt the illegal same-round follow move.
-        assert a1["action"] == "wait", f"Bot 1 should wait here, got {a1}"
+        # Bot 1 may move left (server resolves) or wait — both acceptable
+        assert a1["action"] in ("move_left", "wait"), f"Unexpected action: {a1}"
 
     def test_bot_waits_if_only_path_blocked(self):
         """If a bot's only path forward is blocked by another bot, it should
