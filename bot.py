@@ -384,6 +384,7 @@ async def play() -> None:
             update_expected_positions(expected_positions, data, actions)
             update_expected_inventories(expected_inventories, data, actions)
             last_actions_sent = {a["bot"]: a for a in actions}
+            saved_prev_action_json = prev_action_json
             prev_action_json = response_json
 
             # --- Everything below is post-send bookkeeping ---
@@ -405,13 +406,13 @@ async def play() -> None:
             )
             if desync_this_round:
                 dbg(f"R{round_num} SENT: {response_json[:300]}")
-                dbg(f"R{round_num} PREV_SENT: {prev_action_json[:300]}")
+                dbg(f"R{round_num} PREV_SENT: {saved_prev_action_json[:300]}")
             # Log response JSON when a penalty-like gap follows
             # (checked retroactively on the NEXT round)
             if recv_wait_ms > 5000:
                 dbg(
                     f"R{round_num} PENALTY_GAP: {recv_wait_ms:.0f}ms — "
-                    f"prev response was: {prev_action_json[:500]}"
+                    f"prev response was: {saved_prev_action_json[:500]}"
                 )
                 dbg(
                     f"R{round_num} PENALTY_GAP: action_count={len(actions)} "
