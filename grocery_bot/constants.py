@@ -141,7 +141,7 @@ DIAG_OSCILLATION = 20  # oscillation_count > this flags OSCILLATING
 # Speculative pickup (planner/speculative.py)
 # ---------------------------------------------------------------------------
 SPEC_MAX_TEAM_COPIES = 2  # skip item types already carried by >= this many bots
-ORACLE_SPEC_LOOKAHEAD = 2  # future orders beyond preview to consider for speculation
+ORACLE_SPEC_LOOKAHEAD = 3  # future orders beyond preview to consider for speculation
 ORACLE_DEEP_LOOKAHEAD = 6  # deep lookahead for oracle-enhanced planner
 ORACLE_ASSIGNMENT_BONUS = 0.3  # cost reduction per future-demand count in assignment
 ORACLE_IDLE_ATTRACTION = 0.4  # idle positioning weight toward oracle-needed items
