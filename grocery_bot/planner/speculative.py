@@ -25,9 +25,11 @@ class SpeculativeMixin(PlannerBase):
         (expensive to pick later). Each bot gets a unique target.
         """
         self.spec_assignments: dict[int, dict[str, Any]] = {}
-        if not self.preview or not self.net_preview:
-            return
-        if not self.cfg.enable_spec_assignment:
+        _do_preview = bool(self.preview and self.net_preview and self.cfg.enable_spec_assignment)
+        _do_oracle = bool(
+            self.oracle_needs and self.cfg.enable_spec_assignment and self.cfg.num_bots < 15
+        )
+        if not _do_preview and not _do_oracle:
             return
 
         # Identify idle bots: no active assignment, no active items, has space
@@ -47,7 +49,7 @@ class SpeculativeMixin(PlannerBase):
         # Collect preview items on shelves, ranked by dropoff distance DESC
         preview_items: list[tuple[float, dict[str, Any]]] = []
         seen_types: set[str] = set()
-        for item_type, count in self.net_preview.items():
+        for item_type, count in self.net_preview.items() if _do_preview else ():
             if count <= 0:
                 continue
             for it in self.items_by_type.get(item_type, []):
@@ -83,11 +85,54 @@ class SpeculativeMixin(PlannerBase):
                 self.spec_assignments[best_bid] = item
                 assigned_bids.add(best_bid)
 
+        # Phase 2: Assign oracle items to remaining idle bots
+        if _do_oracle:
+            for t, count in self.oracle_needs.items():
+                if count <= 0:
+                    continue
+                remaining = [b for b in idle_bids if b not in assigned_bids]
+                if not remaining:
+                    break
+                for it in self.items_by_type.get(t, []):
+                    if not self._is_available(it):
+                        continue
+                    best_bid = None
+                    best_dist = float("inf")
+                    for bid in remaining:
+                        bpos = tuple(self.bots_by_id[bid]["position"])
+                        cell, d = self.gs.find_best_item_target(bpos, it)
+                        if cell is not None and d < best_dist:
+                            best_dist, best_bid = d, bid
+                    if best_bid is not None:
+                        self.spec_assignments[best_bid] = it
+                        assigned_bids.add(best_bid)
+                        break
+
     def _is_preferred_spec_type(self, item_type: str) -> bool:
         """Prefer preview-needed types for speculative pickup when available."""
         return bool(
             self.cfg.prefer_preview_spec and self.preview and self.net_preview.get(item_type, 0) > 0
         )
+
+    def _step_oracle_prepick(self, ctx: Any) -> bool:
+        """Pre-pick items for oracle-known future orders (N+2..N+K).
+
+        For small teams (1-4 bots) where enable_speculative is off, this
+        enables oracle-guided pickup. Large teams use _step_speculative_pickup
+        which already incorporates oracle preference via _find_spec_target.
+        """
+        if not self.oracle_needs or ctx.has_active:
+            return False
+        if len(ctx.inv) >= MAX_INVENTORY:
+            return False
+        if self.bot_assignments.get(ctx.bid):
+            return False
+        spec_item = self.spec_assignments.get(ctx.bid)
+        if spec_item and self._is_available(spec_item):
+            return self._act_on_spec_assignment(
+                ctx.bid, ctx.bx, ctx.by, ctx.pos, spec_item, ctx.blocked
+            )
+        return self._try_speculative_pickup(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked)
 
     def _step_speculative_pickup(self, ctx: Any) -> bool:
         """Speculatively pick up items when idle (large teams)."""
@@ -240,8 +285,13 @@ class SpeculativeMixin(PlannerBase):
                 self.cfg.prefer_preview_spec and self.preview and self.net_preview.get(t, 0) > 0
             )
             is_oracle = self.oracle_needs.get(t, 0) > 0
-            # Preview: strong preference (tier 0). Oracle: tiebreaker at same distance.
-            key = (0, d, 0) if is_preview else (1, d, 0 if is_oracle else 1)
+            # Preview: tier 0, Oracle: tier 0 for large teams, tiebreaker for small
+            if is_preview:
+                key = (0, d, 0)
+            elif is_oracle and self.cfg.enable_spec_assignment:
+                key = (0, d, 1)
+            else:
+                key = (1, d, 0 if is_oracle else 1)
             if cell and key < best_key:
                 best_key = key
                 best_item = it
