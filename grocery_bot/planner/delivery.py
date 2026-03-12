@@ -48,7 +48,8 @@ class DeliveryMixin(PlannerBase):
             return nearest, False
 
         target, should_wait = self.gs.get_dropoff_approach_target(
-            bid, pos, nearest, delivering_bots
+            bid, pos, nearest, delivering_bots,
+            max_slots=self.cfg.max_approach_slots,
         )
         if not should_wait:
             return target, False

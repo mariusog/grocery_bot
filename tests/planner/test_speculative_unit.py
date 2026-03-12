@@ -341,3 +341,33 @@ class TestOracleSpeculative:
         item, _cell = planner._find_spec_target((18, 4), set(), {})
         assert item is not None
         assert item["type"] == "bread"
+
+
+class TestDispersalWindow:
+    """Tests for _in_dispersal_window helper."""
+
+    def test_in_dispersal_window_during_dispersal(self):
+        """Returns True during lane-dispersal opening rounds."""
+        bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
+        planner = make_planner(
+            bots=bots,
+            items=[{"id": "i0", "type": "milk", "position": [3, 4]}],
+            orders=[_active_order(["cheese"])],
+            width=30, height=18, drop_off=[1, 16],
+        )
+        planner.gs.spawn_lane_dispersal = True
+        planner.current_round = 0
+        assert planner._in_dispersal_window() is True
+
+    def test_not_in_dispersal_window_post_dispersal(self):
+        """Returns False after dispersal window ends."""
+        bots = [{"id": i, "position": [2 + i, 4], "inventory": []} for i in range(10)]
+        planner = make_planner(
+            bots=bots,
+            items=[{"id": "i0", "type": "milk", "position": [3, 4]}],
+            orders=[_active_order(["cheese"])],
+            width=30, height=18, drop_off=[1, 16],
+        )
+        planner.gs.spawn_lane_dispersal = True
+        planner.current_round = 31
+        assert planner._in_dispersal_window() is False

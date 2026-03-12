@@ -123,6 +123,8 @@ class GameState(
         self._history_gen = 0
         self.spawn_origin = None
         self.spawn_dispersal_targets = None
+        self.spawn_lane_dispersal = False
+        self.spawn_dispersal_done: set[int] = set()
         self.future_orders = []
         self.future_orders_recorded = 0
         self.future_demand = {}

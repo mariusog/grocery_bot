@@ -38,11 +38,12 @@ class AssignmentMixin(GameStateBase):
             row: list[float] = []
             bot_zone = int(bot_pos[0] / zone_width) if zone_width else 0
             for ii, it in enumerate(candidate_items):
-                _, d = self.find_best_item_target(bot_pos, it)
                 if drop_off is not None:
-                    ix, iy = it["position"]
-                    dx, dy = drop_off
-                    d += (abs(ix - dx) + abs(iy - dy)) * ASSIGNMENT_DROPOFF_WEIGHT
+                    _, d = self.find_best_item_target_weighted(
+                        bot_pos, it, drop_off, ASSIGNMENT_DROPOFF_WEIGHT
+                    )
+                else:
+                    _, d = self.find_best_item_target(bot_pos, it)
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY

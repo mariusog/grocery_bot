@@ -14,6 +14,7 @@ from grocery_bot.constants import (
     IDLE_PREVIEW_STAGE_WEIGHT_5BOT,
     IDLE_PREVIEW_STAGE_WEIGHT_10BOT,
     IDLE_TARGET_DISTANCE_WEIGHT,
+    MAX_APPROACH_SLOTS,
     MAX_CONCURRENT_DELIVERERS,
     MAX_INVENTORY,
     MAX_NONACTIVE_DELIVERERS,
@@ -87,6 +88,7 @@ class TeamConfig:
     reserve_last_slot_for_spec: bool  # keep 1 slot free for active when speculating
     use_multi_preview_bots: bool  # allow multiple simultaneous preview bots
     reserve_unassigned_slot: bool  # unassigned bots reserve 1 slot for active items
+    max_approach_slots: int  # max bots approaching dropoff simultaneously
 
     # --- Methods for runtime-dependent values ---
 
@@ -102,7 +104,7 @@ class TeamConfig:
             return 1 if has_assignment else 2
         if self.num_bots <= 3:
             return MIN_INV_FOR_NONACTIVE_DELIVERY
-        return MAX_INVENTORY  # medium teams (4-7): require full inventory to clear
+        return MIN_INV_FOR_NONACTIVE_DELIVERY  # medium teams (4-7): clear at 2 items
 
     def preview_prepick_force(
         self,
@@ -139,7 +141,7 @@ class TeamConfig:
         if self.num_bots >= 15:
             return 12
         if self.num_bots >= 8:
-            return 20
+            return 30  # Expert: farthest lane is ~25 steps from spawn
         return 12
 
 
@@ -157,7 +159,7 @@ def get_team_config(num_bots: int) -> TeamConfig:
 
     # Delivery concurrency
     if num_bots >= 8:
-        max_concurrent = max(2, num_bots // 4)
+        max_concurrent = max(3, num_bots // 4)
         max_nonactive = max(MAX_NONACTIVE_DELIVERERS, num_bots // 3)
     elif num_bots >= 5:
         max_concurrent = 2
@@ -165,6 +167,10 @@ def get_team_config(num_bots: int) -> TeamConfig:
     else:
         max_concurrent = MAX_CONCURRENT_DELIVERERS
         max_nonactive = MAX_NONACTIVE_DELIVERERS
+
+    # Approach slots: 8-14 bots get 3 (single dropoff, wide map);
+    # 15+ get 2 per zone (3 dropoff zones on Nightmare); <8 get default
+    max_approach = 3 if num_bots >= 15 else MAX_APPROACH_SLOTS
 
     # Preview stage weight
     if num_bots >= 10:
@@ -203,4 +209,5 @@ def get_team_config(num_bots: int) -> TeamConfig:
         reserve_last_slot_for_spec=num_bots >= 8,
         use_multi_preview_bots=num_bots >= 5,
         reserve_unassigned_slot=8 <= num_bots < 15,
+        max_approach_slots=max_approach,
     )

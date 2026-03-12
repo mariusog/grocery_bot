@@ -40,6 +40,7 @@ class DropoffMixin(GameStateBase):
         bot_pos: tuple[int, int],
         drop_off: tuple[int, int],
         delivering_bots: list[tuple[int, tuple[int, int]]],
+        max_slots: int = MAX_APPROACH_SLOTS,
     ) -> tuple[tuple[int, int], bool]:
         """Determine where a delivering bot should path to, managing congestion."""
         if not self.dropoff_approach_cells:
@@ -55,7 +56,7 @@ class DropoffMixin(GameStateBase):
             if other_dist < my_dist or (other_dist == my_dist and other_id < bot_id):
                 closer_bots += 1
 
-        if closer_bots < MAX_APPROACH_SLOTS:
+        if closer_bots < max_slots:
             return drop_off, False
 
         if self.dropoff_wait_cells:
@@ -75,12 +76,13 @@ class DropoffMixin(GameStateBase):
         self,
         drop_off: tuple[int, int],
         bot_positions: list[tuple[int, int]],
+        max_slots: int = MAX_APPROACH_SLOTS,
     ) -> bool:
         """Return True if the dropoff area is congested."""
         approach_set = set(self.dropoff_approach_cells)
         approach_set.add(drop_off)
         count = sum(1 for pos in bot_positions if pos in approach_set)
-        return count > MAX_APPROACH_SLOTS
+        return count > max_slots
 
     def get_avoidance_target(
         self,

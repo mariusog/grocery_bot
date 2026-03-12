@@ -236,3 +236,40 @@ class TestReset:
         state = {"grid": {"width": 11, "height": 9, "walls": []}, "items": []}
         gs.init_static(state)
         assert gs.blocked_static != set()
+
+    def test_reset_clears_spawn_dispersal(self):
+        gs = make_gs_with_state()
+        gs.spawn_lane_dispersal = True
+        gs.spawn_dispersal_done = {1, 2}
+        gs.reset()
+        assert gs.spawn_lane_dispersal is False
+        assert gs.spawn_dispersal_done == set()
+
+
+class TestFindBestItemTargetWeighted:
+    """Tests for dropoff-aware item target selection."""
+
+    def test_prefers_dropoff_side_cell(self):
+        """Weighted cost should prefer the pickup cell closer to dropoff."""
+        gs = make_gs_with_state(
+            items=[{"id": "i1", "type": "a", "position": [5, 3]}],
+            width=11, height=9,
+        )
+        item = {"id": "i1", "type": "a", "position": [5, 3]}
+        dropoff = (1, 7)
+        cell, cost = gs.find_best_item_target_weighted((3, 3), item, dropoff, 3.0)
+        assert cell is not None
+        # The chosen cell should be on the dropoff side of the item
+        assert cell[0] <= 5  # x <= item x (closer to dropoff at x=1)
+
+    def test_matches_unweighted_when_weight_zero(self):
+        """With dropoff_weight=0, result equals find_best_item_target."""
+        gs = make_gs_with_state(
+            items=[{"id": "i1", "type": "a", "position": [5, 3]}],
+            width=11, height=9,
+        )
+        item = {"id": "i1", "type": "a", "position": [5, 3]}
+        cell_w, cost_w = gs.find_best_item_target_weighted((3, 3), item, (1, 7), 0.0)
+        cell_u, cost_u = gs.find_best_item_target((3, 3), item)
+        assert cell_w == cell_u
+        assert abs(cost_w - cost_u) < 0.01

@@ -98,7 +98,9 @@ class IdleMixin(PlannerBase):
         nearest = self._nearest_dropoff(pos)
         if self.cfg.use_predictions:
             bot_positions = [tuple(b["position"]) for b in self.bots]
-            if self.gs.is_dropoff_congested(nearest, bot_positions):
+            if self.gs.is_dropoff_congested(
+                nearest, bot_positions, max_slots=self.cfg.max_approach_slots
+            ):
                 avoidance = self.gs.get_avoidance_target(pos, nearest)
                 if avoidance and avoidance != pos:
                     return self._emit_move(bid, bx, by, pos, avoidance, blocked)

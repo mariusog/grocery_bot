@@ -338,6 +338,20 @@ class StepsMixin(PlannerBase):
             ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.inv, ctx.blocked, force_slots=force
         )
 
+    def _step_pipeline_pickup(self, ctx: Any) -> bool:
+        """Post-delivery: route to pre-assigned pipeline item."""
+        if ctx.inv or ctx.has_active:
+            return False
+        spec_item = self.spec_assignments.get(ctx.bid)
+        if not spec_item or not self._is_available(spec_item):
+            return False
+        nd = self._nearest_dropoff(ctx.pos)
+        if self.gs.dist_static(ctx.pos, nd) > 2:
+            return False
+        return self._act_on_spec_assignment(
+            ctx.bid, ctx.bx, ctx.by, ctx.pos, spec_item, ctx.blocked
+        )
+
     def _step_clear_dropoff(self, ctx: Any) -> bool:
         """Clear dropoff area when idle."""
         return self._try_clear_dropoff(ctx.bid, ctx.bx, ctx.by, ctx.pos, ctx.blocked)

@@ -115,6 +115,15 @@ class PlannerBase:
     # directly — only on the concrete RoundPlanner class.
     # ------------------------------------------------------------------ #
 
+    # -- Dispersal guard (concrete helper, not a stub) --
+    def _in_dispersal_window(self) -> bool:
+        """True during opening dispersal on lane-dispersal maps."""
+        if not self.cfg.use_spawn_dispersal:
+            return False
+        if self.current_round >= self.cfg.spawn_dispersal_max_rounds():
+            return False
+        return getattr(self.gs, "spawn_lane_dispersal", False)
+
     # -- RoundPlanner (round_planner.py) --
     def _nearest_dropoff(self, pos: tuple[int, int]) -> tuple[int, int]:
         raise NotImplementedError

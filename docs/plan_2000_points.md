@@ -13,6 +13,8 @@
 
 **Target: 2000** (2.5x improvement needed)
 
+**Focus: Hard / Expert / Nightmare only.** Easy (1-bot) and Medium (3-bot) are near ceiling. Ignore regressions on those maps — all optimization effort targets multi-bot setups (5/10/20 bots).
+
 ## Why 2000 is Achievable
 
 The current bot plays **reactively** — it sees active + preview orders and assigns bots to pick

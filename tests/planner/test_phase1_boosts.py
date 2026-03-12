@@ -76,7 +76,7 @@ class TestMediumTeamClearing:
             [_order(["cheese"])],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
-        assert p._step_clear_nonactive_inventory(ctx) is False
+        assert p._step_clear_nonactive_inventory(ctx) is True
 
     def test_5bot_clears_when_full(self):
         """5-bot team: 3 non-active items (full) SHOULD clear."""

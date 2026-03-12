@@ -99,17 +99,17 @@ class TestSmallTeamClears:
 
 
 class TestMediumTeamFullOnly:
-    """Medium teams (4-7 bots) require full inventory to clear non-active items."""
+    """Medium teams (4-7 bots) clear non-active items at 2+ items."""
 
-    def test_partial_skips(self):
-        """5-bot team should NOT clear at 2 items (needs full=3)."""
+    def test_partial_clears(self):
+        """5-bot team SHOULD clear at 2 items (lowered from 3)."""
         bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]}] + [
             {"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)
         ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])])
         ctx = p._build_bot_context(p.bots_by_id[0])
-        assert p._step_clear_nonactive_inventory(ctx) is False
+        assert p._step_clear_nonactive_inventory(ctx) is True
 
     def test_full_clears(self):
         bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter", "eggs"]}] + [

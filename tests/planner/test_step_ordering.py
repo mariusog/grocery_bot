@@ -32,8 +32,8 @@ class TestStepChainStructure:
     def test_idle_positioning_is_last(self):
         assert RoundPlanner._STEP_CHAIN[-1].__name__ == "_step_idle_positioning"
 
-    def test_chain_has_23_steps(self):
-        assert len(RoundPlanner._STEP_CHAIN) == 23
+    def test_chain_has_24_steps(self):
+        assert len(RoundPlanner._STEP_CHAIN) == 24
 
     def test_all_expected_steps_present(self):
         expected = {
@@ -57,6 +57,7 @@ class TestStepChainStructure:
             "_step_oracle_prepick",
             "_step_speculative_pickup",
             "_step_break_oscillation",
+            "_step_pipeline_pickup",
             "_step_clear_dropoff",
             "_step_idle_nonactive_deliver",
             "_step_idle_positioning",

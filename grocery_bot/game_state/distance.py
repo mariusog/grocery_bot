@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from grocery_bot.constants import DIST_CACHE_MAX
+from grocery_bot.constants import ASSIGNMENT_DROPOFF_WEIGHT, DIST_CACHE_MAX
 from grocery_bot.game_state._base import GameStateBase
 from grocery_bot.pathfinding import bfs_all, find_adjacent_positions
 
@@ -42,3 +42,26 @@ class DistanceMixin(GameStateBase):
                 best_d = d
                 best_cell = ac
         return best_cell, best_d
+
+    def find_best_item_target_weighted(
+        self,
+        bot_pos: tuple[int, int],
+        item: dict[str, Any],
+        dropoff: tuple[int, int],
+        dropoff_weight: float = ASSIGNMENT_DROPOFF_WEIGHT,
+    ) -> tuple[tuple[int, int] | None, float]:
+        """Find adjacent cell minimizing d_bot + dropoff_weight * d_dropoff (BFS)."""
+        ipos = tuple(item["position"])
+        adj_cells = self.adj_cache.get(
+            ipos, find_adjacent_positions(ipos[0], ipos[1], self.blocked_static)
+        )
+        if not adj_cells:
+            return None, float("inf")
+        best_cell: tuple[int, int] | None = None
+        best_cost = float("inf")
+        for ac in adj_cells:
+            cost = self.dist_static(bot_pos, ac) + dropoff_weight * self.dist_static(ac, dropoff)
+            if cost < best_cost:
+                best_cost = cost
+                best_cell = ac
+        return best_cell, best_cost

@@ -3,6 +3,7 @@
 from typing import Any
 
 from grocery_bot.constants import (
+    ASSIGNMENT_CANDIDATES_PER_TYPE,
     ASSIGNMENT_DROPOFF_WEIGHT,
     MAX_INVENTORY,
     MAX_PREVIEW_BOTS,

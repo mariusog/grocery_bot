@@ -56,6 +56,8 @@ class GameStateBase:
     _history_gen: int
     spawn_origin: tuple[int, int] | None
     spawn_dispersal_targets: dict[int, tuple[int, int]] | None
+    spawn_lane_dispersal: bool
+    spawn_dispersal_done: set[int]
 
     # --- Pickup tracking ---
     last_pickup: dict[int, tuple[str, int]]
@@ -75,4 +77,14 @@ class GameStateBase:
         self, pos: tuple[int, int], item: dict[str, Any]
     ) -> tuple[tuple[int, int] | None, float]:
         """Closest reachable adjacent cell for an item. Provided by DistanceMixin."""
+        raise NotImplementedError
+
+    def find_best_item_target_weighted(
+        self,
+        bot_pos: tuple[int, int],
+        item: dict[str, Any],
+        dropoff: tuple[int, int],
+        dropoff_weight: float = 3.0,
+    ) -> tuple[tuple[int, int] | None, float]:
+        """Weighted cost: d_bot + weight * d_dropoff. Provided by DistanceMixin."""
         raise NotImplementedError

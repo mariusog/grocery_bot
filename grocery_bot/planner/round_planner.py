@@ -121,6 +121,13 @@ class RoundPlanner(
         self._compute_bot_assignments()
         self._identify_batch_b()
         self._assign_speculative_targets()
+
+        # Compute spawn dispersal targets early so _pre_predict and the
+        # step chain can see them (including the spawn_lane_dispersal flag).
+        # Only for single-dropoff maps (lane-based dispersal).
+        if self.cfg.use_spawn_dispersal and len(self.drop_off_zones) <= 1:
+            self._infer_spawn_origin()
+            self._compute_dispersal_targets()
         self.gs.update_round_positions(
             {b["id"]: tuple(b["position"]) for b in self.bots},
             self.drop_off,
@@ -346,6 +353,7 @@ RoundPlanner._STEP_CHAIN = [
     RoundPlanner._step_oracle_prepick,
     RoundPlanner._step_speculative_pickup,
     RoundPlanner._step_break_oscillation,
+    RoundPlanner._step_pipeline_pickup,
     RoundPlanner._step_clear_dropoff,
     RoundPlanner._step_idle_nonactive_deliver,
     RoundPlanner._step_idle_positioning,

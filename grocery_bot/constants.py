@@ -89,7 +89,8 @@ CORRIDOR_HEIGHT_THRESHOLD = 10  # grid heights > this get a second corridor row
 # Hungarian algorithm threshold
 # ---------------------------------------------------------------------------
 HUNGARIAN_MAX_PAIRS = 200  # n_bots * n_items <= this uses Hungarian; else greedy
-ASSIGNMENT_DROPOFF_WEIGHT = 1.0  # weight for item-to-dropoff distance in assignment cost
+ASSIGNMENT_DROPOFF_WEIGHT = 3.0  # weight for item-to-dropoff distance in assignment cost
+ASSIGNMENT_CANDIDATES_PER_TYPE = 3  # max candidate items per type for assignment solver
 
 # ---------------------------------------------------------------------------
 # Minimum inventory for non-active delivery
@@ -150,6 +151,7 @@ ORACLE_IDLE_ATTRACTION = 0.4  # idle positioning weight toward oracle-needed ite
 # Spawn dispersal (planner/spawn.py)
 # ---------------------------------------------------------------------------
 SPAWN_DISPERSAL_MAX_ROUNDS = 12  # only apply spawn dispersal in the opening
+MIN_LANE_ADJ_CELLS = 8  # min item-adjacent cells for a column to be an aisle lane
 
 # ---------------------------------------------------------------------------
 # Oracle planner (planner/oracle_planner.py, oracle_scheduler.py)

@@ -54,17 +54,19 @@ class TestLargeTeam:
         assert cfg.use_corridor_penalty is True
         assert cfg.preview_stage_weight == 0.4
         assert cfg.target_attraction_weight == 0.0
-        assert cfg.max_concurrent_deliverers == max(2, 10 // 4)
+        assert cfg.max_concurrent_deliverers == max(3, 10 // 4)
         assert cfg.max_nonactive_deliverers == max(1, 10 // 3)
         assert cfg.extra_preview_roles is True
+        assert cfg.max_approach_slots == 2  # Expert: default slots
 
 
 class TestHugeTeam:
     def test_20bot(self):
         cfg = get_team_config(20)
         assert cfg.blocking_radius == 5.0
-        assert cfg.max_concurrent_deliverers == max(2, 20 // 4)
+        assert cfg.max_concurrent_deliverers == max(3, 20 // 4)
         assert cfg.max_nonactive_deliverers == max(1, 20 // 3)
+        assert cfg.max_approach_slots == 3  # 15+ bots: 3 approach slots
 
     def test_15bot_blocking_radius(self):
         cfg = get_team_config(15)
@@ -94,7 +96,7 @@ class TestMethods:
 
     def test_nonactive_clear_min_inv_medium(self):
         cfg = get_team_config(5)
-        assert cfg.nonactive_clear_min_inv(has_assignment=False) == 3
+        assert cfg.nonactive_clear_min_inv(has_assignment=False) == 2
 
     def test_preview_prepick_force_large_idle(self):
         cfg = get_team_config(10)
