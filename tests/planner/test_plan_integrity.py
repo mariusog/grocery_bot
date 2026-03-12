@@ -6,8 +6,11 @@ from tests.conftest import get_action, make_planner, make_state
 
 def _order(items, oid="o0"):
     return {
-        "id": oid, "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": oid,
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
@@ -33,8 +36,10 @@ class TestOneActionPerBot:
     def test_5bot(self):
         p = make_planner(
             bots=[{"id": i, "position": [i * 2 + 1, 4], "inventory": []} for i in range(5)],
-            items=[{"id": "i0", "type": "cheese", "position": [4, 2]},
-                   {"id": "i1", "type": "milk", "position": [6, 2]}],
+            items=[
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [6, 2]},
+            ],
             orders=[_order(["cheese", "milk"])],
         )
         assert len(p.actions) == 5
@@ -44,12 +49,20 @@ class TestOneActionPerBot:
 class TestAllWaitWhenNoOrder:
     def test_completed_order(self):
         p = make_planner(
-            bots=[{"id": 0, "position": [3, 3], "inventory": []},
-                  {"id": 1, "position": [7, 3], "inventory": []}],
-            items=[], orders=[{
-                "id": "o0", "items_required": ["cheese"],
-                "items_delivered": ["cheese"], "complete": True, "status": "completed",
-            }],
+            bots=[
+                {"id": 0, "position": [3, 3], "inventory": []},
+                {"id": 1, "position": [7, 3], "inventory": []},
+            ],
+            items=[],
+            orders=[
+                {
+                    "id": "o0",
+                    "items_required": ["cheese"],
+                    "items_delivered": ["cheese"],
+                    "complete": True,
+                    "status": "completed",
+                }
+            ],
         )
         assert all(a["action"] == "wait" for a in p.actions)
 
@@ -68,7 +81,9 @@ class TestBasicBehavior:
     def test_delivers_when_all_picked(self):
         state = make_state(
             bots=[{"id": 0, "position": [5, 4], "inventory": ["cheese"]}],
-            items=[], orders=[_order(["cheese"])], drop_off=[1, 8],
+            items=[],
+            orders=[_order(["cheese"])],
+            drop_off=[1, 8],
         )
         bot.reset_state()
         a = get_action(bot.decide_actions(state), 0)
@@ -77,7 +92,9 @@ class TestBasicBehavior:
     def test_drops_off_at_dropoff(self):
         state = make_state(
             bots=[{"id": 0, "position": [1, 8], "inventory": ["cheese"]}],
-            items=[], orders=[_order(["cheese"])], drop_off=[1, 8],
+            items=[],
+            orders=[_order(["cheese"])],
+            drop_off=[1, 8],
         )
         bot.reset_state()
         a = get_action(bot.decide_actions(state), 0)
@@ -86,7 +103,9 @@ class TestBasicBehavior:
     def test_mixed_inventory_at_dropoff(self):
         state = make_state(
             bots=[{"id": 0, "position": [1, 8], "inventory": ["cheese", "bread"]}],
-            items=[], orders=[_order(["cheese"])], drop_off=[1, 8],
+            items=[],
+            orders=[_order(["cheese"])],
+            drop_off=[1, 8],
         )
         bot.reset_state()
         a = get_action(bot.decide_actions(state), 0)

@@ -42,8 +42,7 @@ class TestMultiBotCollisionEdgeCases:
         p0 = _predict_pos(3, 5, a0["action"])
         p1 = _predict_pos(6, 5, a1["action"])
         assert p0 != p1, (
-            f"Bots predicted to same cell: bot0->{p0} ({a0['action']}), "
-            f"bot1->{p1} ({a1['action']})"
+            f"Bots predicted to same cell: bot0->{p0} ({a0['action']}), bot1->{p1} ({a1['action']})"
         )
 
     def test_yield_to_delivering_bot(self):
@@ -82,9 +81,7 @@ class TestMultiBotCollisionEdgeCases:
         from grocery_bot.pathfinding import _predict_pos
 
         p0 = _predict_pos(2, 7, a0["action"])
-        assert p0 != (2, 8), (
-            f"Bot 0 should yield to bot 1 at dropoff, but moved to {p0}"
-        )
+        assert p0 != (2, 8), f"Bot 0 should yield to bot 1 at dropoff, but moved to {p0}"
 
     def test_bots_at_spawn_disperse(self):
         """Multiple bots starting near each other should spread out,
@@ -115,8 +112,7 @@ class TestMultiBotCollisionEdgeCases:
         actions = bot.decide_actions(state)
         moving = sum(1 for a in actions if a["action"] != "wait")
         assert moving >= 2, (
-            f"At least 2 of 3 bots should be moving from spawn, "
-            f"but only {moving} moved: {actions}"
+            f"At least 2 of 3 bots should be moving from spawn, but only {moving} moved: {actions}"
         )
 
     def test_dropoff_congestion_three_bots(self):

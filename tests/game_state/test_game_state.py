@@ -44,16 +44,12 @@ class TestMultiTripPlanning:
         trip1_types = {it["type"] for it, _ in route}
         # Whatever split, total cost should be <= naive 3-closest approach
         trip1_cost = bot.tsp_cost(bot_pos, route, drop_off)
-        trip2_items = [
-            (it, cell) for it, cell in candidates if it["type"] not in trip1_types
-        ]
+        trip2_items = [(it, cell) for it, cell in candidates if it["type"] not in trip1_types]
         trip2_cost = bot.tsp_cost(drop_off, trip2_items, drop_off) if trip2_items else 0
         total_optimal = trip1_cost + trip2_cost
 
         # Compare with greedy: 3 closest
-        candidates_sorted = sorted(
-            candidates, key=lambda c: bot.dist_static(bot_pos, c[1])
-        )
+        candidates_sorted = sorted(candidates, key=lambda c: bot.dist_static(bot_pos, c[1]))
         greedy_trip1 = candidates_sorted[:3]
         greedy_trip2 = candidates_sorted[3:]
         greedy_route1 = bot.tsp_route(bot_pos, greedy_trip1, drop_off)
@@ -72,6 +68,4 @@ class TestMultiTripPlanning:
 
         sim = GameSimulator(seed=42, num_bots=1)
         result = sim.run()
-        assert result["score"] >= 120, (
-            f"Score {result['score']} regressed from baseline"
-        )
+        assert result["score"] >= 120, f"Score {result['score']} regressed from baseline"

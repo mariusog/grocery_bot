@@ -15,15 +15,21 @@ from tests.conftest import make_state
 
 def _order(items, status="active"):
     return {
-        "id": "o0", "items_required": items,
-        "items_delivered": [], "complete": False, "status": status,
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": status,
     }
 
 
 def _preview(items):
     return {
-        "id": "o1", "items_required": items,
-        "items_delivered": [], "complete": False, "status": "preview",
+        "id": "o1",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "preview",
     }
 
 
@@ -57,16 +63,14 @@ class TestAssignedBotSkipsPreview:
         """Assigned bot on 5-bot team skips adjacent preview item."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": []},
-        ] + [
-            {"id": i, "position": [i + 6, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 6, 4], "inventory": []} for i in range(1, 5)]
         items = [
             {"id": "i_active", "type": "cheese", "position": [8, 2]},
             {"id": "i_preview", "type": "bread", "position": [5, 3]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese"]), _preview(["bread"])],
         )
         # Force bot 0 to be assigned to the active item
@@ -81,39 +85,33 @@ class TestAssignedBotSkipsPreview:
         """Unassigned bot on 5-bot team can still pick adjacent preview."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": []},
-        ] + [
-            {"id": i, "position": [i + 6, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 6, 4], "inventory": []} for i in range(1, 5)]
         items = [
             {"id": "i_active", "type": "cheese", "position": [8, 2]},
             {"id": "i_preview", "type": "bread", "position": [5, 3]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese"]), _preview(["bread"])],
         )
         # Ensure bot 0 is NOT assigned
         p.bot_assignments.pop(0, None)
         ctx = p._build_bot_context(p.bots_by_id[0])
         result = p._step_opportunistic_preview(ctx)
-        assert result is True, (
-            "Unassigned bot should still pick adjacent preview items"
-        )
+        assert result is True, "Unassigned bot should still pick adjacent preview items"
 
     def test_assigned_picks_preview_when_no_active_on_shelves(self):
         """Assigned bot picks preview when all active items already carried."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": ["cheese"]},
-        ] + [
-            {"id": i, "position": [i + 6, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 6, 4], "inventory": []} for i in range(1, 5)]
         items = [
             {"id": "i_preview", "type": "bread", "position": [5, 3]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese"]), _preview(["bread"])],
         )
         # Bot 0 carries cheese (active item). No active items on shelves.
@@ -121,33 +119,27 @@ class TestAssignedBotSkipsPreview:
         assert p.active_on_shelves == 0
         ctx = p._build_bot_context(p.bots_by_id[0])
         result = p._step_opportunistic_preview(ctx)
-        assert result is True, (
-            "Assigned bot should pick preview when no active items on shelves"
-        )
+        assert result is True, "Assigned bot should pick preview when no active items on shelves"
 
     def test_10bot_assigned_skips_preview(self):
         """Assigned bot on 10-bot team also skips preview."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": []},
-        ] + [
-            {"id": i, "position": [i + 1, 4], "inventory": []}
-            for i in range(1, 10)
-        ]
+        ] + [{"id": i, "position": [i + 1, 4], "inventory": []} for i in range(1, 10)]
         items = [
             {"id": "i_active", "type": "cheese", "position": [8, 2]},
             {"id": "i_preview", "type": "bread", "position": [5, 3]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese"]), _preview(["bread"])],
             width=14,
         )
         p.bot_assignments[0] = [items[0]]
         ctx = p._build_bot_context(p.bots_by_id[0])
         result = p._step_opportunistic_preview(ctx)
-        assert result is False, (
-            "Assigned bot on 10-bot team should skip preview"
-        )
+        assert result is False, "Assigned bot on 10-bot team should skip preview"
 
     def test_2bot_assigned_always_skips(self):
         """2-bot team: assigned bot always skips preview (existing behavior)."""
@@ -160,12 +152,11 @@ class TestAssignedBotSkipsPreview:
             {"id": "i_preview", "type": "bread", "position": [5, 3]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese"]), _preview(["bread"])],
         )
         p.bot_assignments[0] = [items[0]]
         ctx = p._build_bot_context(p.bots_by_id[0])
         result = p._step_opportunistic_preview(ctx)
-        assert result is False, (
-            "Assigned bot on 2-bot team should always skip preview"
-        )
+        assert result is False, "Assigned bot on 2-bot team should always skip preview"

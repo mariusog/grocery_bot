@@ -46,6 +46,4 @@ class TestSpawnDispersalTargets:
                     continue
                 ctx = planner._build_bot_context(b)
                 result = planner._step_spawn_dispersal(ctx)
-                assert result is False, (
-                    f"Assigned bot {bid} should not be dispersed"
-                )
+                assert result is False, f"Assigned bot {bid} should not be dispersed"

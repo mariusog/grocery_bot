@@ -13,15 +13,21 @@ from tests.conftest import make_state
 
 def _order(items, status="active"):
     return {
-        "id": "o0", "items_required": items,
-        "items_delivered": [], "complete": False, "status": status,
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": status,
     }
 
 
 def _preview(items):
     return {
-        "id": "o1", "items_required": items,
-        "items_delivered": [], "complete": False, "status": "preview",
+        "id": "o1",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "preview",
     }
 
 
@@ -63,10 +69,7 @@ class TestMediumTeamClearing:
         """5-bot team: 2 non-active items should NOT clear (needs 3)."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]},
-        ] + [
-            {"id": i, "position": [i + 5, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)]
         p = _planner(
             bots,
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
@@ -79,10 +82,7 @@ class TestMediumTeamClearing:
         """5-bot team: 3 non-active items (full) SHOULD clear."""
         bots = [
             {"id": 0, "position": [5, 4], "inventory": ["bread", "butter", "eggs"]},
-        ] + [
-            {"id": i, "position": [i + 5, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)]
         p = _planner(
             bots,
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
@@ -102,16 +102,11 @@ class TestLargeTeamPreviewCap:
 
     def test_10bot_max_preview_bots(self):
         """10-bot team: preview_bot_ids should be capped (not all idle bots)."""
-        bots = [
-            {"id": i, "position": [i + 1, 4], "inventory": []}
-            for i in range(10)
-        ]
-        items = [
-            {"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]}
-            for j in range(2)
-        ]
+        bots = [{"id": i, "position": [i + 1, 4], "inventory": []} for i in range(10)]
+        items = [{"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]} for j in range(2)]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["t0", "t1"]), _preview(["t0", "t1"])],
             width=14,
         )
@@ -122,18 +117,14 @@ class TestLargeTeamPreviewCap:
 
     def test_20bot_max_preview_bots(self):
         """20-bot Nightmare team: preview_bot_ids capped."""
-        bots = [
-            {"id": i, "position": [i + 1, 4], "inventory": []}
-            for i in range(20)
-        ]
-        items = [
-            {"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]}
-            for j in range(4)
-        ]
+        bots = [{"id": i, "position": [i + 1, 4], "inventory": []} for i in range(20)]
+        items = [{"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]} for j in range(4)]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["t0", "t1", "t2", "t3"]), _preview(["t0", "t1"])],
-            width=28, height=18,
+            width=28,
+            height=18,
         )
         assert len(p.preview_bot_ids) <= 3, (
             f"Too many preview bots: {len(p.preview_bot_ids)}, expected <= 3"
@@ -141,26 +132,17 @@ class TestLargeTeamPreviewCap:
 
     def test_speculative_pickers_capped(self):
         """After plan(), total spec+preview pickers on 10-bot team stays bounded."""
-        bots = [
-            {"id": i, "position": [i + 1, 4], "inventory": []}
-            for i in range(10)
-        ]
-        items = [
-            {"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]}
-            for j in range(2)
-        ]
+        bots = [{"id": i, "position": [i + 1, 4], "inventory": []} for i in range(10)]
+        items = [{"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]} for j in range(2)]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["t0", "t1"]), _preview(["t0", "t1"])],
             width=14,
         )
         # Count bots that ended up in preview/speculative roles
-        preview_roles = sum(
-            1 for r in p.bot_roles.values() if r in ("preview",)
-        )
-        assert preview_roles <= 4, (
-            f"Too many preview-role bots: {preview_roles}, expected <= 4"
-        )
+        preview_roles = sum(1 for r in p.bot_roles.values() if r in ("preview",))
+        assert preview_roles <= 4, f"Too many preview-role bots: {preview_roles}, expected <= 4"
 
 
 # =====================================================================
@@ -180,17 +162,15 @@ class TestEarlyDeliveryStep:
         # Fill up: walk far for 1 item, deliver, fetch rest — more total cost.
         bots = [
             {"id": 0, "position": [2, 7], "inventory": ["cheese", "milk"]},
-        ] + [
-            {"id": i, "position": [i + 3, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 3, 4], "inventory": []} for i in range(1, 5)]
         items = [
             {"id": "i0", "type": "bread", "position": [9, 2]},
             {"id": "i1", "type": "eggs", "position": [9, 4]},
             {"id": "i2", "type": "butter", "position": [9, 6]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese", "milk", "bread", "eggs", "butter"])],
         )
         pos = tuple(p.bots_by_id[0]["position"])
@@ -211,7 +191,8 @@ class TestEarlyDeliveryStep:
             {"id": "i_also", "type": "bread", "position": [5, 2]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese", "milk", "bread"])],
         )
         pos = tuple(p.bots_by_id[0]["position"])
@@ -229,15 +210,13 @@ class TestEarlyDeliveryStep:
         """Early delivery should NOT fire for teams >= 8 (Expert/Nightmare)."""
         bots = [
             {"id": 0, "position": [3, 7], "inventory": ["cheese", "milk"]},
-        ] + [
-            {"id": i, "position": [i + 3, 4], "inventory": []}
-            for i in range(1, 8)
-        ]
+        ] + [{"id": i, "position": [i + 3, 4], "inventory": []} for i in range(1, 8)]
         items = [
             {"id": "i_far", "type": "bread", "position": [9, 2]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese", "milk", "bread"])],
             width=14,
         )
@@ -256,7 +235,8 @@ class TestEarlyDeliveryStep:
             {"id": "i_far", "type": "bread", "position": [9, 2]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese", "milk", "bread"])],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
@@ -266,17 +246,15 @@ class TestEarlyDeliveryStep:
         """Early delivery SHOULD fire for 5-bot team when conditions are met."""
         bots = [
             {"id": 0, "position": [2, 7], "inventory": ["cheese", "milk"]},
-        ] + [
-            {"id": i, "position": [i + 3, 4], "inventory": []}
-            for i in range(1, 5)
-        ]
+        ] + [{"id": i, "position": [i + 3, 4], "inventory": []} for i in range(1, 5)]
         items = [
             {"id": "i0", "type": "bread", "position": [9, 2]},
             {"id": "i1", "type": "eggs", "position": [9, 4]},
             {"id": "i2", "type": "butter", "position": [9, 6]},
         ]
         p = _planner(
-            bots, items,
+            bots,
+            items,
             [_order(["cheese", "milk", "bread", "eggs", "butter"])],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])

@@ -140,9 +140,7 @@ class TestSimulatedGame:
         reset_bot()
         actions = bot.decide_actions(state)
         action = actions[0]
-        assert action["action"] != "wait", (
-            f"Bot should not wait on round 0, got {action}"
-        )
+        assert action["action"] != "wait", f"Bot should not wait on round 0, got {action}"
 
 
 class TestSimulatorDifficultyPresets:
@@ -214,13 +212,9 @@ class TestSimulatorPerformanceProfiling:
         result = sim.run(profile=True)
         stats = result["timings"]["decide_actions"]
         # Average should be under 5ms on any reasonable machine
-        assert stats["avg_ms"] < 5.0, (
-            f"decide_actions avg {stats['avg_ms']:.3f}ms is too slow"
-        )
+        assert stats["avg_ms"] < 5.0, f"decide_actions avg {stats['avg_ms']:.3f}ms is too slow"
         # Max (including round 0 with init_static) under 50ms
-        assert stats["max_ms"] < 50.0, (
-            f"decide_actions max {stats['max_ms']:.3f}ms is too slow"
-        )
+        assert stats["max_ms"] < 50.0, f"decide_actions max {stats['max_ms']:.3f}ms is too slow"
 
     def test_full_game_wall_time(self):
         """Full Easy game should complete in under 2 seconds."""

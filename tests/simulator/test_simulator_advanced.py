@@ -33,9 +33,7 @@ class TestOrderCascadeDelivery:
         ]
         sim.active_order_idx = 0
         # Bot at dropoff with milk (for order 0) and cheese (for order 1)
-        sim.bots = [
-            {"id": 0, "position": list(sim.drop_off), "inventory": ["milk", "cheese"]}
-        ]
+        sim.bots = [{"id": 0, "position": list(sim.drop_off), "inventory": ["milk", "cheese"]}]
         # Perform dropoff
         sim._do_dropoff(sim.bots[0])
         # Order 0 should be complete, and cheese should cascade to order 1
@@ -64,15 +62,11 @@ class TestOrderCascadeDelivery:
             },
         ]
         sim.active_order_idx = 0
-        sim.bots = [
-            {"id": 0, "position": list(sim.drop_off), "inventory": ["milk", "cheese"]}
-        ]
+        sim.bots = [{"id": 0, "position": list(sim.drop_off), "inventory": ["milk", "cheese"]}]
         sim._do_dropoff(sim.bots[0])
         assert sim.orders[0]["complete"]
         assert not sim.orders[1]["complete"], "Order 1 needs bread, not cheese"
-        assert sim.bots[0]["inventory"] == ["cheese"], (
-            "Cheese should remain in inventory"
-        )
+        assert sim.bots[0]["inventory"] == ["cheese"], "Cheese should remain in inventory"
 
 
 class TestDiagnosticMode:

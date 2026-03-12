@@ -176,9 +176,7 @@ class TestTryIdlePositioning:
         assert result is True
         assert target is not None
         next_pos = planner.predicted[0]
-        assert planner.gs.dist_static(next_pos, target) < planner.gs.dist_static(
-            (24, 9), target
-        )
+        assert planner.gs.dist_static(next_pos, target) < planner.gs.dist_static((24, 9), target)
 
 
 class TestLargeTeamStayBias:
@@ -215,6 +213,7 @@ class TestIdleDropoffPenaltyRadius:
 
     def test_constant_value(self):
         from grocery_bot.constants import IDLE_DROPOFF_PENALTY_RADIUS
+
         assert IDLE_DROPOFF_PENALTY_RADIUS == 2
 
 
@@ -249,6 +248,7 @@ class TestLargeTeamNoTargetAttract:
     def test_5bot_still_uses_target_distance(self):
         """5-bot team should still attract idle bots toward item targets."""
         from grocery_bot.constants import IDLE_TARGET_DISTANCE_WEIGHT
+
         # Verify the constant is non-zero (used for small teams)
         assert IDLE_TARGET_DISTANCE_WEIGHT > 0
 
@@ -300,9 +300,7 @@ class TestOscillationDetection:
 class TestBreakOscillation:
     """Tests for _step_break_oscillation step chain behavior."""
 
-    def _planner_oscillating_with_inv(
-        self, inv: list[str], positions: list[tuple[int, int]]
-    ):
+    def _planner_oscillating_with_inv(self, inv: list[str], positions: list[tuple[int, int]]):
         """Create a planner where bot 0 is oscillating with given inventory."""
         planner = make_planner(
             bots=[
@@ -319,9 +317,7 @@ class TestBreakOscillation:
 
     def test_oscillating_with_inventory_delivers(self):
         """Oscillating bot with items should head to dropoff."""
-        planner = self._planner_oscillating_with_inv(
-            ["milk"], [(5, 4), (5, 5), (5, 4)]
-        )
+        planner = self._planner_oscillating_with_inv(["milk"], [(5, 4), (5, 5), (5, 4)])
         ctx = planner._build_bot_context(planner.bots[0])
         result = planner._step_break_oscillation(ctx)
         assert result is True
@@ -331,9 +327,7 @@ class TestBreakOscillation:
 
     def test_oscillating_empty_waits(self):
         """Oscillating bot with no items should wait."""
-        planner = self._planner_oscillating_with_inv(
-            [], [(5, 4), (5, 5), (5, 4)]
-        )
+        planner = self._planner_oscillating_with_inv([], [(5, 4), (5, 5), (5, 4)])
         ctx = planner._build_bot_context(planner.bots[0])
         result = planner._step_break_oscillation(ctx)
         assert result is True
@@ -342,9 +336,7 @@ class TestBreakOscillation:
 
     def test_not_oscillating_skips(self):
         """Non-oscillating bot should not trigger the step."""
-        planner = self._planner_oscillating_with_inv(
-            ["milk"], [(5, 4), (5, 5), (5, 6)]
-        )
+        planner = self._planner_oscillating_with_inv(["milk"], [(5, 4), (5, 5), (5, 6)])
         ctx = planner._build_bot_context(planner.bots[0])
         result = planner._step_break_oscillation(ctx)
         assert result is False

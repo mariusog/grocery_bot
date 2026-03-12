@@ -210,9 +210,7 @@ class TestPreviewDoesntBlockActive:
                 # Check if last 10 actions repeat a 2-round cycle
                 # Allow endgame idle (last 30 rounds) — bot may legitimately wait
                 if len(set(last_actions)) <= 2 and sim.round < 270:
-                    raise AssertionError(
-                        f"Bot stuck in loop at round {sim.round}: {last_actions}"
-                    )
+                    raise AssertionError(f"Bot stuck in loop at round {sim.round}: {last_actions}")
             sim.apply_actions(actions)
 
         assert sim.score > 50, f"Score {sim.score} too low — possible stuck loop"

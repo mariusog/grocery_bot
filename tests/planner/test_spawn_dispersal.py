@@ -15,8 +15,11 @@ from tests.conftest import make_state
 
 def _order(items):
     return {
-        "id": "o0", "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
@@ -71,45 +74,49 @@ class TestSpawnVerticalSpread:
         state = _spawn_state(3, (9, 7), items, ["cheese", "milk", "bread"])
         positions, _ = _run_rounds(state, 5)
         ys = {pos[1] for pos in positions.values()}
-        assert len(ys) >= 2, (
-            f"Bots stuck on same row after 5 rounds: {positions}"
-        )
+        assert len(ys) >= 2, f"Bots stuck on same row after 5 rounds: {positions}"
 
     def test_5bot_spread_after_5_rounds(self):
         """5 bots should use at least 2 distinct Y coords after 5 rounds."""
         items = [
             {"id": f"i{i}", "type": t, "position": p}
-            for i, (t, p) in enumerate([
-                ("cheese", [4, 2]), ("milk", [4, 10]),
-                ("bread", [8, 2]), ("butter", [8, 10]),
-                ("eggs", [6, 6]),
-            ])
+            for i, (t, p) in enumerate(
+                [
+                    ("cheese", [4, 2]),
+                    ("milk", [4, 10]),
+                    ("bread", [8, 2]),
+                    ("butter", [8, 10]),
+                    ("eggs", [6, 6]),
+                ]
+            )
         ]
         state = _spawn_state(
-            5, (9, 7), items, ["cheese", "milk", "bread"],
-            width=11, height=13,
+            5,
+            (9, 7),
+            items,
+            ["cheese", "milk", "bread"],
+            width=11,
+            height=13,
         )
         positions, _ = _run_rounds(state, 5)
         ys = {pos[1] for pos in positions.values()}
-        assert len(ys) >= 2, (
-            f"5 bots stuck on same row after 5 rounds: {positions}"
-        )
+        assert len(ys) >= 2, f"5 bots stuck on same row after 5 rounds: {positions}"
 
     def test_10bot_spread_after_8_rounds(self):
         """10 bots should use at least 3 distinct Y coords after 8 rounds."""
-        items = [
-            {"id": f"i{i}", "type": f"t{i}", "position": [5, 2 + i * 2]}
-            for i in range(7)
-        ]
+        items = [{"id": f"i{i}", "type": f"t{i}", "position": [5, 2 + i * 2]} for i in range(7)]
         state = _spawn_state(
-            10, (26, 16), items, ["t0", "t1"],
-            width=28, height=18, drop_off=[1, 16],
+            10,
+            (26, 16),
+            items,
+            ["t0", "t1"],
+            width=28,
+            height=18,
+            drop_off=[1, 16],
         )
         positions, _ = _run_rounds(state, 8)
         ys = {pos[1] for pos in positions.values()}
-        assert len(ys) >= 3, (
-            f"10 bots lack vertical spread after 8 rounds: {positions}"
-        )
+        assert len(ys) >= 3, f"10 bots lack vertical spread after 8 rounds: {positions}"
 
 
 class TestSpawnNoConvoy:
@@ -125,9 +132,7 @@ class TestSpawnNoConvoy:
         positions, _ = _run_rounds(state, 3)
         ys = [pos[1] for pos in positions.values()]
         # At least one bot should be on a different row
-        assert len(set(ys)) >= 2, (
-            f"All 3 bots on same row (convoy): y={ys}"
-        )
+        assert len(set(ys)) >= 2, f"All 3 bots on same row (convoy): y={ys}"
 
 
 class TestReplayMapSpread:
@@ -207,6 +212,4 @@ class TestSpawnRegression:
         bot.reset_state()
         actions = bot.decide_actions(state)
         movers = [a for a in actions if a["action"] != "wait"]
-        assert len(movers) == 2, (
-            f"Both bots should move but got: {[a['action'] for a in actions]}"
-        )
+        assert len(movers) == 2, f"Both bots should move but got: {[a['action'] for a in actions]}"

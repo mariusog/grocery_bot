@@ -15,8 +15,11 @@ from tests.conftest import make_state
 
 def _order(items, status="active"):
     return {
-        "id": "o0", "items_required": items,
-        "items_delivered": [], "complete": False, "status": status,
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": status,
     }
 
 
@@ -64,8 +67,7 @@ class TestMatchingItemsSkipThrottle:
         ctx = p._build_bot_context(p.bots_by_id[4])
         result = p._step_idle_nonactive_deliver(ctx)
         assert result is True, (
-            "Bot with matching items should skip throttle when "
-            "active_on_shelves=0"
+            "Bot with matching items should skip throttle when active_on_shelves=0"
         )
 
     def test_nonmatching_bot_still_throttled(self):
@@ -83,9 +85,7 @@ class TestMatchingItemsSkipThrottle:
         p._nonactive_delivering = p.cfg.max_nonactive_deliverers  # throttle consumed
         ctx = p._build_bot_context(p.bots_by_id[2])
         result = p._step_idle_nonactive_deliver(ctx)
-        assert result is False, (
-            "Bot with non-matching items should stay throttled"
-        )
+        assert result is False, "Bot with non-matching items should stay throttled"
 
     def test_throttle_applies_when_items_on_shelves(self):
         """Even matching bots are throttled when items remain on shelves."""
@@ -101,9 +101,7 @@ class TestMatchingItemsSkipThrottle:
         p._nonactive_delivering = 1
         ctx = p._build_bot_context(p.bots_by_id[1])
         result = p._step_idle_nonactive_deliver(ctx)
-        assert result is False, (
-            "Throttle should apply when active items remain on shelves"
-        )
+        assert result is False, "Throttle should apply when active items remain on shelves"
 
     def test_active_on_shelves_unchanged(self):
         """active_on_shelves counts only shelf items, not duplicates."""

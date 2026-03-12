@@ -187,9 +187,7 @@ class TestCongestionRegression:
         """5-bot average across seeds 1-10 should be >= 60."""
         scores = _scores(hard_results[:10])
         avg = statistics.mean(scores)
-        assert avg >= 60, (
-            f"5-bot average score {avg:.1f} is below 60 threshold (scores: {scores})"
-        )
+        assert avg >= 60, f"5-bot average score {avg:.1f} is below 60 threshold (scores: {scores})"
 
     def test_no_excessive_idle_rounds(self, hard_diagnostics):
         """Idle rounds should be < 50% of total bot-rounds for 5 bots."""
@@ -207,16 +205,13 @@ class TestCongestionRegression:
         for seed, result in hard_diagnostics:
             diag = result["diagnostics"]
             assert diag["max_delivery_gap"] < 150, (
-                f"5-bot seed {seed}: max delivery gap {diag['max_delivery_gap']} "
-                f"exceeds 150 rounds"
+                f"5-bot seed {seed}: max delivery gap {diag['max_delivery_gap']} exceeds 150 rounds"
             )
 
     def test_10bot_scores_above_zero(self, expert_results):
         """10-bot configs should score > 0 for all seeds 1-10."""
         for seed, result in expert_results[:10]:
-            assert result["score"] > 0, (
-                f"10-bot seed {seed} scored 0 (complete deadlock)"
-            )
+            assert result["score"] > 0, f"10-bot seed {seed} scored 0 (complete deadlock)"
 
 
 @pytest.mark.slow

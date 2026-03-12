@@ -18,24 +18,34 @@ def _write_test_log(tmp_path, rounds_data):
     rows = []
     for rnd, score, actions in rounds_data:
         for a in actions:
-            rows.append({
-                "round": rnd,
-                "score": score,
-                "order_idx": a.get("order_idx", 0),
-                "bot_id": a["bot_id"],
-                "bot_pos": a.get("bot_pos", "10,8"),
-                "inventory": a.get("inventory", ""),
-                "action": a["action"],
-                "item_id": a.get("item_id", ""),
-                "active_needed": "",
-                "active_delivered": "",
-                "preview_needed": "",
-            })
+            rows.append(
+                {
+                    "round": rnd,
+                    "score": score,
+                    "order_idx": a.get("order_idx", 0),
+                    "bot_id": a["bot_id"],
+                    "bot_pos": a.get("bot_pos", "10,8"),
+                    "inventory": a.get("inventory", ""),
+                    "action": a["action"],
+                    "item_id": a.get("item_id", ""),
+                    "active_needed": "",
+                    "active_delivered": "",
+                    "preview_needed": "",
+                }
+            )
 
     fieldnames = [
-        "round", "score", "order_idx", "bot_id", "bot_pos",
-        "inventory", "action", "item_id", "active_needed",
-        "active_delivered", "preview_needed",
+        "round",
+        "score",
+        "order_idx",
+        "bot_id",
+        "bot_pos",
+        "inventory",
+        "action",
+        "item_id",
+        "active_needed",
+        "active_delivered",
+        "preview_needed",
     ]
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -44,8 +54,10 @@ def _write_test_log(tmp_path, rounds_data):
 
     meta = {
         "grid": {
-            "width": 12, "height": 10,
-            "walls": 0, "wall_positions": [],
+            "width": 12,
+            "height": 10,
+            "walls": 0,
+            "wall_positions": [],
         },
         "bots": 1,
         "items_on_map": 4,
@@ -74,9 +86,12 @@ def _write_test_log(tmp_path, rounds_data):
 
 class TestParseActions:
     def test_parses_single_bot_round(self, tmp_path):
-        csv_path, _ = _write_test_log(tmp_path, [
-            (0, 0, [{"bot_id": 0, "action": "move_left"}]),
-        ])
+        csv_path, _ = _write_test_log(
+            tmp_path,
+            [
+                (0, 0, [{"bot_id": 0, "action": "move_left"}]),
+            ],
+        )
         rounds = parse_actions(csv_path)
         assert len(rounds) == 1
         assert rounds[0]["round"] == 0
@@ -85,30 +100,43 @@ class TestParseActions:
         assert rounds[0]["actions"][0]["action"] == "move_left"
 
     def test_parses_multi_bot_round(self, tmp_path):
-        csv_path, _ = _write_test_log(tmp_path, [
-            (0, 0, [
-                {"bot_id": 0, "action": "move_left"},
-                {"bot_id": 1, "action": "move_right"},
-            ]),
-        ])
+        csv_path, _ = _write_test_log(
+            tmp_path,
+            [
+                (
+                    0,
+                    0,
+                    [
+                        {"bot_id": 0, "action": "move_left"},
+                        {"bot_id": 1, "action": "move_right"},
+                    ],
+                ),
+            ],
+        )
         rounds = parse_actions(csv_path)
         assert len(rounds) == 1
         assert len(rounds[0]["actions"]) == 2
 
     def test_parses_pickup_with_item_id(self, tmp_path):
-        csv_path, _ = _write_test_log(tmp_path, [
-            (0, 0, [{"bot_id": 0, "action": "pick_up", "item_id": "item_0"}]),
-        ])
+        csv_path, _ = _write_test_log(
+            tmp_path,
+            [
+                (0, 0, [{"bot_id": 0, "action": "pick_up", "item_id": "item_0"}]),
+            ],
+        )
         rounds = parse_actions(csv_path)
         assert rounds[0]["actions"][0]["item_id"] == "item_0"
 
 
 class TestReplayLog:
     def test_move_only_no_divergence(self, tmp_path):
-        csv_path, json_path = _write_test_log(tmp_path, [
-            (0, 0, [{"bot_id": 0, "action": "move_left"}]),
-            (1, 0, [{"bot_id": 0, "action": "move_left"}]),
-        ])
+        csv_path, json_path = _write_test_log(
+            tmp_path,
+            [
+                (0, 0, [{"bot_id": 0, "action": "move_left"}]),
+                (1, 0, [{"bot_id": 0, "action": "move_left"}]),
+            ],
+        )
         result = replay_log(csv_path, json_path)
         assert result["sim_final_score"] == 0
         assert result["live_final_score"] == 0
@@ -117,19 +145,25 @@ class TestReplayLog:
 
     def test_detects_score_divergence(self, tmp_path):
         """If live score jumps but sim doesn't, report divergence."""
-        csv_path, json_path = _write_test_log(tmp_path, [
-            (0, 0, [{"bot_id": 0, "action": "move_left"}]),
-            (1, 5, [{"bot_id": 0, "action": "move_left"}]),  # live says +5
-        ])
+        csv_path, json_path = _write_test_log(
+            tmp_path,
+            [
+                (0, 0, [{"bot_id": 0, "action": "move_left"}]),
+                (1, 5, [{"bot_id": 0, "action": "move_left"}]),  # live says +5
+            ],
+        )
         result = replay_log(csv_path, json_path)
         # Sim can't score from just moving, so there should be divergence
         assert result["total_divergences"] > 0
         assert result["first_divergence"] is not None
 
     def test_result_has_per_round_data(self, tmp_path):
-        csv_path, json_path = _write_test_log(tmp_path, [
-            (0, 0, [{"bot_id": 0, "action": "wait"}]),
-        ])
+        csv_path, json_path = _write_test_log(
+            tmp_path,
+            [
+                (0, 0, [{"bot_id": 0, "action": "wait"}]),
+            ],
+        )
         result = replay_log(csv_path, json_path)
         assert "rounds" in result
         assert len(result["rounds"]) == 1

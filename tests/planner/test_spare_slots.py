@@ -8,8 +8,11 @@ from tests.conftest import make_state
 
 def _order(items):
     return {
-        "id": "o0", "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
@@ -35,8 +38,10 @@ class TestSpareSlotsMath:
         """spare = 3 - 0 - 2 = 1"""
         p = _planner(
             [{"id": 0, "position": [3, 3], "inventory": []}],
-            [{"id": "i0", "type": "cheese", "position": [4, 2]},
-             {"id": "i1", "type": "milk", "position": [6, 2]}],
+            [
+                {"id": "i0", "type": "cheese", "position": [4, 2]},
+                {"id": "i1", "type": "milk", "position": [6, 2]},
+            ],
             [_order(["cheese", "milk"])],
         )
         assert p._spare_slots([]) == MAX_INVENTORY - p.active_on_shelves

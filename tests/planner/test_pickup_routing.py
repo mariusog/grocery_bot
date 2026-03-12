@@ -146,9 +146,7 @@ class TestFindDetourItemEdgeCases:
             ],
             drop_off=[1, 8],
         )
-        item, _cell = planner._find_detour_item(
-            (3, 5), planner.net_preview, max_detour=0
-        )
+        item, _cell = planner._find_detour_item((3, 5), planner.net_preview, max_detour=0)
         # milk at (9,1) is a huge detour from (3,5) -> (1,8), should be None
         assert item is None
 

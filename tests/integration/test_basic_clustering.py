@@ -73,9 +73,7 @@ class TestEmptyOrdersAndBlacklist:
         bot.init_static(state)
         actions = bot.decide_actions(state)
         action = get_action(actions)
-        assert action["action"] == "wait", (
-            f"Should wait when no orders exist, got {action}"
-        )
+        assert action["action"] == "wait", f"Should wait when no orders exist, got {action}"
 
 
 class TestItemProximityClustering:

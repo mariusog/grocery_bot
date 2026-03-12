@@ -11,8 +11,11 @@ from tests.conftest import make_state
 
 def _order(items):
     return {
-        "id": "o0", "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
@@ -41,8 +44,9 @@ def _planner(bots, items, orders, **kw):
 class TestLargeTeamClearsWhenFull:
     def test_8bot_full_clears(self):
         """Large teams clear when inventory is completely full with non-active items."""
-        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread", "butter", "eggs"]}
-                ] + [{"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 8)]
+        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread", "butter", "eggs"]}] + [
+            {"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 8)
+        ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])])
         ctx = p._build_bot_context(p.bots_by_id[0])
@@ -50,8 +54,9 @@ class TestLargeTeamClearsWhenFull:
 
     def test_10bot_unassigned_clears_when_2_items(self):
         """Large teams: unassigned bots clear when 2+ non-active items (min_inv=2)."""
-        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread", "butter"]}
-                ] + [{"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)]
+        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread", "butter"]}] + [
+            {"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)
+        ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])], width=14)
         ctx = p._build_bot_context(p.bots_by_id[0])
@@ -60,8 +65,9 @@ class TestLargeTeamClearsWhenFull:
 
     def test_10bot_unassigned_keeps_1_speculative(self):
         """Large teams: unassigned bots keep 1 speculative item."""
-        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread"]}
-                ] + [{"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)]
+        bots = [{"id": 0, "position": [2, 4], "inventory": ["bread"]}] + [
+            {"id": i, "position": [i + 2, 4], "inventory": []} for i in range(1, 10)
+        ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])], width=14)
         ctx = p._build_bot_context(p.bots_by_id[0])
@@ -97,16 +103,18 @@ class TestMediumTeamFullOnly:
 
     def test_partial_skips(self):
         """5-bot team should NOT clear at 2 items (needs full=3)."""
-        bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]}
-                ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)]
+        bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]}] + [
+            {"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)
+        ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])])
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_clear_nonactive_inventory(ctx) is False
 
     def test_full_clears(self):
-        bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter", "eggs"]}
-                ] + [{"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)]
+        bots = [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter", "eggs"]}] + [
+            {"id": i, "position": [i + 5, 4], "inventory": []} for i in range(1, 5)
+        ]
         items = [{"id": "i0", "type": "cheese", "position": [4, 2]}]
         p = _planner(bots, items, [_order(["cheese"])])
         ctx = p._build_bot_context(p.bots_by_id[0])

@@ -32,9 +32,7 @@ class TestAntiDeadlock:
         a0 = get_action(actions, 0)
         # Bot 0 should NOT move to (1,8) since bot 1 is there.
         # Should try an alternative direction or wait.
-        assert a0["action"] != "move_down" or True, (
-            "Bot should avoid moving into occupied position"
-        )
+        assert a0["action"] != "move_down" or True, "Bot should avoid moving into occupied position"
         # At minimum, both bots should have actions
         assert len(actions) == 2
 
@@ -150,9 +148,7 @@ class TestMultiBotCollisionScenarios:
         # Bot 0 has milk, should head to delivery or pick cheese.
         # At least bot 0 should move (it's processed first, others blocked).
         a0 = get_action(actions, 0)
-        assert a0["action"] != "wait", (
-            f"Bot 0 (first processed) should not be stuck, got {a0}"
-        )
+        assert a0["action"] != "wait", f"Bot 0 (first processed) should not be stuck, got {a0}"
 
     def test_bots_dont_claim_same_item(self):
         """With two bots and one needed item, only one should target it."""

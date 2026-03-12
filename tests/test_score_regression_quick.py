@@ -51,44 +51,47 @@ class TestMultiBotScoreRegression:
     @pytest.mark.parametrize("seed", [42, 123, 777])
     def test_3bot_completes_orders(self, seed):
         score, orders, _ = _run_sim(
-            num_bots=3, width=16, height=12,
-            num_item_types=8, max_rounds=150, seed=seed,
+            num_bots=3,
+            width=16,
+            height=12,
+            num_item_types=8,
+            max_rounds=150,
+            seed=seed,
         )
         assert orders >= 3, (
-            f"3-bot (seed={seed}) completed {orders} orders (score={score}). "
-            f"Expected >=3."
+            f"3-bot (seed={seed}) completed {orders} orders (score={score}). Expected >=3."
         )
-        assert score >= 25, (
-            f"3-bot (seed={seed}) scored {score}. Expected >=25."
-        )
+        assert score >= 25, f"3-bot (seed={seed}) scored {score}. Expected >=25."
 
     @pytest.mark.parametrize("seed", [42, 123, 777])
     def test_5bot_completes_orders(self, seed):
         score, orders, _ = _run_sim(
-            num_bots=5, width=22, height=14,
-            num_item_types=10, max_rounds=150, seed=seed,
+            num_bots=5,
+            width=22,
+            height=14,
+            num_item_types=10,
+            max_rounds=150,
+            seed=seed,
         )
         assert orders >= 2, (
-            f"5-bot (seed={seed}) completed {orders} orders (score={score}). "
-            f"Expected >=2."
+            f"5-bot (seed={seed}) completed {orders} orders (score={score}). Expected >=2."
         )
-        assert score >= 20, (
-            f"5-bot (seed={seed}) scored {score}. Expected >=20."
-        )
+        assert score >= 20, f"5-bot (seed={seed}) scored {score}. Expected >=20."
 
     @pytest.mark.parametrize("seed", [42, 123, 777])
     def test_10bot_completes_orders(self, seed):
         score, orders, _ = _run_sim(
-            num_bots=10, width=22, height=14,
-            num_item_types=10, max_rounds=150, seed=seed,
+            num_bots=10,
+            width=22,
+            height=14,
+            num_item_types=10,
+            max_rounds=150,
+            seed=seed,
         )
         assert orders >= 2, (
-            f"10-bot (seed={seed}) completed {orders} orders (score={score}). "
-            f"Expected >=2."
+            f"10-bot (seed={seed}) completed {orders} orders (score={score}). Expected >=2."
         )
-        assert score >= 15, (
-            f"10-bot (seed={seed}) scored {score}. Expected >=15."
-        )
+        assert score >= 15, f"10-bot (seed={seed}) scored {score}. Expected >=15."
 
 
 class TestSmallTeamScoreRegression:
@@ -96,12 +99,13 @@ class TestSmallTeamScoreRegression:
 
     def test_1bot_completes_orders(self):
         score, orders, _ = _run_sim(
-            num_bots=1, width=12, height=10,
-            num_item_types=4, max_rounds=150,
+            num_bots=1,
+            width=12,
+            height=10,
+            num_item_types=4,
+            max_rounds=150,
         )
-        assert orders >= 3, (
-            f"1-bot completed {orders} orders (score={score}). Expected >=3."
-        )
+        assert orders >= 3, f"1-bot completed {orders} orders (score={score}). Expected >=3."
 
 
 class TestDropoffNotBlocked:
@@ -159,8 +163,10 @@ class TestDropoffNotBlocked:
             # Simple position tracking for bot 0
             bx, by = state["bots"][0]["position"]
             deltas = {
-                "move_left": (-1, 0), "move_right": (1, 0),
-                "move_up": (0, -1), "move_down": (0, 1),
+                "move_left": (-1, 0),
+                "move_right": (1, 0),
+                "move_up": (0, -1),
+                "move_down": (0, 1),
             }
             dx, dy = deltas.get(a0["action"], (0, 0))
             state["bots"][0]["position"] = [bx + dx, by + dy]

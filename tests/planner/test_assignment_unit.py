@@ -10,10 +10,7 @@ class TestMaxClaimBehavior:
     def test_5bot_4items_max_claim_1(self):
         """5-bot team with 4 items -> ceil(4/5) = 1."""
         bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(5)]
-        items = [
-            {"id": f"i{j}", "type": f"type_{j}", "position": [3 + j, 2]}
-            for j in range(4)
-        ]
+        items = [{"id": f"i{j}", "type": f"type_{j}", "position": [3 + j, 2]} for j in range(4)]
         order_items = [f"type_{j}" for j in range(4)]
         planner = make_planner(
             bots=bots,
@@ -26,10 +23,7 @@ class TestMaxClaimBehavior:
     def test_2bot_5items_max_claim_3(self):
         """2-bot team with 5 items -> ceil(5/2) = 3."""
         bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(2)]
-        items = [
-            {"id": f"i{j}", "type": f"type_{j}", "position": [3 + j, 2]}
-            for j in range(5)
-        ]
+        items = [{"id": f"i{j}", "type": f"type_{j}", "position": [3 + j, 2]} for j in range(5)]
         order_items = [f"type_{j}" for j in range(5)]
         planner = make_planner(
             bots=bots,
@@ -45,14 +39,8 @@ class TestTotalAssignments:
 
     def test_total_assignments_preserved(self):
         """All items should be assigned with 10 bots and 5 items."""
-        bots = [
-            {"id": i, "position": [i + 1, 3], "inventory": []}
-            for i in range(10)
-        ]
-        items = [
-            {"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]}
-            for j in range(5)
-        ]
+        bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(10)]
+        items = [{"id": f"i{j}", "type": f"t{j}", "position": [3 + j, 2]} for j in range(5)]
         order_items = [f"t{j}" for j in range(5)]
         planner = make_planner(
             bots=bots,
@@ -60,9 +48,7 @@ class TestTotalAssignments:
             orders=[_active_order(order_items)],
             drop_off=[1, 8],
         )
-        total_assigned = sum(
-            len(items) for items in planner.bot_assignments.values()
-        )
+        total_assigned = sum(len(items) for items in planner.bot_assignments.values())
         assert total_assigned == 5
 
 
@@ -89,11 +75,7 @@ class TestDropoffWeightedAssignment:
         )
         # Bot 0 should be assigned to the item that minimizes total delivery
         # time (pickup + travel to dropoff), not just pickup distance
-        assigned_items = {
-            it["id"]
-            for items in planner.bot_assignments.values()
-            for it in items
-        }
+        assigned_items = {it["id"] for items in planner.bot_assignments.values() for it in items}
         assert "i_near" in assigned_items and "i_far" in assigned_items, (
             f"Both items should be assigned, got {assigned_items}"
         )
@@ -156,11 +138,7 @@ class TestDropoffWeightedAssignment:
             drop_off=[1, 8],
         )
         # Both items should be assigned (one per bot)
-        all_assigned = {
-            it["id"]
-            for items in planner.bot_assignments.values()
-            for it in items
-        }
+        all_assigned = {it["id"] for items in planner.bot_assignments.values() for it in items}
         assert "near_drop" in all_assigned and "near_spawn" in all_assigned, (
             f"Both items should be assigned, got {all_assigned}"
         )

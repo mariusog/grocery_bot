@@ -63,13 +63,15 @@ class TestActionPositionConsistency:
 
             # Log the state and action
             b = state["bots"][0]
-            log_rows.append({
-                "round": state["round"],
-                "bot_pos": f"{b['position'][0]},{b['position'][1]}",
-                "action": actions[0]["action"],
-                "item_id": actions[0].get("item_id", ""),
-                "inventory": ";".join(b["inventory"]),
-            })
+            log_rows.append(
+                {
+                    "round": state["round"],
+                    "bot_pos": f"{b['position'][0]},{b['position'][1]}",
+                    "action": actions[0]["action"],
+                    "item_id": actions[0].get("item_id", ""),
+                    "inventory": ";".join(b["inventory"]),
+                }
+            )
             sim.apply_actions(actions)
 
         mismatches = self._check_consistency(log_rows)
@@ -201,10 +203,15 @@ class TestBlacklistDoesNotStickForever:
         state = make_state(
             bots=[{"id": 0, "position": [3, 7], "inventory": []}],
             items=[{"id": "item_12", "type": "yogurt", "position": [3, 6]}],
-            orders=[{
-                "id": "o1", "items_required": ["yogurt"],
-                "items_delivered": [], "complete": False, "status": "active",
-            }],
+            orders=[
+                {
+                    "id": "o1",
+                    "items_required": ["yogurt"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                }
+            ],
         )
 
         bot.decide_actions(state)
@@ -242,10 +249,15 @@ class TestBlacklistDoesNotStickForever:
         state = make_state(
             bots=[{"id": 0, "position": [3, 7], "inventory": []}],
             items=items,
-            orders=[{
-                "id": "o1", "items_required": ["yogurt"],
-                "items_delivered": [], "complete": False, "status": "active",
-            }],
+            orders=[
+                {
+                    "id": "o1",
+                    "items_required": ["yogurt"],
+                    "items_delivered": [],
+                    "complete": False,
+                    "status": "active",
+                }
+            ],
         )
 
         bot.decide_actions(state)

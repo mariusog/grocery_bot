@@ -111,8 +111,6 @@ class TestGetDistancesFrom:
         assert (5, 5) not in bot._gs.dist_cache
 
 
-
-
 class TestBfsAll:
     """Tests for bfs_all — BFS from source to ALL reachable cells."""
 

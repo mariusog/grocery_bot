@@ -141,7 +141,6 @@ class TestBuildBlocked:
         pred_1 = planner.predicted.get(1, (2, 3))
         assert pred_1 in blocked
 
-
     def test_huge_team_tighter_radius(self):
         """With 15+ bots, blocking radius is 3 (tighter than 5-7 bots)."""
         bots = [{"id": i, "position": [i + 1, 3], "inventory": []} for i in range(15)]

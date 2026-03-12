@@ -26,9 +26,7 @@ class TestDropoffAtDropoff:
         )
         actions = bot.decide_actions(state)
         action = get_action(actions)
-        assert action["action"] == "drop_off", (
-            "Should deliver when at dropoff with needed items"
-        )
+        assert action["action"] == "drop_off", "Should deliver when at dropoff with needed items"
 
 
 class TestEndGamePartialDelivery:

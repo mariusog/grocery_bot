@@ -15,6 +15,7 @@ from tests.conftest import make_state
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _standard_items():
     return [
         {"id": "item_0", "type": "butter", "position": [3, 2]},
@@ -262,12 +263,9 @@ class TestExpectedPositionTracking:
         else:
             expected = (5, 7)
 
-        assert hasattr(gs, "last_expected_pos"), (
-            "GameState must have last_expected_pos attribute"
-        )
+        assert hasattr(gs, "last_expected_pos"), "GameState must have last_expected_pos attribute"
         assert gs.last_expected_pos.get(0) == expected, (
-            f"Expected position {expected} for action {action}, "
-            f"got {gs.last_expected_pos.get(0)}"
+            f"Expected position {expected} for action {action}, got {gs.last_expected_pos.get(0)}"
         )
 
     def test_pickup_action_expects_same_position(self):
@@ -346,9 +344,7 @@ class TestRoundInResponse:
         # After decide_actions, the GameState should know the last round processed
         bot.decide_actions(state)
         gs = bot._gs
-        assert hasattr(gs, "last_round_processed"), (
-            "GameState must track last_round_processed"
-        )
+        assert hasattr(gs, "last_round_processed"), "GameState must track last_round_processed"
         assert gs.last_round_processed == 42
 
 
@@ -421,9 +417,7 @@ class TestFullDesyncSimulation:
         actions2, gs = _run_round(state2)
 
         # Bot should still function — it uses server state, not cached expected
-        assert actions2[0]["action"] != "wait", (
-            "Bot should not get stuck after desync"
-        )
+        assert actions2[0]["action"] != "wait", "Bot should not get stuck after desync"
 
         # No items should be blacklisted from this sequence
         assert len(gs.blacklisted_items) == 0, (

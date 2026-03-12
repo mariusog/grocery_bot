@@ -196,9 +196,7 @@ class TestFindDetourItem:
             ],
         )
         # milk at (2,6) — adjacent walkable might be (1,6) or (3,6)
-        item, _cell = planner._find_detour_item(
-            (3, 5), planner.net_preview, max_detour=10
-        )
+        item, _cell = planner._find_detour_item((3, 5), planner.net_preview, max_detour=10)
         if item is not None:
             assert item["type"] == "milk"
 
@@ -217,9 +215,7 @@ class TestFindDetourItem:
             drop_off=[1, 8],
         )
         # milk is very far from the path between (1,7) and dropoff (1,8)
-        item, _cell = planner._find_detour_item(
-            (1, 7), planner.net_preview, max_detour=1
-        )
+        item, _cell = planner._find_detour_item((1, 7), planner.net_preview, max_detour=1)
         # If found, detour must be <= max_detour (but likely None due to distance)
         # The item at (9,1) is far from the direct path to (1,8)
         assert item is None

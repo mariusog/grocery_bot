@@ -82,8 +82,7 @@ class TestActivePriorityOverPreview:
         assert len(pickups) == 3, f"Expected 3 pickups, got {len(pickups)}"
         for a in pickups:
             assert a["item_id"] in active_ids, (
-                f"Bot {a['bot']} picked {a['item_id']} "
-                f"(preview) instead of active item"
+                f"Bot {a['bot']} picked {a['item_id']} (preview) instead of active item"
             )
 
 

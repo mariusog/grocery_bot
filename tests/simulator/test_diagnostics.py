@@ -7,10 +7,7 @@ class _FakeSim:
     """Minimal simulator stub for DiagnosticTracker tests."""
 
     def __init__(self, num_bots: int = 2, rnd: int = 0) -> None:
-        self.bots = [
-            {"id": i, "position": [1 + i, 1], "inventory": []}
-            for i in range(num_bots)
-        ]
+        self.bots = [{"id": i, "position": [1 + i, 1], "inventory": []} for i in range(num_bots)]
         self.round = rnd
         self.score = 0
         self.orders_completed = 0
@@ -185,14 +182,27 @@ class TestGetResults:
         tracker.post_round(sim, [{"bot": 0, "action": "wait"}])
         results = tracker.get_results()
         expected_keys = {
-            "idle_rounds", "stuck_rounds", "max_delivery_gap",
-            "oscillation_count", "avg_bots_idle", "total_bot_rounds",
-            "moves", "waits", "pickups", "delivers",
-            "useful_pickups", "wasted_pickups", "pickup_waste_pct",
-            "inv_full_waits", "avg_rounds_per_order",
-            "pickup_delivery_ratio", "per_bot_idle",
-            "blocked_move_pct", "avg_delivery_size",
-            "order_completion_rounds", "per_bot_actions",
+            "idle_rounds",
+            "stuck_rounds",
+            "max_delivery_gap",
+            "oscillation_count",
+            "avg_bots_idle",
+            "total_bot_rounds",
+            "moves",
+            "waits",
+            "pickups",
+            "delivers",
+            "useful_pickups",
+            "wasted_pickups",
+            "pickup_waste_pct",
+            "inv_full_waits",
+            "avg_rounds_per_order",
+            "pickup_delivery_ratio",
+            "per_bot_idle",
+            "blocked_move_pct",
+            "avg_delivery_size",
+            "order_completion_rounds",
+            "per_bot_actions",
         }
         assert set(results.keys()) == expected_keys
 

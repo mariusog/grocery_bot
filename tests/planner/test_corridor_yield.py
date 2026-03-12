@@ -50,16 +50,22 @@ class TestIdleBotYieldsToActive:
         ]
         orders = [_order(["cheese"])]
         state = make_state(
-            bots=bots, items=items, orders=orders,
-            drop_off=[9, 7], walls=walls, width=11, height=9,
+            bots=bots,
+            items=items,
+            orders=orders,
+            drop_off=[9, 7],
+            walls=walls,
+            width=11,
+            height=9,
         )
 
         actions = bot.decide_actions(state)
         a0 = get_action(actions, bot_id=0)
 
         # Bot 0 should move right (direct path toward dropoff)
-        assert a0["action"] == "move_right", \
+        assert a0["action"] == "move_right", (
             f"Active bot should go directly right, got {a0['action']}"
+        )
 
     def test_idle_bot_moves_when_blocking(self):
         """Idle bot should not just wait when it's blocking an active bot."""
@@ -71,16 +77,20 @@ class TestIdleBotYieldsToActive:
         ]
         orders = [_order(["cheese"])]
         state = make_state(
-            bots=bots, items=items, orders=orders,
-            drop_off=[9, 7], walls=walls, width=11, height=9,
+            bots=bots,
+            items=items,
+            orders=orders,
+            drop_off=[9, 7],
+            walls=walls,
+            width=11,
+            height=9,
         )
 
         actions = bot.decide_actions(state)
         a1 = get_action(actions, bot_id=1)
 
         # Bot 1 should not just wait — it should move out of the way
-        assert a1["action"] != "wait", \
-            "Idle bot should not wait when blocking active bot's path"
+        assert a1["action"] != "wait", "Idle bot should not wait when blocking active bot's path"
 
     def test_no_yield_when_not_in_path(self):
         """Idle bot NOT in the active bot's path should not be forced to yield."""
@@ -91,8 +101,13 @@ class TestIdleBotYieldsToActive:
         ]
         orders = [_order(["cheese"])]
         state = make_state(
-            bots=bots, items=items, orders=orders,
-            drop_off=[9, 7], walls=walls, width=11, height=9,
+            bots=bots,
+            items=items,
+            orders=orders,
+            drop_off=[9, 7],
+            walls=walls,
+            width=11,
+            height=9,
         )
 
         actions = bot.decide_actions(state)
@@ -115,8 +130,13 @@ class TestYieldPrePrediction:
         ]
         orders = [_order(["cheese"])]
         state = make_state(
-            bots=bots, items=items, orders=orders,
-            drop_off=[9, 7], walls=walls, width=11, height=9,
+            bots=bots,
+            items=items,
+            orders=orders,
+            drop_off=[9, 7],
+            walls=walls,
+            width=11,
+            height=9,
         )
 
         bot.reset_state()
@@ -136,8 +156,9 @@ class TestYieldPrePrediction:
         p._pre_predict()
 
         # Bot 1 should be predicted to yield (move away from (4, 1))
-        assert p.predicted[1] != (4, 1), \
+        assert p.predicted[1] != (4, 1), (
             f"Bot 1 should be predicted to yield, but predicted={p.predicted[1]}"
+        )
 
     def test_no_yield_prediction_when_not_blocking(self):
         """Idle bot not on any active path should stay predicted in place."""
@@ -150,8 +171,13 @@ class TestYieldPrePrediction:
         ]
         orders = [_order(["cheese"])]
         state = make_state(
-            bots=bots, items=items, orders=orders,
-            drop_off=[9, 7], walls=walls, width=11, height=9,
+            bots=bots,
+            items=items,
+            orders=orders,
+            drop_off=[9, 7],
+            walls=walls,
+            width=11,
+            height=9,
         )
 
         bot.reset_state()
@@ -171,5 +197,6 @@ class TestYieldPrePrediction:
         p._pre_predict()
 
         # Bot 1 is near the dropoff and NOT blocking — should stay in place
-        assert p.predicted[1] == (8, 7), \
+        assert p.predicted[1] == (8, 7), (
             f"Bot 1 should stay in place, but predicted={p.predicted[1]}"
+        )

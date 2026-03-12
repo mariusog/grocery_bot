@@ -16,6 +16,7 @@ class TestPrecomputeDropoffZones:
 
     def test_dropoff_approach_cells_within_radius(self):
         from grocery_bot.game_state import DROPOFF_CONGESTION_RADIUS
+
         gs = _make_gs_with_dropoff()
         drop_off = (1, 8)
         for cell in gs.dropoff_approach_cells:
@@ -30,6 +31,7 @@ class TestPrecomputeDropoffZones:
 
     def test_dropoff_wait_cells_at_correct_distance(self):
         from grocery_bot.game_state import DROPOFF_WAIT_DISTANCE
+
         gs = _make_gs_with_dropoff()
         drop_off = (1, 8)
         for cell in gs.dropoff_wait_cells:
@@ -63,6 +65,7 @@ class TestGetDropoffApproachTarget:
 
     def test_far_bot_gets_wait_target(self):
         from grocery_bot.game_state import MAX_APPROACH_SLOTS
+
         gs = _make_gs_with_dropoff()
         drop_off = (1, 8)
         # Create enough closer bots to fill approach slots
@@ -115,10 +118,11 @@ class TestIsDropoffCongested:
 
     def test_congested_with_many_bots(self):
         from grocery_bot.game_state import MAX_APPROACH_SLOTS
+
         gs = _make_gs_with_dropoff()
         drop_off = (1, 8)
         # Place more bots than MAX_APPROACH_SLOTS near dropoff
-        near_positions = gs.dropoff_approach_cells[:MAX_APPROACH_SLOTS + 1]
+        near_positions = gs.dropoff_approach_cells[: MAX_APPROACH_SLOTS + 1]
         if len(near_positions) > MAX_APPROACH_SLOTS:
             assert gs.is_dropoff_congested(drop_off, near_positions) is True
 
@@ -132,6 +136,7 @@ class TestIsDropoffCongested:
         gs = _make_gs_with_dropoff()
         drop_off = (1, 8)
         from grocery_bot.game_state import MAX_APPROACH_SLOTS
+
         # Place bots on dropoff itself plus approach cells
         positions = [drop_off, *gs.dropoff_approach_cells[:MAX_APPROACH_SLOTS]]
         assert gs.is_dropoff_congested(drop_off, positions) is True
@@ -152,6 +157,7 @@ class TestGetAvoidanceTarget:
         result = gs.get_avoidance_target((1, 7), drop_off)
         if result is not None:
             from grocery_bot.game_state import DROPOFF_CONGESTION_RADIUS
+
             d = gs.dist_static(result, drop_off)
             assert d > DROPOFF_CONGESTION_RADIUS
 

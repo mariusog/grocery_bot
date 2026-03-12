@@ -74,12 +74,16 @@ def _run_game_with_timing(preset_name, seed=42):
     """
     result, round_times, max_ms, _ = _run_game_with_timing_cached(preset_name, seed)
     score, items_delivered, orders_completed, rounds_used = result
-    return {
-        "score": score,
-        "items_delivered": items_delivered,
-        "orders_completed": orders_completed,
-        "rounds_used": rounds_used,
-    }, list(round_times), max_ms
+    return (
+        {
+            "score": score,
+            "items_delivered": items_delivered,
+            "orders_completed": orders_completed,
+            "rounds_used": rounds_used,
+        },
+        list(round_times),
+        max_ms,
+    )
 
 
 @cache
@@ -163,8 +167,7 @@ class TestRoundLatency:
         """No single round should exceed ROUND_BUDGET_MS."""
         _, _round_times, max_ms = _run_game_with_timing(preset)
         assert max_ms < ROUND_BUDGET_MS, (
-            f"{preset}: slowest round took {max_ms:.1f}ms "
-            f"(budget {ROUND_BUDGET_MS}ms)"
+            f"{preset}: slowest round took {max_ms:.1f}ms (budget {ROUND_BUDGET_MS}ms)"
         )
 
     @pytest.mark.parametrize("preset", ["Expert", "Nightmare"])
@@ -173,8 +176,7 @@ class TestRoundLatency:
         """Large presets must stay under the hard ceiling."""
         _, _round_times, max_ms = _run_game_with_timing(preset)
         assert max_ms < ROUND_HARD_LIMIT_MS, (
-            f"{preset}: slowest round took {max_ms:.1f}ms "
-            f"(hard limit {ROUND_HARD_LIMIT_MS}ms)"
+            f"{preset}: slowest round took {max_ms:.1f}ms (hard limit {ROUND_HARD_LIMIT_MS}ms)"
         )
 
     def test_average_latency_under_10ms(self):
@@ -205,8 +207,7 @@ class TestActionPositionConsistency:
         """Action consistency holds across different map seeds."""
         mismatches = _check_action_position_consistency("Easy", seed=seed)
         assert mismatches == [], (
-            f"Easy seed={seed}: {len(mismatches)} mismatches. "
-            f"First at round {mismatches[0][0]}"
+            f"Easy seed={seed}: {len(mismatches)} mismatches. First at round {mismatches[0][0]}"
         )
 
 
@@ -216,11 +217,14 @@ class TestActionPositionConsistency:
 class TestScoreSanity:
     """Bot must achieve minimum scores to detect catastrophic regressions."""
 
-    @pytest.mark.parametrize("preset,min_score", [
-        ("Easy", MIN_SCORES["Easy"]),
-        ("Medium", MIN_SCORES["Medium"]),
-        ("Hard", MIN_SCORES["Hard"]),
-    ])
+    @pytest.mark.parametrize(
+        "preset,min_score",
+        [
+            ("Easy", MIN_SCORES["Easy"]),
+            ("Medium", MIN_SCORES["Medium"]),
+            ("Hard", MIN_SCORES["Hard"]),
+        ],
+    )
     def test_minimum_score(self, preset, min_score):
         """Score must exceed minimum threshold."""
         result, _, _ = _run_game_with_timing(preset)
@@ -231,9 +235,7 @@ class TestScoreSanity:
     def test_easy_no_blacklisted_items(self):
         """Easy difficulty should complete without blacklisting any items."""
         _, _, _, blacklisted_items = _run_game_with_timing_cached("Easy")
-        assert len(blacklisted_items) == 0, (
-            f"Blacklisted items in Easy: {blacklisted_items}"
-        )
+        assert len(blacklisted_items) == 0, f"Blacklisted items in Easy: {blacklisted_items}"
 
 
 # ── Desync resilience: bot recovers from position mismatches ─────────────
@@ -255,28 +257,34 @@ class TestDesyncResilience:
             {"id": "i1", "type": "milk", "position": [6, 2]},
         ]
         orders = [
-            {"id": "o1", "items_required": ["cheese", "milk"],
-             "items_delivered": [], "complete": False, "status": "active"},
+            {
+                "id": "o1",
+                "items_required": ["cheese", "milk"],
+                "items_delivered": [],
+                "complete": False,
+                "status": "active",
+            },
         ]
 
         # Round 0: normal
         state0 = make_state(
             bots=[{"id": 0, "position": [5, 5], "inventory": []}],
-            items=items, orders=orders,
+            items=items,
+            orders=orders,
         )
         bot.decide_actions(state0)
 
         # Round 1: desync — bot didn't move (server ignored our action)
         state1 = make_state(
             bots=[{"id": 0, "position": [5, 5], "inventory": []}],
-            items=items, orders=orders, round_num=1,
+            items=items,
+            orders=orders,
+            round_num=1,
         )
         actions1 = bot.decide_actions(state1)
 
         # Bot should still produce a valid action (not crash, not "wait")
-        assert actions1[0]["action"] != "wait", (
-            "Bot should replan from actual state, not get stuck"
-        )
+        assert actions1[0]["action"] != "wait", "Bot should replan from actual state, not get stuck"
 
     def test_pickup_failure_from_desync_does_not_blacklist(self):
         """Pickup failure caused by desync must not blacklist the item."""
@@ -286,14 +294,20 @@ class TestDesyncResilience:
             {"id": "item_0", "type": "cheese", "position": [4, 2]},
         ]
         orders = [
-            {"id": "o1", "items_required": ["cheese"],
-             "items_delivered": [], "complete": False, "status": "active"},
+            {
+                "id": "o1",
+                "items_required": ["cheese"],
+                "items_delivered": [],
+                "complete": False,
+                "status": "active",
+            },
         ]
 
         # Round 0: bot adjacent to item
         state0 = make_state(
             bots=[{"id": 0, "position": [4, 3], "inventory": []}],
-            items=items, orders=orders,
+            items=items,
+            orders=orders,
         )
         bot.decide_actions(state0)
         gs = bot._gs
@@ -306,7 +320,9 @@ class TestDesyncResilience:
             # Server says bot is at wrong position
             state = make_state(
                 bots=[{"id": 0, "position": [5, 3], "inventory": []}],
-                items=items, orders=orders, round_num=r,
+                items=items,
+                orders=orders,
+                round_num=r,
             )
             bot.decide_actions(state)
 

@@ -7,15 +7,21 @@ from tests.conftest import get_action, make_state
 
 def _order(items, oid="o0"):
     return {
-        "id": oid, "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": oid,
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
 def _preview(items, oid="o1"):
     return {
-        "id": oid, "items_required": items, "items_delivered": [],
-        "complete": False, "status": "preview",
+        "id": oid,
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "preview",
     }
 
 
@@ -43,10 +49,13 @@ def _planner(bots, items, orders, **kw):
 class TestRushDeliver:
     def test_picks_adjacent_preview_while_rushing(self):
         p = _planner(
-            [{"id": 0, "position": [3, 4], "inventory": ["cheese"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [3, 4], "inventory": ["cheese"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i1", "type": "bread", "position": [4, 4]}],
-            [_order(["cheese"]), _preview(["bread"])], drop_off=[1, 8],
+            [_order(["cheese"]), _preview(["bread"])],
+            drop_off=[1, 8],
         )
         assert p.active_on_shelves == 0
         ctx = p._build_bot_context(p.bots_by_id[0])
@@ -55,9 +64,13 @@ class TestRushDeliver:
 
     def test_rushes_without_preview(self):
         p = _planner(
-            [{"id": 0, "position": [5, 4], "inventory": ["cheese"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
-            [], [_order(["cheese"])], drop_off=[1, 8],
+            [
+                {"id": 0, "position": [5, 4], "inventory": ["cheese"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
+            [],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_rush_deliver(ctx) is True
@@ -65,10 +78,13 @@ class TestRushDeliver:
 
     def test_skips_when_active_remain(self):
         p = _planner(
-            [{"id": 0, "position": [5, 4], "inventory": ["cheese"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [5, 4], "inventory": ["cheese"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "milk", "position": [4, 2]}],
-            [_order(["cheese", "milk"])], drop_off=[1, 8],
+            [_order(["cheese", "milk"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_rush_deliver(ctx) is False
@@ -79,8 +95,10 @@ class TestEndgame:
         p = _planner(
             [{"id": 0, "position": [1, 7], "inventory": ["cheese"]}],
             [{"id": "i0", "type": "milk", "position": [9, 1]}],
-            [_order(["cheese", "milk"])], drop_off=[1, 8],
-            round_num=298, max_rounds=300,
+            [_order(["cheese", "milk"])],
+            drop_off=[1, 8],
+            round_num=298,
+            max_rounds=300,
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_endgame(ctx) is True
@@ -89,8 +107,10 @@ class TestEndgame:
         p = _planner(
             [{"id": 0, "position": [5, 4], "inventory": ["cheese"]}],
             [{"id": "i0", "type": "milk", "position": [4, 2]}],
-            [_order(["cheese", "milk"])], drop_off=[1, 8],
-            round_num=100, max_rounds=300,
+            [_order(["cheese", "milk"])],
+            drop_off=[1, 8],
+            round_num=100,
+            max_rounds=300,
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_endgame(ctx) is False
@@ -99,8 +119,10 @@ class TestEndgame:
         p = _planner(
             [{"id": 0, "position": [5, 4], "inventory": []}],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
-            round_num=298, max_rounds=300,
+            [_order(["cheese"])],
+            drop_off=[1, 8],
+            round_num=298,
+            max_rounds=300,
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_endgame(ctx) is False
@@ -112,7 +134,9 @@ class TestEndgameLive:
             bots=[{"id": 0, "position": [1, 7], "inventory": ["cheese"]}],
             items=[{"id": "i0", "type": "milk", "position": [9, 1]}],
             orders=[_order(["cheese", "milk"])],
-            drop_off=[1, 8], round_num=298, max_rounds=300,
+            drop_off=[1, 8],
+            round_num=298,
+            max_rounds=300,
         )
         bot.reset_state()
         actions = bot.decide_actions(state)

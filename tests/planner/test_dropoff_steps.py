@@ -11,8 +11,11 @@ from tests.conftest import make_state
 
 def _order(items):
     return {
-        "id": "o0", "items_required": items, "items_delivered": [],
-        "complete": False, "status": "active",
+        "id": "o0",
+        "items_required": items,
+        "items_delivered": [],
+        "complete": False,
+        "status": "active",
     }
 
 
@@ -73,7 +76,9 @@ class TestDeliverAtDropoff:
     def test_active_at_dropoff_delivers(self):
         p = _planner(
             [{"id": 0, "position": [1, 8], "inventory": ["cheese"]}],
-            [], [_order(["cheese"])], drop_off=[1, 8],
+            [],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_deliver_at_dropoff(ctx) is True
@@ -83,7 +88,8 @@ class TestDeliverAtDropoff:
         p = _planner(
             [{"id": 0, "position": [1, 8], "inventory": ["bread"]}],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_deliver_at_dropoff(ctx) is False
@@ -91,7 +97,9 @@ class TestDeliverAtDropoff:
     def test_away_from_dropoff_skips(self):
         p = _planner(
             [{"id": 0, "position": [5, 4], "inventory": ["cheese"]}],
-            [], [_order(["cheese"])], drop_off=[1, 8],
+            [],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_deliver_at_dropoff(ctx) is False
@@ -110,10 +118,13 @@ class TestFullNonactiveAtDropoff:
         drop_off with non-matching items is a no-op that traps the bot.
         """
         p = _planner(
-            [{"id": 0, "position": [1, 8], "inventory": ["bread", "jam", "butter"]},
-             {"id": 1, "position": [5, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [1, 8], "inventory": ["bread", "jam", "butter"]},
+                {"id": 1, "position": [5, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_deliver_at_dropoff(ctx) is False
@@ -121,10 +132,13 @@ class TestFullNonactiveAtDropoff:
     def test_partial_nonactive_at_dropoff_skips(self):
         """Bot with <3 non-active items at dropoff should NOT drop_off."""
         p = _planner(
-            [{"id": 0, "position": [1, 8], "inventory": ["bread"]},
-             {"id": 1, "position": [5, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [1, 8], "inventory": ["bread"]},
+                {"id": 1, "position": [5, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_deliver_at_dropoff(ctx) is False
@@ -141,10 +155,13 @@ class TestDropoffRequiresActiveItems:
     def test_only_nonactive_at_dropoff_must_not_deliver(self):
         """Bot at dropoff with only non-active items must NOT emit drop_off."""
         p = _planner(
-            [{"id": 0, "position": [1, 8], "inventory": ["bread", "jam"]},
-             {"id": 1, "position": [5, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [1, 8], "inventory": ["bread", "jam"]},
+                {"id": 1, "position": [5, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert ctx.has_active is False, "bread/jam are not active items"
@@ -157,7 +174,9 @@ class TestDropoffRequiresActiveItems:
         """Bot with active + non-active items at dropoff SHOULD deliver."""
         p = _planner(
             [{"id": 0, "position": [1, 8], "inventory": ["cheese", "bread"]}],
-            [], [_order(["cheese"])], drop_off=[1, 8],
+            [],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert ctx.has_active is True
@@ -167,9 +186,13 @@ class TestDropoffRequiresActiveItems:
 class TestClearDropoff:
     def test_idle_near_dropoff_clears(self):
         p = _planner(
-            [{"id": 0, "position": [2, 8], "inventory": []},
-             {"id": 1, "position": [5, 3], "inventory": ["cheese"]}],
-            [], [_order(["cheese"])], drop_off=[1, 8],
+            [
+                {"id": 0, "position": [2, 8], "inventory": []},
+                {"id": 1, "position": [5, 3], "inventory": ["cheese"]},
+            ],
+            [],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_clear_dropoff(ctx) is True
@@ -178,17 +201,21 @@ class TestClearDropoff:
         p = _planner(
             [{"id": 0, "position": [1, 7], "inventory": []}],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_clear_dropoff(ctx) is False
 
     def test_far_from_dropoff_skips(self):
         p = _planner(
-            [{"id": 0, "position": [5, 1], "inventory": []},
-             {"id": 1, "position": [7, 3], "inventory": []}],
+            [
+                {"id": 0, "position": [5, 1], "inventory": []},
+                {"id": 1, "position": [7, 3], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_clear_dropoff(ctx) is False
@@ -197,8 +224,10 @@ class TestClearDropoff:
 class TestIdleNonactiveDeliver:
     def test_needs_min_items(self):
         p = _planner(
-            [{"id": 0, "position": [5, 4], "inventory": ["bread"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [5, 4], "inventory": ["bread"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
             [_order(["cheese"])],
         )
@@ -207,8 +236,10 @@ class TestIdleNonactiveDeliver:
 
     def test_enough_items_delivers(self):
         p = _planner(
-            [{"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [5, 4], "inventory": ["bread", "butter"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
             [_order(["cheese"])],
         )
@@ -218,10 +249,13 @@ class TestIdleNonactiveDeliver:
     def test_at_dropoff_does_not_move_to_dropoff(self):
         """Bot already at dropoff should not be told to move to dropoff again."""
         p = _planner(
-            [{"id": 0, "position": [1, 8], "inventory": ["bread", "butter"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [1, 8], "inventory": ["bread", "butter"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "cheese", "position": [4, 2]}],
-            [_order(["cheese"])], drop_off=[1, 8],
+            [_order(["cheese"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         # Should be False because _step_deliver_at_dropoff handles this case now
@@ -229,8 +263,10 @@ class TestIdleNonactiveDeliver:
 
     def test_skips_with_active_items(self):
         p = _planner(
-            [{"id": 0, "position": [5, 4], "inventory": ["cheese", "bread"]},
-             {"id": 1, "position": [7, 4], "inventory": []}],
+            [
+                {"id": 0, "position": [5, 4], "inventory": ["cheese", "bread"]},
+                {"id": 1, "position": [7, 4], "inventory": []},
+            ],
             [{"id": "i0", "type": "milk", "position": [4, 2]}],
             [_order(["cheese", "milk"])],
         )
@@ -243,8 +279,7 @@ class TestClearRadiusScalesWithBots:
 
     def test_10bot_clears_at_dist_5(self):
         """On 10-bot team, bot at dist 5 from dropoff should still clear."""
-        bots = [{"id": i, "position": [5 + i, 4], "inventory": []}
-                for i in range(10)]
+        bots = [{"id": i, "position": [5 + i, 4], "inventory": []} for i in range(10)]
         # Place bot 0 at dist 5 from dropoff (1,8): position (2,4) → d=3+4=..
         # Actually (5,7) → d=4+1=5
         bots[0] = {"id": 0, "position": [5, 7], "inventory": []}
@@ -278,7 +313,9 @@ class TestInventoryFullDeliver:
     def test_full_active_delivers(self):
         p = _planner(
             [{"id": 0, "position": [5, 4], "inventory": ["cheese", "milk", "bread"]}],
-            [], [_order(["cheese", "milk", "bread"])], drop_off=[1, 8],
+            [],
+            [_order(["cheese", "milk", "bread"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_inventory_full_deliver(ctx) is True
@@ -287,7 +324,8 @@ class TestInventoryFullDeliver:
         p = _planner(
             [{"id": 0, "position": [5, 4], "inventory": ["cheese"]}],
             [{"id": "i0", "type": "milk", "position": [4, 2]}],
-            [_order(["cheese", "milk"])], drop_off=[1, 8],
+            [_order(["cheese", "milk"])],
+            drop_off=[1, 8],
         )
         ctx = p._build_bot_context(p.bots_by_id[0])
         assert p._step_inventory_full_deliver(ctx) is False
