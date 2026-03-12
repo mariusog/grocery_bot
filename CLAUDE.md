@@ -60,19 +60,25 @@ Leaderboard score = sum of best score on each of the 5 maps.
 | `drop_off` | Deliver matching items at drop-off zone |
 | `wait` | Do nothing |
 
-**Invalid actions are treated as `wait`** (no penalty, but wastes a round).
+**Invalid actions are treated as `wait`** (no penalty, but wastes a round). **Do NOT validate moves or pickups client-side** -- the server handles them safely. Only `drop_off` can cause a penalty (see below).
+
+### Penalty Definition (CRITICAL)
+
+A **penalty** is defined as a **10-SECOND WAIT** imposed by the server. During the penalty, the game clock keeps ticking but you cannot act -- you lose ~2 rounds. This is catastrophic for scoring. The ONLY known penalty trigger is an illegal `drop_off` (see Dropoff Rules). Invalid moves, invalid pickups, and other bad actions are NOT penalized -- they are silently treated as `wait`.
 
 ### Pickup Rules
 
 - Bot must be **adjacent** (Manhattan distance 1) to the shelf with the item
 - Bot inventory must not be full (**max 3 items**)
 - `item_id` must match an item on the map
+- Invalid pickups are treated as `wait` -- **NO penalty**
 
 ### Dropoff Rules (CRITICAL -- most common source of bugs)
 
 - Bot must be **standing on** the drop-off cell
 - **Only items matching the active order are delivered** -- non-matching items stay in inventory
 - **ILLEGAL MOVE: `drop_off` when NO inventory items match the active order causes a 10-SECOND PENALTY** -- always verify at least one carried item matches remaining active order needs before emitting `drop_off`
+- `bot.py:_validate_actions()` is the safety net -- it ONLY checks `drop_off` legality. Do NOT add move/pickup validation there (it cripples multi-bot coordination and caused a 181 vs 337 score regression)
 - When an order completes, the next order activates and remaining items are **re-checked against the new active order**
 - Multiple drop-off zones (Nightmare has 3) are interchangeable
 
