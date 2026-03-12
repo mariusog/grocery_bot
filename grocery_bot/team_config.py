@@ -194,7 +194,7 @@ def get_team_config(num_bots: int) -> TeamConfig:
         extra_preview_roles=num_bots >= 8,
         use_wave_mode=num_bots >= WAVE_MODE_MIN_BOTS,
         multi_bot=num_bots > 1,
-        enable_early_delivery=4 <= num_bots < 8,
+        enable_early_delivery=4 <= num_bots < 15,
         apply_nonactive_throttle=num_bots >= 5,
         allow_preview_walk_when_active=num_bots > 5,
         use_spawn_dispersal=num_bots >= 10,
