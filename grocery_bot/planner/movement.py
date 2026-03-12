@@ -81,7 +81,6 @@ class MovementMixin(PlannerBase):
                     if other_pred == predicted:
                         action_dict = self._find_yield_alternative(bid, bx, by, predicted)
                         break
-
         self.actions.append(action_dict)
         expected = _predict_pos(bx, by, action_dict["action"])
         self.predicted[bid] = expected
@@ -327,7 +326,12 @@ class MovementMixin(PlannerBase):
                 and static_result not in self.gs.blocked_static
                 and not self._would_oscillate(bid, static_result)
             ):
-                result = static_result
+                # Reject if landing on a higher-ID bot (server will block)
+                higher_id_pos = {
+                    tuple(b["position"]) for b in self.bots if b["id"] > bid
+                }
+                if static_result not in higher_id_pos:
+                    result = static_result
 
         # T17: Store the full path when no cache exists yet, or when the
         # cache was invalidated (target changed, position mismatch, or
@@ -413,10 +417,11 @@ class MovementMixin(PlannerBase):
     def _build_blocked(self, bid: int) -> set[tuple[int, int]]:
         """Build blocked set for a specific bot (static + nearby other bots).
 
-        The server processes bots sequentially by ID. Lower-ID bots have
-        already moved (use predicted position), higher-ID bots haven't
-        moved yet (use current position). Both are radius-limited to
-        keep BFS tractable; _emit catches remaining edge cases.
+        The server processes bots sequentially by ID. Higher-ID bots
+        haven't moved yet, so their current position is used. Lower-ID
+        decided bots use their predicted (post-move) position. All other
+        bots are radius-limited to avoid over-constraining BFS on large
+        maps. The _emit safety net catches any remaining collisions.
         """
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
         max_dist: float = self.cfg.blocking_radius
@@ -425,6 +430,9 @@ class MovementMixin(PlannerBase):
         for b in self.bots:
             if b["id"] == bid:
                 continue
+            # Higher-ID: server hasn't processed yet, use current position
+            # Lower-ID decided: use predicted position (already moved)
+            # Lower-ID undecided: use current position
             if b["id"] < bid and b["id"] in decided:
                 bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
             else:
