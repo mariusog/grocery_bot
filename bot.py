@@ -85,6 +85,8 @@ def plan_multi_trip(
 
 
 def decide_actions(state: dict) -> list:
+    # Normalize item order for deterministic decisions regardless of server ordering
+    state["items"] = sorted(state["items"], key=lambda it: it["id"])
     if not _gs.blocked_static:
         _gs.init_static(state)
 
