@@ -4,7 +4,7 @@
 
 | Tool | Command | Notes |
 |------|---------|-------|
-| **Test (fast)** | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 \| tail -20` | Pipe through tail. Use quiet mode. |
+| **Test (fast)** | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1; echo "EXIT_CODE=$?"` | Check exit code (0=pass). |
 | **Test (debug)** | `python -m pytest tests/path/file.py::test_name -q --tb=short 2>&1 \| tail -40` | Only for investigating a specific failure. |
 | **Lint** | `ruff check <files>` | Auto-fix: `ruff check --fix <files>` |
 | **Format** | `ruff format <files>` | Check only: `ruff format --check <files>` |
@@ -123,7 +123,7 @@ You are an AI agent with a finite context window. Optimize for it:
 
 | Action | Token-Efficient Way | Token-Wasteful Way |
 |--------|--------------------|--------------------|
-| Check test results | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 \| tail -20` | Verbose test output (unbounded) |
+| Check test results | `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1; echo "EXIT_CODE=$?"` | Verbose test output (unbounded) |
 | Read benchmark results | `cat docs/benchmark_results.md` | Parse stdout from benchmark run |
 | Inspect a log | `python analyze_replay.py <log> --problems` | Read the raw CSV file |
 | Compare two runs | `python analyze_replay.py <log> --compare <other>` | Read both files and diff manually |
@@ -300,7 +300,7 @@ When multiple agents run in parallel (via worktrees), they MUST follow this prot
 - **Stay in your lane**: only modify files listed in your agent's "Owned Files" table
 - **One task at a time**: finish or abandon a task before claiming another
 - If you discover work needed in another agent's files, add a new task to `TASKS.md` assigned to that agent — do NOT modify their files
-- Run `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20` before committing — all tests must pass
+- Run `python -m pytest tests/ -q --tb=line -m "not slow" 2>&1; echo "EXIT_CODE=$?"` before committing — exit code must be 0
 
 ### When Done
 
@@ -361,13 +361,23 @@ Test naming: `test_<method_name>_<scenario>` -- e.g., `test_calculate_score_empt
 
 ```sh
 # Fast tests only (use this while iterating)
-python -m pytest tests/ -q --tb=line -m "not slow" 2>&1 | tail -20
+# IMPORTANT: always check exit code, not just tail output — summary line can be cut off
+python -m pytest tests/ -q --tb=line -m "not slow" 2>&1; echo "EXIT_CODE=$?"
 
 # Only on failure — rerun with details for the failing test
-python -m pytest tests/ -q --tb=short -x 2>&1 | tail -40
+python -m pytest tests/path/file.py::test_name -q --tb=short 2>&1 | tail -40
+
+# If tests appear stuck, install pytest-timeout and use:
+# pip install pytest-timeout
+# python -m pytest tests/ -q --tb=short -m "not slow" --timeout=10 --timeout_method=thread --ignore=tests/test_replay_regression.py 2>&1; echo "EXIT_CODE=$?"
 ```
 
-**IMPORTANT for agents**: Use `-q --tb=line` by default. Never use `-v`. Only switch to `--tb=short` when debugging a specific failure.
+**IMPORTANT for agents**:
+- Use `-q --tb=line` by default. Never use `-v`. Only switch to `--tb=short` when debugging a specific failure.
+- **Always append `; echo "EXIT_CODE=$?"` instead of piping through `tail`** — with `-q` mode the summary line ("N passed") can be cut off by `tail`, making it impossible to confirm pass/fail. Exit code 0 = all passed.
+- **If a test hangs**, install `pytest-timeout` (`pip install pytest-timeout`) and rerun with `--timeout=10 --timeout_method=thread` to get a stack trace showing where the code is stuck. Then fix the root cause — do not work around it with `--ignore`.
+- **Fix broken/hanging tests even if pre-existing** — do not skip or ignore known failures. If you encounter a broken test, fix the root cause (or file a task in TASKS.md if it's outside your ownership).
+- **Replay regression tests** (`tests/test_replay_regression.py`): by default only the latest day's maps run (fast, ~5s). Full history is `@pytest.mark.slow` — run with `-m slow` when needed.
 
 ## Running Benchmarks
 
