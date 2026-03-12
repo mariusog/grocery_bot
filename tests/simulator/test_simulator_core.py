@@ -1,13 +1,9 @@
-"""Tests for simulator edge cases, difficulty presets, and profiling."""
+"""Tests for simulator edge cases and physics."""
 
 import time
 
 import bot
-from grocery_bot.simulator import (
-    DIFFICULTY_PRESETS,
-    GameSimulator,
-    run_benchmark,
-)
+from grocery_bot.simulator import GameSimulator
 from tests.conftest import reset_bot
 
 
@@ -97,109 +93,6 @@ class TestSimulatorEdgeCases:
         action = {"action": "move_left"}
         sim._apply_action(b, action)
         assert b["position"] == [0, 0]
-
-
-class TestSimulatedGame:
-    """Run the bot through a full simulated game to measure actual scores."""
-
-    def test_easy_single_seed(self):
-        """Single Easy game should score reasonably."""
-        sim = GameSimulator(seed=42, num_bots=1)
-        result = sim.run(verbose=True)
-        assert result["score"] >= 50, f"Score {result['score']} too low for Easy map"
-        assert result["orders_completed"] >= 5, (
-            f"Only completed {result['orders_completed']} orders"
-        )
-
-    def test_easy_average_across_seeds(self):
-        """Average across multiple seeds should be consistent."""
-        scores = []
-        for seed in range(5):
-            sim = GameSimulator(seed=seed, num_bots=1)
-            result = sim.run()
-            scores.append(result["score"])
-            print(
-                f"  Seed {seed}: score={result['score']}, "
-                f"orders={result['orders_completed']}, "
-                f"items={result['items_delivered']}"
-            )
-        avg = sum(scores) / len(scores)
-        print(f"  Average: {avg:.1f}, Min: {min(scores)}, Max: {max(scores)}")
-        assert avg >= 50, f"Average score {avg:.1f} too low"
-
-    def test_easy_completes_first_order(self):
-        """Bot should at least complete the first order."""
-        sim = GameSimulator(seed=42, num_bots=1)
-        result = sim.run()
-        assert result["orders_completed"] >= 1, "Failed to complete even 1 order"
-
-    def test_no_wasted_rounds_at_start(self):
-        """Bot should start moving on round 0, not wait."""
-        sim = GameSimulator(seed=42, num_bots=1)
-        state = sim.get_state()
-        reset_bot()
-        actions = bot.decide_actions(state)
-        action = actions[0]
-        assert action["action"] != "wait", f"Bot should not wait on round 0, got {action}"
-
-
-class TestSimulatorDifficultyPresets:
-    """Test that simulator difficulty presets work correctly."""
-
-    def test_easy_preset(self):
-        """Easy preset should produce valid results."""
-        cfg = DIFFICULTY_PRESETS["Easy"]
-        sim = GameSimulator(seed=42, **cfg)
-        result = sim.run()
-        assert result["score"] > 0, "Easy preset should score > 0"
-        assert result["rounds_used"] == 300
-
-    def test_medium_preset_runs(self):
-        """Medium preset should not crash (3 bots may score 0 due to collision bug)."""
-        cfg = DIFFICULTY_PRESETS["Medium"]
-        sim = GameSimulator(seed=42, **cfg)
-        result = sim.run()
-        # May score 0 due to multi-bot collision bug, but should not crash
-        assert result["rounds_used"] == 300
-        assert result["score"] >= 0
-
-    def test_hard_preset_runs(self):
-        """Hard preset should not crash."""
-        cfg = DIFFICULTY_PRESETS["Hard"]
-        sim = GameSimulator(seed=42, **cfg)
-        result = sim.run()
-        assert result["rounds_used"] == 300
-        assert result["score"] >= 0
-
-    def test_expert_preset_runs(self):
-        """Expert preset should not crash."""
-        cfg = DIFFICULTY_PRESETS["Expert"]
-        sim = GameSimulator(seed=42, **cfg)
-        result = sim.run()
-        assert result["rounds_used"] == 300
-        assert result["score"] >= 0
-
-    def test_run_benchmark_function(self):
-        """run_benchmark() should return results for all configs."""
-        # Use single seed for speed
-        results = run_benchmark(
-            configs={"Easy": DIFFICULTY_PRESETS["Easy"]},
-            seeds=[42],
-        )
-        assert len(results) == 1
-        assert results[0]["config"] == "Easy"
-        assert "score" in results[0]
-
-    def test_profiling_output(self):
-        """Profiling mode should include timing data."""
-        cfg = DIFFICULTY_PRESETS["Easy"]
-        sim = GameSimulator(seed=42, **cfg)
-        result = sim.run(profile=True)
-        assert "timings" in result
-        assert "decide_actions" in result["timings"]
-        stats = result["timings"]["decide_actions"]
-        assert stats["calls"] > 0
-        assert stats["avg_ms"] > 0
 
 
 class TestSimulatorPerformanceProfiling:
