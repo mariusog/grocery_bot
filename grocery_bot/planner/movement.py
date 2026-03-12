@@ -326,11 +326,18 @@ class MovementMixin(PlannerBase):
                 and static_result not in self.gs.blocked_static
                 and not self._would_oscillate(bid, static_result)
             ):
-                # Reject if landing on a higher-ID bot (server will block)
-                higher_id_pos = {
-                    tuple(b["position"]) for b in self.bots if b["id"] > bid
+                # Reject if landing on a bot the server hasn't moved yet.
+                # With ID-order execution, higher-ID bots are unmoved.
+                # With urgency-order planning, undecided lower-ID bots
+                # are also unmoved.
+                decided = getattr(self, "_decided", set())
+                unmoved_pos = {
+                    tuple(b["position"])
+                    for b in self.bots
+                    if b["id"] != bid
+                    and not (b["id"] < bid and b["id"] in decided)
                 }
-                if static_result not in higher_id_pos:
+                if static_result not in unmoved_pos:
                     result = static_result
 
         # T17: Store the full path when no cache exists yet, or when the
