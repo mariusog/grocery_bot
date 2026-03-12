@@ -87,6 +87,11 @@ A **penalty** is defined as a **10-SECOND WAIT** imposed by the server. During t
 - **300 rounds** max per game (500 Nightmare), **120 seconds** wall-clock (300s Nightmare)
 - **3 items** per bot inventory
 - **Collision** -- bots block each other (no two on same tile, except spawn)
+- **Move resolution is sequential by bot ID** (0, 1, 2, ...). Each bot's move is resolved against the current board state including earlier bots' already-applied moves. This means:
+  - Higher-ID bots CAN follow lower-ID bots into vacated cells (chain moves)
+  - Lower-ID bots CANNOT follow higher-ID bots (occupant hasn't moved yet)
+  - Swap collisions (A→B, B→A) block both bots
+  - Convergence on empty cell: lower-ID bot wins, higher-ID bot blocked
 - **Full visibility** -- entire map visible every round
 - **2-second timeout** per round for response
 - Disconnect = game over (no reconnect)
