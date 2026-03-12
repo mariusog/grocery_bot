@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260312_101634",
+  "recorded_at": "20260312_232530",
   "source": "live",
   "grid": {
     "width": 16,
@@ -342,70 +342,6 @@
       ]
     },
     {
-      "id": "item_2",
-      "type": "butter",
-      "position": [
-        3,
-        3
-      ]
-    },
-    {
-      "id": "item_3",
-      "type": "eggs",
-      "position": [
-        5,
-        3
-      ]
-    },
-    {
-      "id": "item_4",
-      "type": "pasta",
-      "position": [
-        3,
-        4
-      ]
-    },
-    {
-      "id": "item_5",
-      "type": "cream",
-      "position": [
-        5,
-        4
-      ]
-    },
-    {
-      "id": "item_6",
-      "type": "yogurt",
-      "position": [
-        3,
-        5
-      ]
-    },
-    {
-      "id": "item_7",
-      "type": "milk",
-      "position": [
-        5,
-        5
-      ]
-    },
-    {
-      "id": "item_8",
-      "type": "bread",
-      "position": [
-        7,
-        2
-      ]
-    },
-    {
-      "id": "item_9",
-      "type": "cheese",
-      "position": [
-        9,
-        2
-      ]
-    },
-    {
       "id": "item_10",
       "type": "butter",
       "position": [
@@ -482,6 +418,14 @@
       "type": "eggs",
       "position": [
         13,
+        3
+      ]
+    },
+    {
+      "id": "item_2",
+      "type": "butter",
+      "position": [
+        3,
         3
       ]
     },
@@ -566,6 +510,14 @@
       ]
     },
     {
+      "id": "item_3",
+      "type": "eggs",
+      "position": [
+        5,
+        3
+      ]
+    },
+    {
       "id": "item_30",
       "type": "butter",
       "position": [
@@ -611,6 +563,54 @@
       "position": [
         13,
         8
+      ]
+    },
+    {
+      "id": "item_4",
+      "type": "pasta",
+      "position": [
+        3,
+        4
+      ]
+    },
+    {
+      "id": "item_5",
+      "type": "cream",
+      "position": [
+        5,
+        4
+      ]
+    },
+    {
+      "id": "item_6",
+      "type": "yogurt",
+      "position": [
+        3,
+        5
+      ]
+    },
+    {
+      "id": "item_7",
+      "type": "milk",
+      "position": [
+        5,
+        5
+      ]
+    },
+    {
+      "id": "item_8",
+      "type": "bread",
+      "position": [
+        7,
+        2
+      ]
+    },
+    {
+      "id": "item_9",
+      "type": "cheese",
+      "position": [
+        9,
+        2
       ]
     }
   ],
