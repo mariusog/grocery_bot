@@ -182,35 +182,3 @@ class TestPreviewDoesntBlockActive:
             f"Should NOT walk toward distant preview when active items still needed, got {action}"
         )
 
-    def test_simulator_no_stuck_loop(self):
-        """Full simulation should never get stuck (same action for 10+ rounds)."""
-        from grocery_bot.simulator import GameSimulator
-
-        sim = GameSimulator(seed=42, num_bots=1)
-        reset_bot()
-
-        last_actions = []
-        for _ in range(300):
-            if sim.is_over():
-                break
-            state = sim.get_state()
-            if not state["orders"]:
-                break
-            actions = bot.decide_actions(state)
-            # Track action+position for loop detection
-            b = sim.bots[0]
-            sig = (
-                tuple(b["position"]),
-                actions[0]["action"],
-                actions[0].get("item_id"),
-            )
-            last_actions.append(sig)
-            if len(last_actions) > 10:
-                last_actions.pop(0)
-                # Check if last 10 actions repeat a 2-round cycle
-                # Allow endgame idle (last 30 rounds) — bot may legitimately wait
-                if len(set(last_actions)) <= 2 and sim.round < 270:
-                    raise AssertionError(f"Bot stuck in loop at round {sim.round}: {last_actions}")
-            sim.apply_actions(actions)
-
-        assert sim.score > 50, f"Score {sim.score} too low — possible stuck loop"

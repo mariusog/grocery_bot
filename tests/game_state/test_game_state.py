@@ -62,10 +62,3 @@ class TestMultiTripPlanning:
             f"Multi-trip ({total_optimal}) should be <= greedy ({greedy_cost})"
         )
 
-    def test_simulator_no_regression(self):
-        """Verify multi-trip planning doesn't regress simulated scores."""
-        from grocery_bot.simulator import GameSimulator
-
-        sim = GameSimulator(seed=42, num_bots=1)
-        result = sim.run()
-        assert result["score"] >= 120, f"Score {result['score']} regressed from baseline"

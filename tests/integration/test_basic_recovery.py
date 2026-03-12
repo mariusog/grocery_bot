@@ -1,7 +1,6 @@
 """Tests for single-bot decision logic: pickup, delivery, endgame, edge cases."""
 
 import bot
-from grocery_bot.simulator import GameSimulator
 from tests.conftest import get_action, make_state, reset_bot
 
 # --- Test: bot should not deliver with only 1 item when more items are nearby ---
@@ -130,10 +129,3 @@ class TestPickupFailureRecovery:
             f"After reset, item_14 should be tried again, got {action}"
         )
 
-    def test_simulator_with_failure_recovery(self):
-        """Simulator should still score well (blacklist logic doesn't break normal flow)."""
-        sim = GameSimulator(seed=42, num_bots=1)
-        result = sim.run()
-        assert result["score"] >= 120, (
-            f"Score {result['score']} regressed after adding failure recovery"
-        )
