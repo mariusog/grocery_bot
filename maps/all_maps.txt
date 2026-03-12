@@ -1,0 +1,678 @@
+
+
+============================================================
+
+Map: 2026-03-07_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 17
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=3, cheese=4, milk=4, yogurt=5)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-07_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=5, butter=5, cheese=5, cream=5, eggs=5, milk=3, pasta=5, yogurt=3)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-07_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 17
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=4, butter=4, cereal=6, cheese=4, cream=7, eggs=5, flour=5, milk=6, oats=6, pasta=6, rice=6, yogurt=5)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-07_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 10
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=10, bananas=8, bread=5, butter=8, cereal=8, cheese=8, cream=8, eggs=8, flour=8, milk=5, oats=5, onions=8, pasta=8, rice=8, tomatoes=5, yogurt=10)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-08_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=5, cheese=4, milk=4, yogurt=3)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-08_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=5, butter=5, cheese=3, cream=5, eggs=5, milk=5, pasta=5, yogurt=3)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-08_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=4, butter=5, cereal=5, cheese=6, cream=5, eggs=6, flour=4, milk=4, oats=6, pasta=6, rice=6, yogurt=7)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-08_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=5, bananas=5, bread=8, butter=8, cereal=8, cheese=10, cream=10, eggs=5, flour=5, milk=8, oats=8, onions=8, pasta=8, rice=8, tomatoes=8, yogurt=8)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-08_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=4, bananas=4, bread=8, butter=8, carrots=7, cereal=8, cheese=7, cream=4, eggs=8, flour=8, juice=8, lettuce=8, milk=8, oats=7, onions=4, pasta=4, peppers=8, rice=8, sugar=8, tomatoes=7, yogurt=8)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-09_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=3, cheese=4, milk=5, yogurt=4)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-09_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=5, butter=5, cheese=5, cream=5, eggs=5, milk=3, pasta=3, yogurt=5)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-09_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=6, butter=5, cereal=4, cheese=6, cream=6, eggs=7, flour=4, milk=5, oats=6, pasta=4, rice=6, yogurt=5)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-09_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=8, bananas=10, bread=5, butter=8, cereal=8, cheese=5, cream=8, eggs=8, flour=5, milk=8, oats=8, onions=10, pasta=5, rice=8, tomatoes=8, yogurt=8)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-09_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=4, bananas=8, bread=4, butter=7, carrots=4, cereal=8, cheese=8, cream=8, eggs=8, flour=8, juice=8, lettuce=4, milk=8, oats=8, onions=8, pasta=4, peppers=8, rice=7, sugar=7, tomatoes=8, yogurt=7)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-10_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=4, cheese=3, milk=4, yogurt=5)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-10_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=5, butter=5, cheese=5, cream=3, eggs=5, milk=5, pasta=5, yogurt=3)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-10_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=7, butter=6, cereal=5, cheese=4, cream=6, eggs=5, flour=6, milk=6, oats=4, pasta=5, rice=6, yogurt=4)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-10_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=5, bananas=10, bread=5, butter=8, cereal=8, cheese=5, cream=8, eggs=5, flour=8, milk=8, oats=8, onions=8, pasta=8, rice=8, tomatoes=10, yogurt=8)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-10_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=7, bananas=4, bread=8, butter=4, carrots=7, cereal=7, cheese=8, cream=8, eggs=4, flour=8, juice=8, lettuce=4, milk=7, oats=4, onions=8, pasta=8, peppers=8, rice=8, sugar=8, tomatoes=8, yogurt=8)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-11_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=3, cheese=4, milk=4, yogurt=5)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-11_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=5, butter=3, cheese=3, cream=5, eggs=5, milk=5, pasta=5, yogurt=5)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-11_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=4, butter=6, cereal=5, cheese=6, cream=5, eggs=4, flour=6, milk=5, oats=6, pasta=7, rice=6, yogurt=4)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-11_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=5, bananas=8, bread=8, butter=5, cereal=8, cheese=10, cream=8, eggs=5, flour=5, milk=8, oats=10, onions=8, pasta=8, rice=8, tomatoes=8, yogurt=8)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-11_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=7, bananas=8, bread=8, butter=8, carrots=4, cereal=8, cheese=7, cream=7, eggs=8, flour=8, juice=4, lettuce=8, milk=8, oats=4, onions=8, pasta=4, peppers=7, rice=4, sugar=8, tomatoes=8, yogurt=8)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-12_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
+Spawn: [10, 8]  Drop-off: [(1, 8)]
+Items: 16 (4 types: butter=4, cheese=4, milk=5, yogurt=3)
+
+    012345678901
+ 0  ############
+ 1  #..........#
+ 2  #.#S.S#S.S##
+ 3  #.#S.S#S.S##
+ 4  #.#S.S#S.S##
+ 5  #..........#
+ 6  #.#S.S#S.S##
+ 7  #..........#
+ 8  #D........*#
+ 9  ############
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-12_16x12_3bot
+Size: 16x12  Bots: 3  Rounds: 300  Orders: 50
+Spawn: [14, 10]  Drop-off: [(1, 10)]
+Items: 36 (8 types: bread=3, butter=5, cheese=3, cream=5, eggs=5, milk=5, pasta=5, yogurt=5)
+
+    0123456789012345
+ 0  ################
+ 1  #..............#
+ 2  #.#S.S#S.S#S.S##
+ 3  #.#S.S#S.S#S.S##
+ 4  #.#S.S#S.S#S.S##
+ 5  #.#S.S#S.S#S.S##
+ 6  #..............#
+ 7  #.#S.S#S.S#S.S##
+ 8  #.#S.S#S.S#S.S##
+ 9  #..............#
+10  #D............*#
+11  ################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-12_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
+Spawn: [20, 12]  Drop-off: [(1, 12)]
+Items: 64 (12 types: bread=5, butter=6, cereal=4, cheese=7, cream=5, eggs=4, flour=4, milk=6, oats=6, pasta=6, rice=5, yogurt=6)
+
+    0123456789012345678901
+ 0  ######################
+ 1  #....................#
+ 2  #.#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#..#
+ 7  #....................#
+ 8  #.#S.S#S.S#S.S#S.S#..#
+ 9  #.#S.S#S.S#S.S#S.S#..#
+10  #.#S.S#S.S#S.S#S.S#..#
+11  #....................#
+12  #D..................*#
+13  ######################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-12_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
+Spawn: [26, 16]  Drop-off: [(1, 16)]
+Items: 120 (16 types: apples=8, bananas=5, bread=5, butter=8, cereal=10, cheese=5, cream=8, eggs=8, flour=8, milk=8, oats=8, onions=8, pasta=10, rice=5, tomatoes=8, yogurt=8)
+
+    0123456789012345678901234567
+ 0  ############################
+ 1  #..........................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#....#
+ 9  #..........................#
+10  #.#S.S#S.S#S.S#S.S#S.S#....#
+11  #.#S.S#S.S#S.S#S.S#S.S#....#
+12  #.#S.S#S.S#S.S#S.S#S.S#....#
+13  #.#S.S#S.S#S.S#S.S#S.S#....#
+14  #.#S.S#S.S#S.S#S.S#S.S#....#
+15  #..........................#
+16  #D........................*#
+17  ############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor
+
+Map: 2026-03-12_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=4, bananas=8, bread=8, butter=8, carrots=8, cereal=8, cheese=8, cream=7, eggs=8, flour=8, juice=7, lettuce=4, milk=4, oats=4, onions=8, pasta=4, peppers=8, rice=8, sugar=7, tomatoes=8, yogurt=7)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor

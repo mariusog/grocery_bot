@@ -1,7 +1,7 @@
-Map: 2026-03-07_22x14_5bot
-Size: 22x14  Bots: 5  Rounds: 300  Orders: 17
+Map: 2026-03-09_22x14_5bot
+Size: 22x14  Bots: 5  Rounds: 300  Orders: 50
 Spawn: [20, 12]  Drop-off: [(1, 12)]
-Items: 64 (12 types: bread=4, butter=4, cereal=6, cheese=4, cream=7, eggs=5, flour=5, milk=6, oats=6, pasta=6, rice=6, yogurt=5)
+Items: 64 (12 types: bread=6, butter=5, cereal=4, cheese=6, cream=6, eggs=7, flour=4, milk=5, oats=6, pasta=4, rice=6, yogurt=5)
 
     0123456789012345678901
  0  ######################

@@ -1,0 +1,26 @@
+Map: 2026-03-11_30x18_20bot
+Size: 30x18  Bots: 20  Rounds: 500  Orders: 500
+Spawn: [28, 16]  Drop-off: [(15, 16), (27, 16), (1, 16)]
+Items: 144 (21 types: apples=7, bananas=8, bread=8, butter=8, carrots=4, cereal=8, cheese=7, cream=7, eggs=8, flour=8, juice=4, lettuce=8, milk=8, oats=4, onions=8, pasta=4, peppers=7, rice=4, sugar=8, tomatoes=8, yogurt=8)
+
+    012345678901234567890123456789
+ 0  ##############################
+ 1  #............................#
+ 2  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 3  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 4  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 5  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 6  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 7  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 8  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+ 9  #............................#
+10  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+11  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+12  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+13  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+14  #.#S.S#S.S#S.S#S.S#S.S#S.S#..#
+15  #............................#
+16  #D.............D...........D*#
+17  ##############################
+
+Legend: # wall  S shelf  D drop-off  * spawn  . floor

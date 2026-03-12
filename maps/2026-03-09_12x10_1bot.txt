@@ -1,7 +1,7 @@
-Map: 2026-03-07_12x10_1bot
-Size: 12x10  Bots: 1  Rounds: 300  Orders: 17
+Map: 2026-03-09_12x10_1bot
+Size: 12x10  Bots: 1  Rounds: 300  Orders: 50
 Spawn: [10, 8]  Drop-off: [(1, 8)]
-Items: 16 (4 types: butter=3, cheese=4, milk=4, yogurt=5)
+Items: 16 (4 types: butter=3, cheese=4, milk=5, yogurt=4)
 
     012345678901
  0  ############

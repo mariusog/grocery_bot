@@ -1,7 +1,7 @@
-Map: 2026-03-07_28x18_10bot
-Size: 28x18  Bots: 10  Rounds: 300  Orders: 10
+Map: 2026-03-08_28x18_10bot
+Size: 28x18  Bots: 10  Rounds: 300  Orders: 50
 Spawn: [26, 16]  Drop-off: [(1, 16)]
-Items: 120 (16 types: apples=10, bananas=8, bread=5, butter=8, cereal=8, cheese=8, cream=8, eggs=8, flour=8, milk=5, oats=5, onions=8, pasta=8, rice=8, tomatoes=5, yogurt=10)
+Items: 120 (16 types: apples=5, bananas=5, bread=8, butter=8, cereal=8, cheese=10, cream=10, eggs=5, flour=5, milk=8, oats=8, onions=8, pasta=8, rice=8, tomatoes=8, yogurt=8)
 
     0123456789012345678901234567
  0  ############################
