@@ -82,6 +82,12 @@ class GameState(
         self.future_demand: dict[str, int] = {}
         self._demand_order_idx: int = -1
 
+        # Oracle planner schedule cache
+        self._oracle_schedule: Any = None
+        self._oracle_last_order_idx: int = -1
+        self._oracle_stuck_counts: dict[int, int] = {}
+        self._oracle_last_pos: dict[int, tuple[int, int]] = {}
+
     def reset(self) -> None:
         """Reset all state for a new game."""
         self.blocked_static = set()
@@ -121,6 +127,10 @@ class GameState(
         self.future_orders_recorded = 0
         self.future_demand = {}
         self._demand_order_idx = -1
+        self._oracle_schedule = None
+        self._oracle_last_order_idx = -1
+        self._oracle_stuck_counts = {}
+        self._oracle_last_pos = {}
 
     def init_static(self, state: dict[str, Any]) -> None:
         """Compute static blocked set and caches on round 0."""
