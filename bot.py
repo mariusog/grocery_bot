@@ -304,6 +304,14 @@ async def play() -> None:
 
             round_num = data["round"]
 
+            # === ACTION STATUS: detect server-side timeout ===
+            action_status = data.get("action_status")
+            if action_status == "timeout":
+                dbg(f"R{round_num} ACTION_TIMEOUT: server dropped our R{round_num - 1} actions!")
+                # Reset expectations — server didn't apply our moves
+                expected_positions.clear()
+                expected_inventories.clear()
+
             # On first round, capture wall set and item positions for validation
             if round_num == 0:
                 wall_set = set(tuple(w) for w in data["grid"]["walls"])
@@ -395,8 +403,8 @@ async def play() -> None:
             # Actions are already validated by _validate_actions() inside
             # decide_actions() — illegal moves are replaced with "wait".
 
-            # Build the exact JSON we'll send
-            response_json = json.dumps({"actions": actions})
+            # Build the exact JSON we'll send (include round to prevent stale application)
+            response_json = json.dumps({"actions": actions, "round": round_num})
 
             await ws.send(response_json)
             send_time = time.perf_counter()

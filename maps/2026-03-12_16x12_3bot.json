@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_at": "20260312_074354",
+  "recorded_at": "20260312_101634",
   "source": "live",
   "grid": {
     "width": 16,
@@ -749,6 +749,43 @@
       "items_required": [
         "milk",
         "eggs",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_15",
+      "items_required": [
+        "pasta",
+        "butter",
+        "yogurt",
+        "butter",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_16",
+      "items_required": [
+        "eggs",
+        "cream",
+        "bread",
+        "yogurt",
+        "eggs"
+      ]
+    },
+    {
+      "id": "order_17",
+      "items_required": [
+        "cream",
+        "bread",
+        "cheese"
+      ]
+    },
+    {
+      "id": "order_18",
+      "items_required": [
+        "butter",
+        "bread",
+        "yogurt",
         "eggs"
       ]
     }
