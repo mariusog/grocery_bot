@@ -104,13 +104,13 @@ def test_oracle_needs_empty_without_knowledge():
     assert p.oracle_needs == {}
 
 
-def test_oracle_needs_includes_synthetic_orders():
-    """Oracle uses all orders including synthetic padding."""
+def test_oracle_needs_excludes_synthetic_orders():
+    """Oracle only uses recorded orders, not synthetic padding."""
     future = [
         {"id": "o0", "items_required": ["milk"]},
         {"id": "o1", "items_required": ["bread"]},
-        {"id": "o2", "items_required": ["cheese"]},
-        {"id": "o3", "items_required": ["yogurt"]},
+        {"id": "o2", "items_required": ["cheese"]},  # synthetic
+        {"id": "o3", "items_required": ["yogurt"]},  # synthetic
     ]
     items = [
         {"id": "i1", "type": "milk", "position": [3, 2]},
@@ -129,9 +129,9 @@ def test_oracle_needs_includes_synthetic_orders():
     gs.update_demand(0)
     planner = OracleEnhancedPlanner(gs, state, full_state=state)
     planner.plan()
-    # Should see orders o2 and o3 (beyond preview), even though recorded=2
-    assert "cheese" in planner.oracle_needs
-    assert "yogurt" in planner.oracle_needs
+    # Should NOT see synthetic orders o2/o3 — only recorded orders matter
+    assert "cheese" not in planner.oracle_needs
+    assert "yogurt" not in planner.oracle_needs
 
 
 def test_oracle_idle_target_returns_centroid():

@@ -25,7 +25,7 @@ class OracleEnhancedPlanner(RoundPlanner):
         idx = self.gs._demand_order_idx
         if idx < 0:
             return
-        limit = len(self.gs.future_orders)
+        limit = self.gs.future_orders_recorded or len(self.gs.future_orders)
         for off in range(2, 2 + ORACLE_DEEP_LOOKAHEAD):
             oidx = idx + off
             if oidx >= limit:
@@ -40,7 +40,7 @@ class OracleEnhancedPlanner(RoundPlanner):
         idx = self.gs._demand_order_idx
         if idx < 0:
             return None
-        limit = len(self.gs.future_orders)
+        limit = self.gs.future_orders_recorded or len(self.gs.future_orders)
         target_idx = idx + 2
         if target_idx >= limit:
             return None
