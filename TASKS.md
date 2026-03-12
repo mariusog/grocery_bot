@@ -4,18 +4,21 @@ Agents MUST check this file before starting work and update it when claiming or 
 
 Status: `open` | `in-progress` | `done` | `blocked`
 
-## Current Performance (2026-03-10)
+## Current Performance (2026-03-12)
 
-**Replay benchmark** (`python benchmark.py`, total=820 single-map):
+**Replay benchmark** (`python benchmark.py`, corrected simulator physics):
 
 | Map | Bots | Grid | Score |
 |-----|------|------|-------|
-| Easy | 1 | 12x10 | 125 |
-| Medium | 3 | 16x12 | 159 |
-| Hard | 5 | 22x14 | 113 |
-| Expert | 10 | 28x18 | 106 |
-| Nightmare | 20 | 30x18 | 317 |
-| **Total** | | | **820** |
+| Easy | 1 | 12x10 | 121 |
+| Medium | 3 | 16x12 | 149 |
+| Hard | 5 | 22x14 | 134 |
+| Expert | 10 | 28x18 | 114 |
+| Nightmare | 20 | 30x18 | 242 |
+| **Total** | | | **760** |
+
+**Live Hard: 116** (replay: 118, delta: -2) (2026-03-12)
+**Live Expert: 73** (replay: 96, delta: -23) (2026-03-12)
 
 **Target: 1000 live total**
 
@@ -34,6 +37,31 @@ Status: `open` | `in-progress` | `done` | `blocked`
 2. **Hard InvFull clearing** (+10-20): 5-bot teams require full inventory (3 items) before clearing non-active. Lowering to 2 saves ~40 bot-rounds of waste.
 3. **Expert InvFull** (+10-20): 258 bot-rounds wasted. Scaled dropoff radius helped; further work on oscillation reduction.
 4. **Nightmare tail bots** (+20-40): B16-B19 barely contribute. Better work distribution could add 20+ points.
+
+---
+
+## Tasks for 2026-03-13
+
+### T63: Same-shelf multi-pickup for duplicate order items
+- **Status**: open
+- **Priority**: 1
+- **Difficulty**: Medium (2-3 hours)
+- **Files**: `grocery_bot/planner/assignment.py`, `grocery_bot/game_state/hungarian.py`
+- **Root cause**: When an order needs 2+ of the same type (e.g. `cheese: 2`), `_compute_bot_assignments` adds 2 different cheese shelf items as candidates and assigns 2 separate bots to 2 different shelves. Since items respawn instantly (same ID, same shelf), a single bot could pick the same shelf twice — saving the second bot's entire trip.
+- **How to fix**:
+  1. In `_compute_bot_assignments`, when `net_active[t] > 1`, allow the same item to appear multiple times in candidates (same shelf, picked multiple rounds)
+  2. The Hungarian assignment already supports multi-slot bots (`slots` parameter) — a bot with 2+ free slots assigned to 2 candidates at the same position would pick twice in place
+  3. Add distance comparison: only use same-shelf if it's cheaper than sending a second bot to another shelf
+- **Expected gain**: +5-15 across all difficulties (most impactful on Expert/Nightmare with large orders)
+- **TDD**: Test that a bot assigned `cheese: 2` picks the nearest cheese shelf twice instead of 2 bots going to 2 shelves
+
+### T64: Fix remaining sim-vs-live divergence
+- **Status**: open
+- **Priority**: 1
+- **Difficulty**: Medium (2-3 hours)
+- **Files**: `bot.py`, `grocery_bot/planner/assignment.py`
+- **Root cause**: Bot decisions depend on `items` list ordering (which item of a type is "first" in `items_by_type`). The live server sends items in a different order than our map JSON. Current workaround: sort by ID in `decide_actions`. Real fix: make all item selection tie-break on a stable criterion (e.g. distance to bot or dropoff) instead of list position.
+- **Expected gain**: Closes the 96 vs 73 local-vs-live Expert gap
 
 ---
 
