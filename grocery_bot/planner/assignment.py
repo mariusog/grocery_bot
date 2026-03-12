@@ -6,7 +6,6 @@ from grocery_bot.constants import (
     ASSIGNMENT_DROPOFF_WEIGHT,
     MAX_INVENTORY,
     MAX_PREVIEW_BOTS,
-    ORACLE_ASSIGNMENT_BONUS,
     ZONE_CROSS_PENALTY,
 )
 from grocery_bot.planner._base import PlannerBase
@@ -162,10 +161,6 @@ class AssignmentMixin(PlannerBase):
                 if zone_width:
                     item_zone = int(it["position"][0] / zone_width)
                     d += abs(bot_zone - item_zone) * ZONE_CROSS_PENALTY
-                # Oracle bonus: prefer items also needed by future orders
-                oracle_val = getattr(self, "oracle_item_value", {}).get(it["type"], 0)
-                if oracle_val > 0:
-                    d -= oracle_val * ORACLE_ASSIGNMENT_BONUS
                 # Tiny tie-breaker: encourage bot i to prefer item i's region
                 # so symmetric spawn positions don't all pick the same target.
                 if n_bots > 1 and n_items > 1:
