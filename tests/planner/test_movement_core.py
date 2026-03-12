@@ -174,6 +174,48 @@ class TestBuildBlocked:
         assert (2, 3) in blocked
 
 
+class TestBfsSmartOscillationFallback:
+    """Oscillation fallback must not route through higher-ID bot positions."""
+
+    def test_oscillation_fallback_avoids_higher_id_bot(self):
+        """When BFS oscillates, static fallback must not land on higher-ID bot."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [3, 4], "inventory": []},
+                {"id": 1, "position": [2, 4], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [1, 3]}],
+            orders=[_active_order(["cheese"])],
+        )
+        # Set up oscillation history: bot 0 was at (2,4) two rounds ago
+        planner.gs.bot_history[0] = deque([(2, 4), (3, 4)], maxlen=3)
+        blocked = planner._build_blocked(0)
+        result = planner._bfs_smart(0, (3, 4), (1, 3), blocked)
+        # Result must not be bot 1's position (2, 4)
+        if result is not None:
+            assert result != (2, 4), (
+                "Oscillation fallback routed through higher-ID bot"
+            )
+
+    def test_oscillation_fallback_returns_valid_position(self):
+        """Static fallback result must not be in the blocked set."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [3, 4], "inventory": []},
+                {"id": 1, "position": [4, 4], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [6, 3]}],
+            orders=[_active_order(["cheese"])],
+        )
+        planner.gs.bot_history[0] = deque([(4, 4), (3, 4)], maxlen=3)
+        blocked = planner._build_blocked(0)
+        result = planner._bfs_smart(0, (3, 4), (6, 3), blocked)
+        if result is not None:
+            assert result not in blocked, (
+                f"_bfs_smart returned blocked position {result}"
+            )
+
+
 class TestFindYieldAlternative:
     def test_finds_alternative_direction(self):
         """Should find an alternative move when target is blocked by yielding."""
