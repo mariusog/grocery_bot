@@ -72,6 +72,7 @@ Leaderboard score = sum of best score on each of the 5 maps.
 
 - Bot must be **standing on** the drop-off cell
 - **Only items matching the active order are delivered** -- non-matching items stay in inventory
+- **ILLEGAL MOVE: `drop_off` when NO inventory items match the active order causes a 10-SECOND PENALTY** -- always verify at least one carried item matches remaining active order needs before emitting `drop_off`
 - When an order completes, the next order activates and remaining items are **re-checked against the new active order**
 - Multiple drop-off zones (Nightmare has 3) are interchangeable
 
