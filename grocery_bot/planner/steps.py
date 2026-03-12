@@ -271,9 +271,12 @@ class StepsMixin(PlannerBase):
             return False
         if self._is_at_any_dropoff(ctx.pos):
             return False
+        # Full-inventory bots on large teams bypass throttle — stuck otherwise
+        full_inv = len(ctx.inv) >= MAX_INVENTORY and self.cfg.use_predictions
         max_na_del = self.cfg.max_nonactive_deliverers
-        if self.cfg.apply_nonactive_throttle and self._nonactive_delivering >= max_na_del:
-            return False
+        if not full_inv and self.cfg.apply_nonactive_throttle:
+            if self._nonactive_delivering >= max_na_del:
+                return False
         self._nonactive_delivering += 1
         nd = self._nearest_dropoff(ctx.pos)
         self._emit_move_or_wait(ctx.bid, ctx.bx, ctx.by, ctx.pos, nd, ctx.blocked)
@@ -353,7 +356,8 @@ class StepsMixin(PlannerBase):
             and not self.cfg.use_predictions
             and any(item in self.active_needed for item in ctx.inv)
         )
-        if not carries_matching:
+        full_inv = len(ctx.inv) >= MAX_INVENTORY and self.cfg.use_predictions
+        if not carries_matching and not full_inv:
             max_na_del = self.cfg.max_nonactive_deliverers
             if self.cfg.apply_nonactive_throttle and self._nonactive_delivering >= max_na_del:
                 return False
