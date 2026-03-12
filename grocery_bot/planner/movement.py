@@ -70,6 +70,17 @@ class MovementMixin(PlannerBase):
                     if other_pred == my_pos:
                         action_dict = self._find_yield_alternative(bid, bx, by, predicted)
                         break
+            # Prevent convergence: two decided bots targeting the same cell.
+            # The server rejects one move, causing a desync.
+            if action_dict["action"].startswith("move_"):
+                predicted = _predict_pos(bx, by, action_dict["action"])
+                decided = getattr(self, "_decided", set())
+                for other_bid, other_pred in self.predicted.items():
+                    if other_bid == bid or other_bid not in decided:
+                        continue
+                    if other_pred == predicted:
+                        action_dict = self._find_yield_alternative(bid, bx, by, predicted)
+                        break
 
         self.actions.append(action_dict)
         expected = _predict_pos(bx, by, action_dict["action"])
@@ -91,9 +102,15 @@ class MovementMixin(PlannerBase):
         by: int,
         blocked_target: tuple[int, int],
     ) -> dict[str, Any]:
-        occupied: set[tuple[int, int]] = {
-            self.predicted.get(b["id"], tuple(b["position"])) for b in self.bots if b["id"] != bid
-        }
+        decided: set[int] = getattr(self, "_decided", set())
+        occupied: set[tuple[int, int]] = set()
+        for b in self.bots:
+            if b["id"] == bid:
+                continue
+            if b["id"] < bid and b["id"] in decided:
+                occupied.add(self.predicted.get(b["id"], tuple(b["position"])))
+            else:
+                occupied.add(tuple(b["position"]))
         # Prefer non-oscillating alternatives, but fall back to any unblocked
         fallback: dict[str, Any] | None = None
         for dx, dy in DIRECTIONS:
@@ -128,11 +145,29 @@ class MovementMixin(PlannerBase):
         Returns paths of active/delivering bots for use in phase 2.
         """
         active_paths: list[list[tuple[int, int]]] = []
+        # During lane-based spawn dispersal, bots at spawn will disperse —
+        # not follow assignments.  Skip predictions so they don't block exits.
+        # Only for lane dispersal (single-dropoff maps like Expert).
+        spawn: tuple[int, int] | None = None
+        if (
+            self.cfg.use_spawn_dispersal
+            and getattr(self.gs, "spawn_lane_dispersal", False)
+            and self.current_round < self.cfg.spawn_dispersal_max_rounds()
+        ):
+            spawn = (
+                tuple(self.gs.spawn_origin)  # type: ignore[arg-type]
+                if self.gs.spawn_origin is not None
+                else None
+            )
         for b in self.bots:
             bid: int = b["id"]
             pos: tuple[int, int] = tuple(b["position"])
             has_active: bool = self.bot_has_active.get(bid, False)
             target: tuple[int, int] | None = None
+
+            if spawn and pos == spawn:
+                self.predicted[bid] = pos
+                continue
 
             if has_active and self._should_head_to_dropoff(b):
                 target, _ = self._get_delivery_target(bid, pos)
@@ -212,12 +247,16 @@ class MovementMixin(PlannerBase):
 
     def _build_moving_obstacles(self, bid: int) -> list[tuple[tuple[int, int], tuple[int, int]]]:
         """Build moving obstacle list for temporal BFS (other bots only)."""
+        decided: set[int] = getattr(self, "_decided", set())
         obstacles: list[tuple[tuple[int, int], tuple[int, int]]] = []
         for b in self.bots:
             if b["id"] == bid:
                 continue
             cur: tuple[int, int] = tuple(b["position"])
-            pred: tuple[int, int] = self.predicted.get(b["id"], cur)
+            if b["id"] < bid and b["id"] in decided:
+                pred: tuple[int, int] = self.predicted.get(b["id"], cur)
+            else:
+                pred = cur  # higher ID or undecided: treat as stationary
             obstacles.append((cur, pred))
         return obstacles
 
@@ -372,14 +411,26 @@ class MovementMixin(PlannerBase):
             self._emit(bid, bx, by, {"bot": bid, "action": "wait"})
 
     def _build_blocked(self, bid: int) -> set[tuple[int, int]]:
-        """Build blocked set for a specific bot (static + nearby other bots)."""
+        """Build blocked set for a specific bot (static + nearby other bots).
+
+        The server processes bots sequentially by ID. Lower-ID bots have
+        already moved (use predicted position), higher-ID bots haven't
+        moved yet (use current position).
+        """
         pos: tuple[int, int] = tuple(self.bots_by_id[bid]["position"])
         max_dist: float = self.cfg.blocking_radius
+        decided: set[int] = getattr(self, "_decided", set())
         other: set[tuple[int, int]] = set()
         for b in self.bots:
             if b["id"] == bid:
                 continue
-            bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
+            # Server processes lower IDs first: they're at predicted pos.
+            # Higher IDs haven't moved: they're at current pos.
+            # Only trust predictions for bots the planner has decided.
+            if b["id"] < bid and b["id"] in decided:
+                bp: tuple[int, int] = self.predicted.get(b["id"], tuple(b["position"]))
+            else:
+                bp = tuple(b["position"])
             if max_dist == float("inf") or (abs(bp[0] - pos[0]) + abs(bp[1] - pos[1])) <= max_dist:
                 other.add(bp)
         blocked_set: set[tuple[int, int]] = self.gs.blocked_static | other

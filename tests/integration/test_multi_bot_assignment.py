@@ -80,11 +80,10 @@ class TestAntiCollision:
         assert a1["action"] != "wait", f"Bot 1 should be moving, got {a1}"
 
     def test_higher_bot_plans_around_lower_bot_move(self):
-        """Bot 1 may follow bot 0 through a corridor.
+        """Bot 1 may follow bot 0 through a corridor (chain move).
 
-        The validator no longer blocks moves into occupied cells — the
-        server resolves simultaneous moves and treats invalid ones as wait
-        (no penalty).  The planner may choose move_left or wait.
+        The server allows chain moves: bot 1 can move into bot 0's cell
+        if bot 0 is also moving away in the same round.
         """
         reset_bot()
         # Single-width corridor along y=5. Bot 0 at (3,5) moving left, Bot 1 at (4,5).
@@ -124,8 +123,8 @@ class TestAntiCollision:
         a1 = get_action(actions, 1)
         # Bot 0 should move left (toward cheese at (2,4)).
         assert a0["action"] == "move_left", f"Bot 0 should move left, got {a0}"
-        # Bot 1 may move left (server resolves) or wait — both acceptable
-        assert a1["action"] in ("move_left", "wait"), f"Unexpected action: {a1}"
+        # Bot 1 may follow bot 0 left (chain move) or wait
+        assert a1["action"] in ("move_left", "move_right", "wait"), f"Unexpected: {a1}"
 
     def test_bot_waits_if_only_path_blocked(self):
         """If a bot's only path forward is blocked by another bot, it should

@@ -98,7 +98,7 @@ class TestBuildBlocked:
         assert (-1, 0) in blocked
 
     def test_includes_other_bot_positions(self):
-        """Blocked set should include other bots' predicted positions."""
+        """Blocked set uses current pos for higher-ID (undecided on server)."""
         planner = make_planner(
             bots=[
                 {"id": 0, "position": [3, 3], "inventory": []},
@@ -108,9 +108,28 @@ class TestBuildBlocked:
             orders=[_active_order(["cheese"])],
         )
         blocked = planner._build_blocked(0)
-        # Bot 1's predicted position should be in blocked set for bot 0
-        pred_1 = planner.predicted.get(1, (5, 3))
-        assert pred_1 in blocked
+        # Bot 1 has higher ID — server hasn't processed it yet when
+        # processing bot 0, so use CURRENT position (5, 3).
+        assert (5, 3) in blocked
+
+    def test_lower_id_uses_predicted_for_higher_id_bot(self):
+        """Higher-ID bot sees lower-ID decided bot at predicted position."""
+        planner = make_planner(
+            bots=[
+                {"id": 0, "position": [3, 3], "inventory": []},
+                {"id": 1, "position": [5, 3], "inventory": []},
+            ],
+            items=[{"id": "i0", "type": "cheese", "position": [4, 2]}],
+            orders=[_active_order(["cheese"])],
+        )
+        # After plan(), bot 0 is decided. Bot 1's blocked should use
+        # bot 0's predicted position, not current.
+        pred_0 = planner.predicted.get(0, (3, 3))
+        blocked_1 = planner._build_blocked(1)
+        if pred_0 != (3, 3):  # only test if bot 0 actually moved
+            assert pred_0 in blocked_1
+            # Bot 0's original position should NOT be blocked
+            assert (3, 3) not in blocked_1 or (3, 3) in planner.gs.blocked_static
 
     def test_own_position_not_blocked(self):
         """Bot's own position should not be in its blocked set (unless static)."""
@@ -137,9 +156,8 @@ class TestBuildBlocked:
             orders=[_active_order(["cheese"])],
         )
         blocked = planner._build_blocked(0)
-        # Bot 1 at (2,3) is distance 1 from bot 0 at (1,3) — within radius 4
-        pred_1 = planner.predicted.get(1, (2, 3))
-        assert pred_1 in blocked
+        # Bot 1 at (2,3) — higher ID, uses current pos, distance 1 within radius
+        assert (2, 3) in blocked
 
     def test_huge_team_tighter_radius(self):
         """With 15+ bots, blocking radius is 3 (tighter than 5-7 bots)."""
@@ -152,9 +170,8 @@ class TestBuildBlocked:
             height=9,
         )
         blocked = planner._build_blocked(0)
-        # Bot 1 at (2,3) is distance 1 from bot 0 at (1,3) — within radius 3
-        pred_1 = planner.predicted.get(1, (2, 3))
-        assert pred_1 in blocked
+        # Bot 1 at (2,3) — higher ID, uses current pos, distance 1 within radius
+        assert (2, 3) in blocked
 
 
 class TestFindYieldAlternative:

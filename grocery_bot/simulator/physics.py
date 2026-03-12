@@ -13,48 +13,16 @@ class PhysicsMixin(SimulatorBase):
     """
 
     def apply_actions(self, actions: list[dict[str, Any]]) -> None:
-        """Apply bot actions with simultaneous swap-collision detection.
+        """Apply bot actions sequentially by bot ID.
 
-        Moves are resolved in two passes:
-        1. Compute intended destinations for all move actions.
-        2. Block swaps (two bots trying to exchange positions) and
-           target-collisions (two bots moving to the same cell), then
-           apply remaining moves and non-move actions.
+        The live server processes each bot in ID order (0, 1, 2, ...),
+        updating positions in-place. Later bots see earlier bots' new
+        positions, so higher-ID bots can follow lower-ID bots (chain
+        moves) but not vice versa.
         """
         actions_by_bot = {a["bot"]: a for a in actions}
-
-        # Pass 1: compute intended positions for movers
-        move_deltas = {
-            "move_up": (0, -1),
-            "move_down": (0, 1),
-            "move_left": (-1, 0),
-            "move_right": (1, 0),
-        }
-        intended: dict[int, tuple[int, int]] = {}  # bot_id -> (nx, ny)
-        for b in self.bots:
-            act = actions_by_bot.get(b["id"], {"action": "wait"})["action"]
-            if act in move_deltas:
-                dx, dy = move_deltas[act]
-                intended[b["id"]] = (b["position"][0] + dx, b["position"][1] + dy)
-
-        # Pass 2: detect swap collisions and block both participants
-        blocked_bots: set[int] = set()
-        bot_positions = {b["id"]: tuple(b["position"]) for b in self.bots}
-        for bid_a, dest_a in intended.items():
-            for bid_b, dest_b in intended.items():
-                if bid_a >= bid_b:
-                    continue
-                # Swap: A wants B's position and B wants A's position
-                if dest_a == bot_positions[bid_b] and dest_b == bot_positions[bid_a]:
-                    blocked_bots.add(bid_a)
-                    blocked_bots.add(bid_b)
-
-        # Apply actions, skipping blocked movers
-        for b in sorted(self.bots, key=lambda b: b["id"]):
-            bid = b["id"]
-            action = actions_by_bot.get(bid, {"action": "wait"})
-            if bid in blocked_bots and action["action"] in move_deltas:
-                continue  # swap-blocked
+        for b in sorted(self.bots, key=lambda bot: bot["id"]):
+            action = actions_by_bot.get(b["id"], {"action": "wait"})
             self._apply_action(b, action)
         self.round += 1
 
