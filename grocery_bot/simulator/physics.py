@@ -91,15 +91,8 @@ class PhysicsMixin(SimulatorBase):
         if abs(bx - ix) + abs(by - iy) != 1:
             return
         b["inventory"].append(item["type"])
-        self.items_on_map.remove(item)
-        self._next_item_id += 1
-        self.items_on_map.append(
-            {
-                "id": f"item_{self._next_item_id}",
-                "type": item["type"],
-                "position": list(item["position"]),
-            }
-        )
+        # Item stays on shelf with same ID (matching live server behavior).
+        # No removal/re-add needed — the shelf is always stocked.
 
     def _do_dropoff(self, b: dict) -> None:
         """Handle dropoff with cascade delivery across order transitions."""

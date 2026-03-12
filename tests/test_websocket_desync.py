@@ -112,7 +112,7 @@ class TestPickupAfterRestock:
     """Verify that items can be picked up after restocking."""
 
     def test_item_restock_uses_new_id(self):
-        """After picking up an item, the restocked item has a new ID."""
+        """After picking up an item, the restocked item keeps the same ID."""
         from grocery_bot.simulator import GameSimulator
 
         sim = GameSimulator(seed=42, num_bots=1, width=12, height=10)
@@ -128,14 +128,10 @@ class TestPickupAfterRestock:
         # Pick up
         sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": item_id}])
 
-        # Old item_id should be gone
-        current_ids = {it["id"] for it in sim.items_on_map}
-        assert item_id not in current_ids, "Old item_id should be removed after pickup"
-
-        # New item should exist at same position
+        # Restocked item should keep the same ID (matching live server)
         restocked = [it for it in sim.items_on_map if list(it["position"]) == item_pos]
         assert len(restocked) == 1, "Item should restock at same position"
-        assert restocked[0]["id"] != item_id, "Restocked item should have new ID"
+        assert restocked[0]["id"] == item_id, "Restocked item keeps same ID"
         assert restocked[0]["type"] == item["type"], "Restocked item should keep same type"
 
     def test_pickup_same_position_twice(self):
@@ -163,30 +159,29 @@ class TestPickupAfterRestock:
         sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": restocked[0]["id"]}])
         assert bot_obj["inventory"] == [item_type, item_type]
 
-    def test_pickup_old_id_after_restock_fails(self):
-        """Trying to pick up with the OLD item_id after restock should fail.
+    def test_pickup_same_id_after_restock_succeeds(self):
+        """Picking up with the same item_id after restock should succeed.
 
-        This is the key difference: our simulator correctly rejects stale IDs,
-        but the bot might cache stale IDs if item tracking is wrong.
+        The live server keeps item IDs stable across restocks.
         """
         from grocery_bot.simulator import GameSimulator
 
         sim = GameSimulator(seed=42, num_bots=1, width=12, height=10)
 
         item = sim.items_on_map[0]
-        old_id = item["id"]
+        item_id = item["id"]
         item_pos = list(item["position"])
 
         bot_obj = sim.bots[0]
         bot_obj["position"] = [item_pos[0], item_pos[1] + 1]
 
         # Pick up first time
-        sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": old_id}])
+        sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": item_id}])
         assert len(bot_obj["inventory"]) == 1
 
-        # Try picking up with OLD id — should fail
-        sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": old_id}])
-        assert len(bot_obj["inventory"]) == 1, "Pickup with stale ID should fail"
+        # Pick up again with same id — should succeed (item respawned with same ID)
+        sim.apply_actions([{"bot": 0, "action": "pick_up", "item_id": item_id}])
+        assert len(bot_obj["inventory"]) == 2, "Same ID pickup should work after restock"
 
 
 class TestBlacklistDoesNotStickForever:
