@@ -4,108 +4,630 @@
 <meta charset="UTF-8">
 <title>Grocery Bot Visualizer</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Consolas', 'Monaco', monospace; background: #1a1a2e; color: #eee; display: flex; height: 100vh; }
-
-#sidebar {
-  width: 320px; min-width: 320px; background: #16213e; padding: 12px;
-  display: flex; flex-direction: column; gap: 8px; overflow-y: auto;
+:root {
+  --bg-deep: #111827;
+  --bg-panel: #1e293b;
+  --bg-card: #273548;
+  --bg-input: #334155;
+  --border: #3b4a60;
+  --border-light: #475569;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #f43f5e;
+  --accent-hover: #fb7185;
+  --green: #34d399;
+  --blue: #60a5fa;
+  --yellow: #fbbf24;
+  --orange: #fb923c;
+  --pink: #f472b6;
 }
-#sidebar h2 { font-size: 14px; color: #8899aa; text-transform: uppercase; letter-spacing: 1px; }
-#sidebar label { font-size: 12px; color: #aab; display: block; margin-bottom: 2px; }
-#sidebar select, #sidebar input[type=file] { width: 100%; padding: 4px; background: #0f3460; color: #eee; border: 1px solid #334; border-radius: 4px; font-size: 13px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', 'SF Pro', -apple-system, system-ui, sans-serif; background: var(--bg-deep); color: var(--text); display: flex; height: 100vh; font-size: 13px; }
 
-#controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-#controls button { padding: 4px 10px; background: #0f3460; color: #eee; border: 1px solid #446; border-radius: 4px; cursor: pointer; font-size: 13px; }
-#controls button:hover { background: #1a5276; }
-#controls button.active { background: #e94560; border-color: #e94560; }
+/* ---- Sidebar ---- */
+#sidebar {
+  width: 330px; min-width: 330px; background: var(--bg-panel); padding: 0;
+  display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border);
+}
+#sidebar::-webkit-scrollbar { width: 5px; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-#round-slider { width: 100%; }
-#round-display { font-size: 18px; font-weight: bold; color: #e94560; }
-#score-display { font-size: 16px; color: #0f9; }
+.sidebar-header {
+  padding: 14px 16px 10px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); flex-shrink: 0;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5;
+}
+.sidebar-header h1 { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.sidebar-header .subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
-#bot-panel { flex: 1; overflow-y: auto; font-size: 12px; }
-.bot-row { padding: 3px 6px; border-bottom: 1px solid #223; display: flex; gap: 8px; align-items: center; }
-.bot-row .bot-id { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0; }
-.bot-row .bot-info { flex: 1; }
-.bot-row .bot-action { color: #8cf; font-size: 11px; }
-.bot-row .bot-inv { color: #fc8; font-size: 11px; }
+.section {
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.section-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; cursor: pointer; user-select: none;
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  transition: background 0.15s;
+}
+.section-title:hover { background: rgba(255,255,255,0.03); }
+.section-title .chevron { transition: transform 0.2s; font-size: 10px; color: var(--text-muted); }
+.section.collapsed .section-title .chevron { transform: rotate(-90deg); }
+.section-body { padding: 6px 16px 12px; }
+.section.collapsed .section-body { display: none; }
 
-#main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
-canvas { border: 2px solid #334; border-radius: 4px; }
+label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 3px; font-weight: 500; }
+select, input[type=file] {
+  width: 100%; padding: 6px 8px; background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;
+}
+select:focus, input:focus { border-color: var(--accent); }
+select { cursor: pointer; -webkit-appearance: none; }
 
-#order-panel { margin-top: 8px; font-size: 12px; max-width: 800px; width: 100%; }
-.order-box { display: inline-block; padding: 4px 8px; margin: 2px; border-radius: 4px; font-size: 11px; }
-.order-active { background: #1a5; color: #fff; }
-.order-preview { background: #058; color: #fff; }
+/* ---- Buttons ---- */
+.btn {
+  padding: 6px 12px; background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 500;
+  transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
+.btn:hover { background: var(--border); border-color: var(--border-light); }
+.btn.active, .btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.active:hover, .btn-accent:hover { background: var(--accent-hover); }
+.btn-sm { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
+.btn-block { width: 100%; }
+
+/* ---- Playback ---- */
+#game-info {
+  padding: 10px 16px; background: rgba(52,211,153,0.06); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  display: none; font-size: 12px;
+}
+#game-info .info-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+#game-info .info-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+#game-info .info-value { color: var(--green); font-weight: 700; font-size: 16px; }
+#game-info .info-detail { color: var(--text-dim); font-size: 11px; }
+
+.playback-section { padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.round-score-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+#round-display { font-size: 16px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+#score-display { font-size: 14px; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
+#score-delta {
+  font-size: 12px; font-weight: 700; color: var(--green); margin-left: 2px;
+  opacity: 0; transition: opacity 0.3s;
+  font-variant-numeric: tabular-nums;
+}
+#score-delta.visible { opacity: 1; }
+
+.round-progress {
+  height: 3px; background: var(--bg-input); border-radius: 2px; margin-bottom: 6px; overflow: hidden;
+}
+.round-progress-fill {
+  height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.15s;
+}
+
+/* Styled range slider */
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 6px; background: var(--bg-input);
+  border-radius: 3px; outline: none; margin: 6px 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent);
+  border-radius: 50%; cursor: pointer; border: 2px solid var(--bg-panel);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3); transition: transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; background: var(--accent); border-radius: 50%;
+  cursor: pointer; border: 2px solid var(--bg-panel);
+}
+
+.controls-row { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+.controls-row .btn { min-width: 32px; font-size: 13px; }
+.controls-row .spacer { flex: 1; }
+#round-input {
+  width: 56px; padding: 4px 6px; background: var(--bg-input); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; font-size: 12px;
+  font-family: 'SF Mono', 'Consolas', monospace; text-align: center; font-variant-numeric: tabular-nums;
+}
+#round-input:focus { border-color: var(--accent); outline: none; }
+
+.overlay-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.overlay-row label { font-size: 11px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center; gap: 3px; margin-bottom: 0; }
+.overlay-row input[type=checkbox] {
+  -webkit-appearance: none; width: 14px; height: 14px; border: 1px solid var(--border);
+  border-radius: 3px; background: var(--bg-input); cursor: pointer; position: relative;
+}
+.overlay-row input[type=checkbox]:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+.overlay-row input[type=checkbox]:checked::after {
+  content: ''; position: absolute; left: 3.5px; top: 1px; width: 4px; height: 7px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+/* ---- Bot panel ---- */
+#section-bots { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#section-bots .section-body { flex: 1; min-height: 0; overflow: hidden; padding: 0; }
+#bot-panel { overflow-y: auto; font-size: 12px; height: 100%; }
+.bot-row {
+  padding: 5px 16px; display: flex; gap: 8px; align-items: center;
+  cursor: pointer; transition: background 0.1s; border-left: 3px solid transparent;
+}
+.bot-row:hover { background: rgba(255,255,255,0.03); }
+.bot-row.tracked { background: rgba(244,63,94,0.1); border-left-color: var(--accent); }
+.bot-row + .bot-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.bot-id-badge {
+  width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0;
+  color: #fff; font-family: 'SF Mono', 'Consolas', monospace;
+}
+.bot-info { flex: 1; min-width: 0; }
+.bot-action-line {
+  display: flex; align-items: center; gap: 4px; font-size: 11px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+.bot-action-line .action-icon { font-size: 12px; width: 16px; text-align: center; }
+.bot-action-line .action-text { color: var(--blue); }
+.bot-action-line .action-text.act-wait { color: var(--accent); }
+.bot-action-line .action-text.act-pick { color: var(--yellow); }
+.bot-action-line .action-text.act-drop { color: var(--green); }
+.bot-action-line .dist-text { color: var(--text-muted); font-size: 10px; }
+.bot-pos-inv { color: var(--text-muted); font-size: 10px; font-family: 'SF Mono', 'Consolas', monospace; }
+.bot-inv-items { color: var(--orange); }
+
+/* ---- Right panel (Problems) ---- */
+#right-panel {
+  width: 260px; min-width: 260px; background: var(--bg-panel); padding: 0;
+  display: none; flex-direction: column; border-left: 1px solid var(--border); overflow: hidden;
+}
+#right-panel.visible { display: flex; }
+#right-panel::-webkit-scrollbar { width: 5px; }
+#right-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.right-panel-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 5; background: var(--bg-panel);
+}
+.right-panel-header h2 {
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.right-panel-header .problem-count-badge {
+  font-size: 10px; color: var(--accent); font-weight: 600;
+}
+.right-panel-nav {
+  display: flex; gap: 4px; align-items: center; padding: 6px 14px;
+  border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-muted);
+}
+.right-panel-nav .btn { padding: 2px 8px; font-size: 11px; }
+.right-panel-nav .nav-label { flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
+
+#problems-list { flex: 1; overflow-y: auto; }
+
+.problem-row {
+  display: flex; gap: 8px; align-items: flex-start; padding: 8px 14px;
+  cursor: pointer; transition: background 0.1s; border-left: 3px solid transparent;
+}
+.problem-row:hover { background: rgba(255,255,255,0.03); }
+.problem-row + .problem-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.problem-row.active { background: rgba(244,63,94,0.08); border-left-color: var(--accent); }
+
+.problem-round-badge {
+  font-size: 10px; font-weight: 600; font-family: 'SF Mono', 'Consolas', monospace;
+  color: var(--text-muted); min-width: 36px; flex-shrink: 0; padding-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.problem-detail { flex: 1; min-width: 0; }
+.problem-desc {
+  font-size: 11px; color: var(--text-dim); line-height: 1.4; word-break: break-word;
+}
+.problem-type-tag {
+  display: inline-block; font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 1px 5px; border-radius: 3px; margin-top: 3px;
+}
+.problem-type-tag.type-idle { background: rgba(244,63,94,0.15); color: #fca5a5; }
+.problem-type-tag.type-oscillation { background: rgba(251,146,60,0.15); color: var(--orange); }
+.problem-type-tag.type-full-inv { background: rgba(244,114,182,0.15); color: var(--pink); }
+.problem-type-tag.type-gap { background: rgba(96,165,250,0.15); color: var(--blue); }
+
+.problem-severity {
+  font-size: 10px; font-weight: 700; font-family: 'SF Mono', 'Consolas', monospace;
+  color: var(--text-muted); flex-shrink: 0; min-width: 24px; text-align: right;
+}
+
+.problems-empty {
+  padding: 24px 14px; text-align: center; color: var(--text-muted); font-size: 12px;
+}
+.problems-empty.good { color: var(--green); }
+
+/* ---- Right panel tabs ---- */
+.rp-tabs {
+  display: flex; border-bottom: 1px solid var(--border); background: var(--bg-panel);
+  position: sticky; top: 0; z-index: 5;
+}
+.rp-tab {
+  flex: 1; padding: 9px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.6px; text-align: center;
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  background: none; border-top: none; border-left: none; border-right: none; font-family: inherit;
+}
+.rp-tab:hover { color: var(--text-dim); background: rgba(255,255,255,0.02); }
+.rp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.rp-tab .tab-badge {
+  font-size: 9px; font-weight: 600; margin-left: 3px; padding: 1px 4px;
+  border-radius: 3px; background: rgba(244,63,94,0.15); color: var(--accent);
+  vertical-align: 1px;
+}
+
+.rp-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.rp-view.active { display: flex; }
+
+/* ---- Bot Stats ---- */
+#bot-stats-list { flex: 1; overflow-y: auto; }
+
+.bot-stat-row {
+  padding: 8px 14px; cursor: pointer; transition: background 0.1s;
+  border-left: 3px solid transparent;
+}
+.bot-stat-row:hover { background: rgba(255,255,255,0.03); }
+.bot-stat-row + .bot-stat-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.bot-stat-row.tracked { background: rgba(244,63,94,0.08); border-left-color: var(--accent); }
+
+.bot-stat-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.bot-stat-header .bot-id-badge {
+  width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-weight: 700; font-size: 10px; color: #fff;
+  font-family: 'SF Mono', 'Consolas', monospace; flex-shrink: 0;
+}
+.bot-stat-header .bot-stat-name {
+  font-size: 11px; font-weight: 600; color: var(--text);
+}
+.bot-stat-header .bot-stat-util {
+  margin-left: auto; font-size: 11px; font-weight: 700;
+  font-family: 'SF Mono', 'Consolas', monospace; font-variant-numeric: tabular-nums;
+}
+
+.bot-stat-bar {
+  display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 6px;
+  background: var(--bg-deep);
+}
+.bot-stat-bar .seg-move { background: var(--blue); }
+.bot-stat-bar .seg-pick { background: var(--yellow); }
+.bot-stat-bar .seg-drop { background: var(--green); }
+.bot-stat-bar .seg-wait { background: rgba(255,255,255,0.1); }
+
+.bot-stat-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+  font-size: 10px; font-family: 'SF Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.bot-stat-item {
+  display: flex; align-items: center; gap: 4px;
+}
+.bot-stat-item .stat-color {
+  width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+.bot-stat-item .stat-label { color: var(--text-muted); }
+.bot-stat-item .stat-value { margin-left: auto; color: var(--text-dim); font-weight: 600; }
+
+.bot-stats-sort {
+  display: flex; gap: 2px; padding: 6px 14px; border-bottom: 1px solid var(--border);
+  font-size: 10px;
+}
+.bot-stats-sort button {
+  padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border);
+  background: none; color: var(--text-muted); font-size: 10px; font-family: inherit;
+  cursor: pointer; transition: all 0.1s;
+}
+.bot-stats-sort button:hover { background: rgba(255,255,255,0.05); }
+.bot-stats-sort button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ---- Help ---- */
+.help-section { padding: 8px 16px 12px; flex-shrink: 0; }
+.help-trigger { font-size: 11px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.help-trigger:hover { color: var(--text-dim); }
+.help-box {
+  font-size: 11px; color: var(--text-dim); background: var(--bg-deep); padding: 10px 12px;
+  border-radius: 6px; display: none; margin-top: 6px; line-height: 1.7;
+  border: 1px solid var(--border);
+}
+.help-box kbd {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 3px;
+  padding: 1px 5px; font-size: 10px; font-family: 'SF Mono', 'Consolas', monospace;
+  color: var(--text);
+}
+
+/* ---- Main area ---- */
+#main {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 16px; position: relative; overflow: hidden;
+}
+canvas#canvas { border: 1px solid var(--border); border-radius: 6px; }
+
+#empty-state {
+  text-align: center; color: var(--text-muted); max-width: 400px;
+}
+#empty-state h2 { font-size: 18px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
+#empty-state p { font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+#empty-state .drop-hint {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 30px 20px; margin: 16px 0;
+  transition: all 0.2s;
+}
+body.drag-over #empty-state .drop-hint,
+body.drag-over #main { background: rgba(244,63,94,0.05); }
+body.drag-over #empty-state .drop-hint { border-color: var(--accent); background: rgba(244,63,94,0.08); }
+
+#drop-overlay {
+  position: fixed; inset: 0; background: rgba(17,24,39,0.85); display: none;
+  align-items: center; justify-content: center; z-index: 100;
+  border: 3px dashed var(--accent); margin: 8px; border-radius: 12px;
+}
+body.drag-over #drop-overlay { display: flex; }
+#drop-overlay span { font-size: 18px; color: var(--accent); font-weight: 600; }
+
+#tooltip {
+  position: absolute; background: var(--bg-panel); border: 1px solid var(--border-light);
+  border-radius: 6px; padding: 8px 12px; font-size: 11px; pointer-events: none;
+  display: none; z-index: 10; max-width: 260px; white-space: pre-line;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4); line-height: 1.5;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* ---- Order panel ---- */
+#order-panel { margin-top: 10px; font-size: 12px; max-width: 900px; width: 100%; }
+.order-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+.order-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; width: 60px; }
+.order-label-active { color: var(--green); }
+.order-label-preview { color: var(--blue); }
+.order-chip {
+  display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px;
+  font-family: 'SF Mono', 'Consolas', monospace; font-weight: 500;
+}
+.order-chip-active { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+.order-chip-preview { background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.2); }
+.order-meta { font-size: 10px; color: var(--text-muted); }
+.order-progress-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; }
+.order-progress-bar {
+  flex: 1; height: 5px; background: var(--bg-input); border-radius: 3px; overflow: hidden;
+}
+.order-progress-fill {
+  height: 100%; background: var(--green); border-radius: 3px; transition: width 0.2s;
+}
+.order-progress-text {
+  font-size: 10px; color: var(--text-dim); font-family: 'SF Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums; min-width: 40px; text-align: right;
+}
+
+/* ---- Score chart ---- */
+#score-chart-container { width: 100%; max-width: 900px; margin-top: 10px; position: relative; }
+#score-chart {
+  width: 100%; height: 56px; border: 1px solid var(--border); border-radius: 6px;
+  cursor: crosshair; background: var(--bg-deep);
+}
+#chart-tooltip {
+  position: absolute; background: var(--bg-panel); border: 1px solid var(--border-light);
+  border-radius: 4px; padding: 3px 8px; font-size: 10px; pointer-events: none;
+  display: none; z-index: 10; white-space: nowrap; font-family: 'SF Mono', 'Consolas', monospace;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3); transform: translateX(-50%);
+}
+
+/* ---- Legend ---- */
+.legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-muted); }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.1); }
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) {
+  #sidebar { width: 280px; min-width: 280px; }
+  #right-panel { width: 220px; min-width: 220px; }
+}
+@media (max-width: 800px) {
+  #right-panel { display: none !important; }
+}
 </style>
 </head>
 <body>
 
+<div id="drop-overlay"><span>Drop .csv + .json log files</span></div>
+
 <div id="sidebar">
-  <h2>Grocery Bot Visualizer</h2>
-
-  <div>
-    <label>Load Game Meta (.json)</label>
-    <input type="file" id="meta-file" accept=".json">
-  </div>
-  <div>
-    <label>Load Game Log (.csv)</label>
-    <input type="file" id="csv-file" accept=".csv">
-  </div>
-  <div>
-    <label>Filter logs:</label>
-    <select id="log-filter" style="margin-bottom:4px">
-      <option value="">All</option>
-      <option value="local_easy">Easy (local)</option>
-      <option value="local_medium">Medium (local)</option>
-      <option value="local_hard">Hard (local)</option>
-      <option value="local_expert">Expert (local)</option>
-      <option value="local_nightmare">Nightmare (local)</option>
-      <option value="local_custom">Custom (local)</option>
-      <option value="game_">Live games</option>
-    </select>
-    <select id="log-select"><option value="">-- select log --</option></select>
-    <button id="load-btn" style="margin-top:4px;width:100%">Load Selected</button>
+  <div class="sidebar-header">
+    <h1>Grocery Bot Replay</h1>
+    <div class="subtitle">Debug visualizer for challenge runs</div>
   </div>
 
-  <hr style="border-color:#334">
-
-  <div id="round-display">Round: 0 / 0</div>
-  <div id="score-display">Score: 0</div>
-  <input type="range" id="round-slider" min="0" max="0" value="0">
-
-  <div id="controls">
-    <button id="btn-start">|&lt;</button>
-    <button id="btn-prev">&lt;</button>
-    <button id="btn-play">&#9654;</button>
-    <button id="btn-next">&gt;</button>
-    <button id="btn-end">&gt;|</button>
-    <label style="margin-left:8px">Speed:</label>
-    <select id="speed-select">
-      <option value="500">Slow</option>
-      <option value="150" selected>Normal</option>
-      <option value="50">Fast</option>
-      <option value="10">Turbo</option>
-    </select>
+  <div id="game-info">
+    <div class="info-row">
+      <div>
+        <div class="info-label">Score</div>
+        <div class="info-value" id="gi-score">-</div>
+      </div>
+      <div>
+        <div class="info-label">Difficulty</div>
+        <div class="info-detail" id="gi-diff">-</div>
+      </div>
+      <div>
+        <div class="info-label">Grid</div>
+        <div class="info-detail" id="gi-grid">-</div>
+      </div>
+      <div>
+        <div class="info-label">Bots</div>
+        <div class="info-detail" id="gi-bots">-</div>
+      </div>
+      <div>
+        <div class="info-label">Orders</div>
+        <div class="info-detail" id="gi-orders">-</div>
+      </div>
+    </div>
   </div>
 
-  <hr style="border-color:#334">
-  <h2>Bots</h2>
-  <div id="bot-panel"></div>
+  <div class="section" id="section-load">
+    <div class="section-title" onclick="toggleSection('section-load')">
+      Load Game <span class="chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div style="margin-bottom:6px">
+        <label>Game Meta (.json)</label>
+        <input type="file" id="meta-file" accept=".json">
+      </div>
+      <div style="margin-bottom:6px">
+        <label>Game Log (.csv)</label>
+        <input type="file" id="csv-file" accept=".csv">
+      </div>
+      <div style="margin-bottom:4px">
+        <label>Filter:</label>
+        <select id="log-filter">
+          <option value="">All</option>
+          <option value="local_easy">Easy</option>
+          <option value="local_medium">Medium</option>
+          <option value="local_hard">Hard</option>
+          <option value="local_expert">Expert</option>
+          <option value="local_nightmare">Nightmare</option>
+          <option value="local_custom">Custom</option>
+          <option value="game_">Live games</option>
+        </select>
+      </div>
+      <div style="margin-bottom:6px">
+        <select id="log-select"><option value="">-- select log --</option></select>
+      </div>
+      <button class="btn btn-block" id="load-btn">Load Selected</button>
+    </div>
+  </div>
+
+  <div class="playback-section" id="playback-area" style="display:none">
+    <div class="round-score-row">
+      <span id="round-display">Round 0 / 0</span>
+      <span id="score-display">Score: 0</span>
+      <span id="score-delta"></span>
+    </div>
+    <div class="round-progress"><div class="round-progress-fill" id="round-progress-fill" style="width:0%"></div></div>
+    <input type="range" id="round-slider" min="0" max="0" value="0">
+    <div class="controls-row">
+      <button class="btn" id="btn-start" title="First round">&#x23EE;</button>
+      <button class="btn" id="btn-prev" title="Previous round">&larr;</button>
+      <button class="btn" id="btn-play" title="Play/Pause">&#9654;</button>
+      <button class="btn" id="btn-next" title="Next round">&rarr;</button>
+      <button class="btn" id="btn-end" title="Last round">&#x23ED;</button>
+      <div class="spacer"></div>
+      <input type="number" id="round-input" placeholder="R#" min="0" title="Jump to round">
+      <select id="speed-select" style="width:70px">
+        <option value="500">Slow</option>
+        <option value="150" selected>Normal</option>
+        <option value="50">Fast</option>
+        <option value="10">Turbo</option>
+      </select>
+    </div>
+    <div class="overlay-row">
+      <label><input type="checkbox" id="chk-trails" checked> Trails</label>
+      <label><input type="checkbox" id="chk-heatmap"> Heatmap</label>
+      <label><input type="checkbox" id="chk-gridcoords"> Coords</label>
+    </div>
+  </div>
+
+  <div class="section collapsed" id="section-legend" style="display:none">
+    <div class="section-title" onclick="toggleSection('section-legend')">
+      Legend <span class="chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#444"></div> Wall</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--green);opacity:0.5"></div> Drop-off</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ff6b6b;opacity:0.6"></div> Item shelf</div>
+      </div>
+      <div class="legend" style="margin-top:4px">
+        <div class="legend-item"><span style="color:var(--yellow);font-size:12px">&#x25CF;</span> Pickup</div>
+        <div class="legend-item"><span style="color:var(--green);font-size:12px">&#x25CB;</span> Drop-off</div>
+        <div class="legend-item"><span style="color:#f44;font-size:12px">&times;</span> Waiting</div>
+        <div class="legend-item"><span style="color:var(--blue);font-size:12px">&rarr;</span> Moving</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-trigger" id="help-toggle">
+      <span style="font-size:13px">&#x2328;</span> Keyboard shortcuts
+    </div>
+    <div class="help-box" id="help-box">
+      <b>Navigate</b><br>
+      <kbd>&larr;</kbd> <kbd>&rarr;</kbd> or <kbd>H</kbd> <kbd>L</kbd> = &plusmn;1 round<br>
+      <kbd>Shift</kbd>+Arrow or <kbd>J</kbd> <kbd>K</kbd> = &plusmn;10 rounds<br>
+      <kbd>Space</kbd> = play/pause &middot; <kbd>Home</kbd> / <kbd>End</kbd> = first/last<br><br>
+      <b>Tracking</b><br>
+      <kbd>0</kbd>-<kbd>9</kbd> = track bot &middot; <kbd>Esc</kbd> = untrack<br>
+      Click a bot on canvas or sidebar to track<br><br>
+      <b>Problems</b><br>
+      <kbd>N</kbd> / <kbd>P</kbd> = next / prev problem<br><br>
+      <b>Overlays</b><br>
+      <kbd>T</kbd> = trails &middot; <kbd>M</kbd> = heatmap &middot; <kbd>G</kbd> = coords
+    </div>
+  </div>
+
+  <div class="section" id="section-bots" style="display:none">
+    <div class="section-title" onclick="toggleSection('section-bots')">
+      Bots <span id="tracked-label" style="color:var(--accent);font-weight:400;font-size:10px;text-transform:none;letter-spacing:0"></span>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="section-body" style="padding:0">
+      <div id="bot-panel"></div>
+    </div>
+  </div>
 </div>
 
 <div id="main">
-  <canvas id="canvas" width="800" height="600"></canvas>
+  <div id="empty-state">
+    <h2>No replay loaded</h2>
+    <p>Load a game log to start debugging. Use the sidebar file pickers, or drop files here.</p>
+    <div class="drop-hint">
+      <div style="font-size: 28px; margin-bottom: 8px; opacity: 0.4">&#x1F4C2;</div>
+      <div>Drop <b>.csv</b> + <b>.json</b> files here</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px">or use the sidebar to browse</div>
+    </div>
+  </div>
+  <canvas id="canvas" width="800" height="600" style="display:none"></canvas>
+  <div id="tooltip"></div>
   <div id="order-panel"></div>
+  <div id="score-chart-container" style="display:none">
+    <canvas id="score-chart"></canvas>
+    <div id="chart-tooltip"></div>
+  </div>
+</div>
+
+<div id="right-panel">
+  <div class="rp-tabs">
+    <button class="rp-tab active" data-view="problems">Problems <span class="tab-badge" id="problem-count"></span></button>
+    <button class="rp-tab" data-view="bot-stats">Bot Stats</button>
+  </div>
+
+  <div class="rp-view active" id="view-problems">
+    <div class="right-panel-nav">
+      <button class="btn" id="btn-prev-problem" title="Previous problem (P)">&uarr;</button>
+      <span class="nav-label" id="problem-nav-label">&mdash;</span>
+      <button class="btn" id="btn-next-problem" title="Next problem (N)">&darr;</button>
+    </div>
+    <div id="problems-list"></div>
+  </div>
+
+  <div class="rp-view" id="view-bot-stats">
+    <div class="bot-stats-sort">
+      <button class="active" data-sort="id">ID</button>
+      <button data-sort="util">Util%</button>
+      <button data-sort="picks">Picks</button>
+      <button data-sort="drops">Drops</button>
+      <button data-sort="idle">Idle%</button>
+    </div>
+    <div id="bot-stats-list"></div>
+  </div>
 </div>
 
 <script>
 const BOT_COLORS = [
-  '#e94560','#0abde3','#10ac84','#f39c12','#9b59b6',
-  '#1abc9c','#e67e22','#3498db','#e74c3c','#2ecc71',
-  '#f1c40f','#8e44ad','#16a085','#d35400','#2980b9',
-  '#c0392b','#27ae60','#f39c12','#7f8c8d','#2c3e50'
+  '#f43f5e','#06b6d4','#10b981','#f59e0b','#a855f7',
+  '#14b8a6','#f97316','#3b82f6','#ef4444','#22c55e',
+  '#eab308','#8b5cf6','#0d9488','#ea580c','#2563eb',
+  '#dc2626','#16a34a','#d97706','#6b7280','#475569'
 ];
 
 const ITEM_COLORS = {};
@@ -116,15 +638,32 @@ const ITEM_COLOR_PAL = [
   '#ff4757','#eccc68','#7bed9f','#70a1ff','#5352ed',
 ];
 
-let meta = null;      // game meta JSON
-let rounds = [];      // parsed CSV: rounds[roundNum] = [{bot_id, bot_pos, inventory, action, item_id, ...}]
+const ACTION_ICONS = {
+  'move_up': '\u2191', 'move_down': '\u2193', 'move_left': '\u2190', 'move_right': '\u2192',
+  'pick_up': '\u2B06', 'drop_off': '\u2B07', 'wait': '\u23F8',
+};
+
+let meta = null;
+let rounds = [];
 let maxRound = 0;
 let currentRound = 0;
 let playing = false;
 let playTimer = null;
+let trackedBot = null;
+let problems = [];
+let problemIdx = -1;
+let heatmapData = null;
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const scoreChart = document.getElementById('score-chart');
+const scoreCtx = scoreChart.getContext('2d');
+
+// ---- Collapsible sections ----
+
+function toggleSection(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
 
 // ---- Data Loading ----
 
@@ -150,8 +689,6 @@ function parseCSV(text) {
 
 function loadData(metaObj, csvText) {
   meta = metaObj;
-
-  // Assign item colors
   const types = meta.item_types || [];
   types.forEach((t, i) => { ITEM_COLORS[t] = ITEM_COLOR_PAL[i % ITEM_COLOR_PAL.length]; });
 
@@ -162,14 +699,11 @@ function loadData(metaObj, csvText) {
     if (!rounds[r]) rounds[r] = { actions: [], score: parseInt(row.score) || 0, order_idx: row.order_idx, active_needed: row.active_needed, preview_needed: row.preview_needed };
     const [bx, by] = row.bot_pos.split(',').map(Number);
     rounds[r].actions.push({
-      bot_id: parseInt(row.bot_id),
-      bx, by,
+      bot_id: parseInt(row.bot_id), bx, by,
       inventory: row.inventory ? row.inventory.split(';') : [],
-      action: row.action,
-      item_id: row.item_id || null,
-      active_needed: row.active_needed,
-      active_delivered: row.active_delivered,
-      preview_needed: row.preview_needed,
+      action: row.action, item_id: row.item_id || null,
+      active_needed: row.active_needed, active_delivered: row.active_delivered,
+      preview_needed: row.preview_needed, dist_to_dropoff: row.dist_to_dropoff || '?',
     });
   }
   maxRound = rounds.length - 1;
@@ -177,11 +711,284 @@ function loadData(metaObj, csvText) {
   const slider = document.getElementById('round-slider');
   slider.max = maxRound;
   slider.value = 0;
+  document.getElementById('round-input').max = maxRound;
   currentRound = 0;
+  trackedBot = null;
+  problemIdx = -1;
 
+  // Show UI sections
+  document.getElementById('empty-state').style.display = 'none';
+  canvas.style.display = 'block';
+  document.getElementById('score-chart-container').style.display = 'block';
+  document.getElementById('playback-area').style.display = 'block';
+  document.getElementById('section-bots').style.display = 'block';
+  document.getElementById('section-legend').style.display = 'block';
+  document.getElementById('section-load').classList.add('collapsed');
+  document.getElementById('right-panel').classList.add('visible');
+
+  // Game info banner
+  const gi = document.getElementById('game-info');
+  const res = meta.result || {};
+  document.getElementById('gi-score').textContent = res.score ?? '?';
+  document.getElementById('gi-diff').textContent = (meta.difficulty || '?').charAt(0).toUpperCase() + (meta.difficulty || '').slice(1);
+  document.getElementById('gi-grid').textContent = `${meta.grid.width}x${meta.grid.height}`;
+  document.getElementById('gi-bots').textContent = meta.bots ?? '?';
+  document.getElementById('gi-orders').textContent = res.orders_completed ?? '?';
+  gi.style.display = 'block';
+
+  buildHeatmap();
+  detectProblems();
+  buildBotStats();
   resizeCanvas();
+  renderScoreChart();
   render();
 }
+
+// ---- Heatmap ----
+
+function buildHeatmap() {
+  if (!meta) return;
+  heatmapData = {};
+  let maxCount = 0;
+  for (let r = 0; r <= maxRound; r++) {
+    if (!rounds[r]) continue;
+    for (const ba of rounds[r].actions) {
+      const key = ba.bx + ',' + ba.by;
+      heatmapData[key] = (heatmapData[key] || 0) + 1;
+      if (heatmapData[key] > maxCount) maxCount = heatmapData[key];
+    }
+  }
+  heatmapData._max = maxCount;
+}
+
+// ---- Problem Detection ----
+
+function detectProblems() {
+  problems = [];
+  if (!rounds.length) return;
+  const botRounds = {};
+  for (let r = 0; r <= maxRound; r++) {
+    if (!rounds[r]) continue;
+    for (const ba of rounds[r].actions) {
+      if (!botRounds[ba.bot_id]) botRounds[ba.bot_id] = [];
+      botRounds[ba.bot_id].push({ round: r, action: ba.action, pos: ba.bx+','+ba.by, invCount: ba.inventory.length });
+    }
+  }
+
+  for (const bid in botRounds) {
+    const acts = botRounds[bid];
+    let streak = 0, streakStart = 0;
+    for (const a of acts) {
+      if (a.action === 'wait') { if (streak === 0) streakStart = a.round; streak++; }
+      else { if (streak >= 8) problems.push({ round: streakStart, severity: streak, desc: `B${bid} idle ${streak}rds (R${streakStart}\u2013R${streakStart+streak-1})`, type: 'idle' }); streak = 0; }
+    }
+    if (streak >= 8) problems.push({ round: streakStart, severity: streak, desc: `B${bid} idle ${streak}rds (R${streakStart}\u2013end)`, type: 'idle' });
+
+    let osc = 0, oscStart = 0;
+    for (let i = 2; i < acts.length; i++) {
+      if (acts[i].pos === acts[i-2].pos && acts[i].pos !== acts[i-1].pos) { if (osc === 0) oscStart = acts[i].round; osc++; }
+      else { if (osc >= 4) problems.push({ round: oscStart, severity: osc, desc: `B${bid} oscillating ${osc}rds (R${oscStart})`, type: 'oscillation' }); osc = 0; }
+    }
+    if (osc >= 4) problems.push({ round: oscStart, severity: osc, desc: `B${bid} oscillating ${osc}rds (R${oscStart})`, type: 'oscillation' });
+
+    let fw = 0, fwStart = 0;
+    for (const a of acts) {
+      if (a.action === 'wait' && a.invCount >= 3) { if (fw === 0) fwStart = a.round; fw++; }
+      else { if (fw >= 4) problems.push({ round: fwStart, severity: fw, desc: `B${bid} full-inv wait ${fw}rds (R${fwStart})`, type: 'full-inv' }); fw = 0; }
+    }
+    if (fw >= 4) problems.push({ round: fwStart, severity: fw, desc: `B${bid} full-inv wait ${fw}rds (R${fwStart})`, type: 'full-inv' });
+  }
+
+  let prevScore = 0, lastScoreRound = 0;
+  for (let r = 0; r <= maxRound; r++) {
+    if (!rounds[r]) continue;
+    const score = rounds[r].score;
+    if (score > prevScore) {
+      const gap = r - lastScoreRound;
+      if (gap >= 15) problems.push({ round: lastScoreRound, severity: gap, desc: `No scoring for ${gap}rds (R${lastScoreRound}\u2013R${r})`, type: 'gap' });
+      lastScoreRound = r;
+    }
+    prevScore = score;
+  }
+  if (maxRound - lastScoreRound >= 15) {
+    const gap = maxRound - lastScoreRound;
+    problems.push({ round: lastScoreRound, severity: gap, desc: `No scoring final ${gap}rds`, type: 'gap' });
+  }
+
+  problems.sort((a, b) => a.round - b.round || a.severity - b.severity);
+  document.getElementById('problem-count').textContent = problems.length ? `${problems.length} issue${problems.length > 1 ? 's' : ''}` : '';
+  renderProblemsPanel();
+}
+
+function renderProblemsPanel() {
+  const panel = document.getElementById('problems-list');
+  if (!problems.length) {
+    panel.innerHTML = '<div class="problems-empty good">No significant problems detected</div>';
+    updateProblemNav();
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < problems.length; i++) {
+    const p = problems[i];
+    const typeLabel = { idle: 'idle', oscillation: 'osc', 'full-inv': 'full inv', gap: 'gap' }[p.type] || p.type;
+    html += `<div class="problem-row" data-idx="${i}">
+      <div class="problem-round-badge">R${p.round}</div>
+      <div class="problem-detail">
+        <div class="problem-desc">${p.desc}</div>
+        <span class="problem-type-tag type-${p.type}">${typeLabel}</span>
+      </div>
+      <div class="problem-severity">${p.severity}</div>
+    </div>`;
+  }
+  panel.innerHTML = html;
+  panel.querySelectorAll('.problem-row').forEach(row => {
+    row.addEventListener('click', () => {
+      problemIdx = parseInt(row.dataset.idx);
+      currentRound = problems[problemIdx].round;
+      render();
+      highlightActiveProblem();
+    });
+  });
+  updateProblemNav();
+}
+
+function highlightActiveProblem() {
+  document.querySelectorAll('.problem-row').forEach((el, i) => {
+    el.classList.toggle('active', i === problemIdx);
+  });
+  // Scroll active problem into view
+  const active = document.querySelector('.problem-row.active');
+  if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  updateProblemNav();
+}
+
+function updateProblemNav() {
+  const label = document.getElementById('problem-nav-label');
+  if (!problems.length) { label.textContent = '\u2014'; return; }
+  label.textContent = problemIdx >= 0 ? `${problemIdx + 1} / ${problems.length}` : `\u2014 / ${problems.length}`;
+}
+
+// ---- Bot Stats ----
+
+let botStats = [];       // [{id, moves, picks, drops, waits, total, util, idlePct, color}]
+let botStatsSortKey = 'id';
+
+function buildBotStats() {
+  botStats = [];
+  if (!rounds.length || !meta) return;
+  const counters = {};
+  for (let r = 0; r <= maxRound; r++) {
+    if (!rounds[r]) continue;
+    for (const ba of rounds[r].actions) {
+      if (!counters[ba.bot_id]) counters[ba.bot_id] = { moves: 0, picks: 0, drops: 0, waits: 0, total: 0 };
+      const c = counters[ba.bot_id];
+      c.total++;
+      if (ba.action.startsWith('move_')) c.moves++;
+      else if (ba.action === 'pick_up') c.picks++;
+      else if (ba.action === 'drop_off') c.drops++;
+      else c.waits++;
+    }
+  }
+  for (const bid in counters) {
+    const c = counters[bid];
+    const useful = c.moves + c.picks + c.drops;
+    botStats.push({
+      id: parseInt(bid),
+      moves: c.moves, picks: c.picks, drops: c.drops, waits: c.waits,
+      total: c.total,
+      util: c.total > 0 ? Math.round(useful / c.total * 100) : 0,
+      idlePct: c.total > 0 ? Math.round(c.waits / c.total * 100) : 0,
+      color: BOT_COLORS[parseInt(bid) % BOT_COLORS.length],
+    });
+  }
+  sortAndRenderBotStats();
+}
+
+function sortAndRenderBotStats() {
+  const sorted = [...botStats];
+  if (botStatsSortKey === 'id') sorted.sort((a, b) => a.id - b.id);
+  else if (botStatsSortKey === 'util') sorted.sort((a, b) => b.util - a.util);
+  else if (botStatsSortKey === 'picks') sorted.sort((a, b) => b.picks - a.picks);
+  else if (botStatsSortKey === 'drops') sorted.sort((a, b) => b.drops - a.drops);
+  else if (botStatsSortKey === 'idle') sorted.sort((a, b) => b.idlePct - a.idlePct);
+
+  const panel = document.getElementById('bot-stats-list');
+  let html = '';
+  for (const s of sorted) {
+    const t = s.total || 1;
+    const movePct = (s.moves / t * 100).toFixed(1);
+    const pickPct = (s.picks / t * 100).toFixed(1);
+    const dropPct = (s.drops / t * 100).toFixed(1);
+    const waitPct = (s.waits / t * 100).toFixed(1);
+    const utilColor = s.util >= 80 ? 'var(--green)' : s.util >= 50 ? 'var(--yellow)' : 'var(--accent)';
+    const isTracked = trackedBot === s.id;
+    html += `<div class="bot-stat-row${isTracked ? ' tracked' : ''}" data-bot-id="${s.id}">
+      <div class="bot-stat-header">
+        <div class="bot-id-badge" style="background:${s.color}">${s.id}</div>
+        <div class="bot-stat-name">Bot ${s.id}</div>
+        <div class="bot-stat-util" style="color:${utilColor}">${s.util}% util</div>
+      </div>
+      <div class="bot-stat-bar" title="Move ${movePct}% | Pick ${pickPct}% | Drop ${dropPct}% | Wait ${waitPct}%">
+        <div class="seg-move" style="width:${movePct}%"></div>
+        <div class="seg-pick" style="width:${pickPct}%"></div>
+        <div class="seg-drop" style="width:${dropPct}%"></div>
+        <div class="seg-wait" style="width:${waitPct}%"></div>
+      </div>
+      <div class="bot-stat-grid">
+        <div class="bot-stat-item"><div class="stat-color" style="background:var(--blue)"></div><span class="stat-label">Moves</span><span class="stat-value">${s.moves}</span></div>
+        <div class="bot-stat-item"><div class="stat-color" style="background:var(--yellow)"></div><span class="stat-label">Pickups</span><span class="stat-value">${s.picks}</span></div>
+        <div class="bot-stat-item"><div class="stat-color" style="background:var(--green)"></div><span class="stat-label">Deliveries</span><span class="stat-value">${s.drops}</span></div>
+        <div class="bot-stat-item"><div class="stat-color" style="background:rgba(255,255,255,0.15)"></div><span class="stat-label">Idle</span><span class="stat-value">${s.waits} <span style="color:var(--text-muted);font-weight:400">(${s.idlePct}%)</span></span></div>
+      </div>
+    </div>`;
+  }
+  panel.innerHTML = html;
+  panel.querySelectorAll('.bot-stat-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const bid = parseInt(row.dataset.botId);
+      trackedBot = trackedBot === bid ? null : bid;
+      render();
+      sortAndRenderBotStats();
+    });
+  });
+}
+
+// ---- Right panel tabs ----
+
+document.querySelectorAll('.rp-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.rp-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.rp-view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('view-' + tab.dataset.view).classList.add('active');
+  });
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '1' || e.key === '2') {
+    const view = e.key === '1' ? 'problems' : 'bot-stats';
+    document.querySelectorAll('.rp-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.view === view);
+    });
+    document.querySelectorAll('.rp-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + view).classList.add('active');
+  }
+  if (e.key === ' ' && !e.repeat) { e.preventDefault(); document.getElementById('btn-play').click(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('btn-prev').click(); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('btn-next').click(); }
+});
+
+// Sort buttons
+document.querySelectorAll('.bot-stats-sort button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.bot-stats-sort button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    botStatsSortKey = btn.dataset.sort;
+    sortAndRenderBotStats();
+  });
+});
 
 // ---- File loading ----
 
@@ -201,18 +1008,142 @@ function tryAutoLoad() {
   }
 }
 
+// ---- Drag and Drop ----
+
+let dragCounter = 0;
+document.addEventListener('dragenter', e => { e.preventDefault(); dragCounter++; document.body.classList.add('drag-over'); });
+document.addEventListener('dragleave', e => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; document.body.classList.remove('drag-over'); } });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dragCounter = 0;
+  document.body.classList.remove('drag-over');
+  const files = [...e.dataTransfer.files];
+  for (const file of files) {
+    if (file.name.endsWith('.json')) file.text().then(t => { window._loadedMeta = JSON.parse(t); tryAutoLoad(); });
+    if (file.name.endsWith('.csv')) file.text().then(t => { window._loadedCSV = t; tryAutoLoad(); });
+  }
+});
+
+// ---- Score Chart ----
+
+function renderScoreChart() {
+  if (!rounds.length) return;
+  const w = scoreChart.parentElement.clientWidth;
+  const h = 56;
+  scoreChart.width = w;
+  scoreChart.height = h;
+  const maxScore = Math.max(1, ...rounds.filter(Boolean).map(r => r.score));
+
+  scoreCtx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-deep');
+  scoreCtx.fillRect(0, 0, w, h);
+
+  // Problem bands
+  for (const p of problems) {
+    const x1 = (p.round / maxRound) * w;
+    const x2 = ((p.round + p.severity) / maxRound) * w;
+    const colors = { idle: 'rgba(244,63,94,0.12)', oscillation: 'rgba(249,115,22,0.12)', 'full-inv': 'rgba(244,114,182,0.12)', gap: 'rgba(96,165,250,0.12)' };
+    scoreCtx.fillStyle = colors[p.type] || 'rgba(244,63,94,0.12)';
+    scoreCtx.fillRect(x1, 0, Math.max(2, x2 - x1), h);
+  }
+
+  // Score line with gradient fill
+  scoreCtx.beginPath();
+  let started = false;
+  for (let r = 0; r <= maxRound; r++) {
+    if (!rounds[r]) continue;
+    const x = (r / maxRound) * w;
+    const y = h - (rounds[r].score / maxScore) * (h - 8) - 4;
+    if (!started) { scoreCtx.moveTo(x, y); started = true; }
+    else scoreCtx.lineTo(x, y);
+  }
+  scoreCtx.strokeStyle = '#34d399';
+  scoreCtx.lineWidth = 1.5;
+  scoreCtx.stroke();
+  // Fill under curve
+  scoreCtx.lineTo(w, h);
+  scoreCtx.lineTo(0, h);
+  scoreCtx.closePath();
+  const grad = scoreCtx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(52,211,153,0.12)');
+  grad.addColorStop(1, 'rgba(52,211,153,0)');
+  scoreCtx.fillStyle = grad;
+  scoreCtx.fill();
+
+  // Order completion ticks
+  const ocr = meta?.diagnostics?.order_completion_rounds || [];
+  for (const r of ocr) {
+    const x = (r / maxRound) * w;
+    scoreCtx.strokeStyle = 'rgba(52,211,153,0.25)';
+    scoreCtx.lineWidth = 1;
+    scoreCtx.beginPath();
+    scoreCtx.moveTo(x, h - 4);
+    scoreCtx.lineTo(x, h);
+    scoreCtx.stroke();
+  }
+
+  // Playhead
+  const cx = (currentRound / maxRound) * w;
+  scoreCtx.strokeStyle = 'var(--accent)';
+  scoreCtx.lineWidth = 1.5;
+  scoreCtx.beginPath();
+  scoreCtx.moveTo(cx, 0);
+  scoreCtx.lineTo(cx, h);
+  scoreCtx.stroke();
+  // Playhead dot
+  if (rounds[currentRound]) {
+    const py = h - (rounds[currentRound].score / maxScore) * (h - 8) - 4;
+    scoreCtx.beginPath();
+    scoreCtx.arc(cx, py, 3, 0, Math.PI * 2);
+    scoreCtx.fillStyle = '#f43f5e';
+    scoreCtx.fill();
+  }
+}
+
+let chartDragging = false;
+function chartScrub(e) {
+  if (!maxRound) return;
+  const rect = scoreChart.getBoundingClientRect();
+  currentRound = Math.round(((e.clientX - rect.left) / scoreChart.width) * maxRound);
+  currentRound = Math.max(0, Math.min(maxRound, currentRound));
+  render();
+}
+scoreChart.addEventListener('mousedown', e => { chartDragging = true; chartScrub(e); });
+window.addEventListener('mousemove', e => { if (chartDragging) chartScrub(e); });
+window.addEventListener('mouseup', () => { chartDragging = false; });
+
+// Score chart hover tooltip
+scoreChart.addEventListener('mousemove', e => {
+  if (!maxRound || !rounds.length) return;
+  const rect = scoreChart.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const r = Math.round((x / scoreChart.width) * maxRound);
+  const clamped = Math.max(0, Math.min(maxRound, r));
+  const rd = rounds[clamped];
+  if (!rd) return;
+  const tip = document.getElementById('chart-tooltip');
+  tip.textContent = `R${clamped}  Score: ${rd.score}`;
+  tip.style.display = 'block';
+  tip.style.left = x + 'px';
+  tip.style.bottom = '62px';
+});
+scoreChart.addEventListener('mouseleave', () => {
+  document.getElementById('chart-tooltip').style.display = 'none';
+});
+
 // ---- Canvas ----
 
 function resizeCanvas() {
   if (!meta) return;
   const gw = meta.grid.width, gh = meta.grid.height;
-  const maxW = window.innerWidth - 360, maxH = window.innerHeight - 100;
+  const rpVisible = document.getElementById('right-panel').classList.contains('visible');
+  const maxW = window.innerWidth - 370 - (rpVisible ? 260 : 0), maxH = window.innerHeight - 210;
   const cellSize = Math.min(Math.floor(maxW / gw), Math.floor(maxH / gh), 40);
   canvas.width = gw * cellSize;
   canvas.height = gh * cellSize;
   canvas._cellSize = cellSize;
 }
-window.addEventListener('resize', () => { resizeCanvas(); render(); });
+window.addEventListener('resize', () => { resizeCanvas(); render(); renderScoreChart(); });
 
 function render() {
   if (!meta || !rounds.length) return;
@@ -221,22 +1152,57 @@ function render() {
   const roundData = rounds[currentRound];
   if (!roundData) return;
 
-  // Clear
-  ctx.fillStyle = '#222';
+  const showTrails = document.getElementById('chk-trails').checked;
+  const showHeatmap = document.getElementById('chk-heatmap').checked;
+  const showCoords = document.getElementById('chk-gridcoords').checked;
+
+  ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Heatmap
+  if (showHeatmap && heatmapData) {
+    const maxC = heatmapData._max;
+    for (const key in heatmapData) {
+      if (key === '_max') continue;
+      const [hx, hy] = key.split(',').map(Number);
+      const intensity = heatmapData[key] / maxC;
+      if (intensity > 0.05) {
+        const r = Math.floor(255 * Math.pow(intensity, 0.7));
+        const g = Math.floor(60 * (1 - intensity));
+        ctx.fillStyle = `rgba(${r},${g},0,${0.1 + intensity * 0.35})`;
+        ctx.fillRect(hx*cs, hy*cs, cs, cs);
+      }
+    }
+  }
+
   // Grid lines
-  ctx.strokeStyle = '#333';
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 0.5;
   for (let x = 0; x <= gw; x++) { ctx.beginPath(); ctx.moveTo(x*cs, 0); ctx.lineTo(x*cs, gh*cs); ctx.stroke(); }
   for (let y = 0; y <= gh; y++) { ctx.beginPath(); ctx.moveTo(0, y*cs); ctx.lineTo(gw*cs, y*cs); ctx.stroke(); }
 
+  // Grid coordinates
+  if (showCoords && cs >= 16) {
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = `${Math.max(7, cs/5)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let x = 0; x < gw; x += 2) ctx.fillText(x, x*cs+cs/2, 2);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    for (let y = 0; y < gh; y += 2) ctx.fillText(y, 2, y*cs+cs/2);
+  }
+
   // Walls
   const wallSet = new Set((meta.grid.wall_positions || meta.grid.walls || []).map(w => w[0]+','+w[1]));
-  ctx.fillStyle = '#444';
   for (const wk of wallSet) {
     const [wx, wy] = wk.split(',').map(Number);
+    ctx.fillStyle = '#334155';
     ctx.fillRect(wx*cs, wy*cs, cs, cs);
+    // Subtle inner border
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(wx*cs+0.5, wy*cs+0.5, cs-1, cs-1);
   }
 
   // Items (shelves)
@@ -244,42 +1210,74 @@ function render() {
   for (const it of itemPositions) {
     const [ix, iy] = it.position;
     ctx.fillStyle = ITEM_COLORS[it.type] || '#666';
-    ctx.globalAlpha = 0.5;
-    ctx.fillRect(ix*cs+1, iy*cs+1, cs-2, cs-2);
+    ctx.globalAlpha = 0.4;
+    const pad = Math.max(1, cs * 0.08);
+    ctx.beginPath();
+    const rr = Math.max(1, cs * 0.12);
+    roundRect(ctx, ix*cs+pad, iy*cs+pad, cs-pad*2, cs-pad*2, rr);
+    ctx.fill();
     ctx.globalAlpha = 1;
     if (cs >= 20) {
       ctx.fillStyle = '#fff';
-      ctx.font = `${Math.max(8, cs/4)}px monospace`;
+      ctx.font = `${Math.max(8, cs/4)}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(it.type.slice(0,3), ix*cs+cs/2, iy*cs+cs/2+3);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(it.type.slice(0,3), ix*cs+cs/2, iy*cs+cs/2);
     }
   }
 
-  // Drop-off zones (fall back to single drop_off if drop_off_zones absent)
+  // Drop-off zones
   const dropZones = meta.drop_off_zones || [meta.drop_off];
   for (const [dx, dy] of dropZones) {
-    ctx.fillStyle = '#0f9';
-    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = 'rgba(52,211,153,0.2)';
     ctx.fillRect(dx*cs, dy*cs, cs, cs);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = '#0f9';
+    ctx.strokeStyle = '#34d399';
     ctx.lineWidth = 2;
-    ctx.strokeRect(dx*cs, dy*cs, cs, cs);
+    ctx.strokeRect(dx*cs+1, dy*cs+1, cs-2, cs-2);
     if (cs >= 16) {
-      ctx.fillStyle = '#0f9';
-      ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
+      ctx.fillStyle = '#34d399';
+      ctx.font = `bold ${Math.max(9, cs/3)}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText('D', dx*cs+cs/2, dy*cs+cs/2+4);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('D', dx*cs+cs/2, dy*cs+cs/2);
     }
+  }
+
+  // Bot trails
+  if (showTrails) {
+    const trailLen = 12;
+    const startR = Math.max(0, currentRound - trailLen);
+    for (let r = startR; r < currentRound; r++) {
+      if (!rounds[r]) continue;
+      const progress = (r - startR) / trailLen;
+      for (const ba of rounds[r].actions) {
+        if (trackedBot !== null && ba.bot_id !== trackedBot) continue;
+        const color = BOT_COLORS[ba.bot_id % BOT_COLORS.length];
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.06 + 0.18 * progress;
+        const dotR = cs * (0.06 + 0.08 * progress);
+        ctx.beginPath();
+        ctx.arc(ba.bx*cs+cs/2, ba.by*cs+cs/2, dotR, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Bots
   const botActions = roundData.actions;
-  for (const ba of botActions) {
+  // Draw non-tracked bots first, tracked bot on top
+  const sorted = trackedBot !== null ? [...botActions].sort((a, b) => (a.bot_id === trackedBot ? 1 : 0) - (b.bot_id === trackedBot ? 1 : 0)) : botActions;
+
+  for (const ba of sorted) {
     const bx = ba.bx, by = ba.by;
     const color = BOT_COLORS[ba.bot_id % BOT_COLORS.length];
+    const isTracked = trackedBot === ba.bot_id;
+    const dimmed = trackedBot !== null && !isTracked;
 
-    // Draw direction arrow
+    if (dimmed) ctx.globalAlpha = 0.25;
+
+    // Direction arrow
     if (ba.action.startsWith('move_')) {
       let tx = bx, ty = by;
       if (ba.action === 'move_up') ty--;
@@ -287,115 +1285,294 @@ function render() {
       if (ba.action === 'move_left') tx--;
       if (ba.action === 'move_right') tx++;
       ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.4;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = dimmed ? 0.1 : 0.5;
+      ctx.lineWidth = Math.max(1.5, cs * 0.06);
       ctx.beginPath();
       ctx.moveTo(bx*cs+cs/2, by*cs+cs/2);
       ctx.lineTo(tx*cs+cs/2, ty*cs+cs/2);
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      // Arrowhead
+      const angle = Math.atan2((ty-by)*cs, (tx-bx)*cs);
+      const aSize = cs * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(tx*cs+cs/2, ty*cs+cs/2);
+      ctx.lineTo(tx*cs+cs/2 - aSize*Math.cos(angle-0.5), ty*cs+cs/2 - aSize*Math.sin(angle-0.5));
+      ctx.lineTo(tx*cs+cs/2 - aSize*Math.cos(angle+0.5), ty*cs+cs/2 - aSize*Math.sin(angle+0.5));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.globalAlpha = dimmed ? 0.25 : 1;
+    }
+
+    // Bot shadow
+    if (!dimmed) {
+      ctx.beginPath();
+      ctx.arc(bx*cs+cs/2+1, by*cs+cs/2+1, cs*0.35, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fill();
     }
 
     // Bot circle
     const radius = cs * 0.35;
     ctx.beginPath();
     ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius, 0, Math.PI*2);
-    ctx.fillStyle = color;
+    const botGrad = ctx.createRadialGradient(bx*cs+cs/2-radius*0.3, by*cs+cs/2-radius*0.3, 0, bx*cs+cs/2, by*cs+cs/2, radius);
+    botGrad.addColorStop(0, lightenColor(color, 30));
+    botGrad.addColorStop(1, color);
+    ctx.fillStyle = botGrad;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+
+    if (isTracked) {
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      // Outer glow
+      ctx.beginPath();
+      ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius + 4, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(251,191,36,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
 
     // Bot ID
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.max(9, cs/3)}px monospace`;
+    ctx.font = `bold ${Math.max(9, cs/3)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(ba.bot_id, bx*cs+cs/2, by*cs+cs/2);
 
-    // Inventory count
-    if (ba.inventory.length > 0) {
-      ctx.fillStyle = '#fc0';
-      ctx.font = `bold ${Math.max(7, cs/4)}px monospace`;
-      ctx.fillText(ba.inventory.length, bx*cs+cs*0.8, by*cs+cs*0.2);
+    // Inventory count badge
+    if (ba.inventory.length > 0 && cs >= 14) {
+      const badgeR = Math.max(5, cs * 0.14);
+      const bx2 = bx*cs+cs*0.82, by2 = by*cs+cs*0.18;
+      ctx.beginPath();
+      ctx.arc(bx2, by2, badgeR, 0, Math.PI*2);
+      ctx.fillStyle = ba.inventory.length >= 3 ? '#ef4444' : '#f59e0b';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.max(6, cs/5)}px sans-serif`;
+      ctx.fillText(ba.inventory.length, bx2, by2);
     }
 
-    // Pickup target
-    if (ba.action === 'pick_up' && ba.item_id) {
-      ctx.strokeStyle = '#ff0';
+    // Pickup indicator
+    if (ba.action === 'pick_up') {
+      ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 2;
       ctx.setLineDash([3,3]);
-      ctx.strokeRect(bx*cs-2, by*cs-2, cs+4, cs+4);
+      const pad = 3;
+      roundRectStroke(ctx, bx*cs-pad, by*cs-pad, cs+pad*2, cs+pad*2, 4);
       ctx.setLineDash([]);
     }
 
-    // Drop-off action
+    // Drop-off indicator
     if (ba.action === 'drop_off') {
-      ctx.strokeStyle = '#0f9';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([4,2]);
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4,3]);
       ctx.beginPath();
-      ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius+4, 0, Math.PI*2);
+      ctx.arc(bx*cs+cs/2, by*cs+cs/2, radius+5, 0, Math.PI*2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
+
+    // Wait indicator
+    if (ba.action === 'wait') {
+      ctx.globalAlpha = dimmed ? 0.15 : 0.7;
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.5;
+      const s = cs * 0.1;
+      const cy = by*cs+cs/2-radius-3;
+      ctx.beginPath();
+      ctx.moveTo(bx*cs+cs/2-s, cy-s);
+      ctx.lineTo(bx*cs+cs/2+s, cy+s);
+      ctx.moveTo(bx*cs+cs/2+s, cy-s);
+      ctx.lineTo(bx*cs+cs/2-s, cy+s);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
   }
 
-  // Update UI
-  document.getElementById('round-display').textContent = `Round: ${currentRound} / ${maxRound}`;
+  // ---- Update sidebar UI ----
+  document.getElementById('round-display').textContent = `Round ${currentRound} / ${maxRound}`;
   document.getElementById('score-display').textContent = `Score: ${roundData.score}`;
   document.getElementById('round-slider').value = currentRound;
+  document.getElementById('round-progress-fill').style.width = maxRound > 0 ? (currentRound / maxRound * 100) + '%' : '0%';
+  document.getElementById('tracked-label').textContent = trackedBot !== null ? `\u2014 tracking B${trackedBot}` : '';
+
+  // Score delta indicator
+  const prevRoundData = currentRound > 0 ? rounds[currentRound - 1] : null;
+  const deltaEl = document.getElementById('score-delta');
+  if (prevRoundData && roundData.score > prevRoundData.score) {
+    const diff = roundData.score - prevRoundData.score;
+    deltaEl.textContent = `+${diff}`;
+    deltaEl.classList.add('visible');
+  } else {
+    deltaEl.classList.remove('visible');
+  }
 
   // Bot panel
   const botPanel = document.getElementById('bot-panel');
   botPanel.innerHTML = '';
   for (const ba of botActions) {
     const color = BOT_COLORS[ba.bot_id % BOT_COLORS.length];
-    const inv = ba.inventory.length > 0 ? ba.inventory.join(', ') : '(empty)';
+    const inv = ba.inventory.length > 0 ? ba.inventory.join(', ') : '\u2014';
     const div = document.createElement('div');
-    div.className = 'bot-row';
+    div.className = 'bot-row' + (trackedBot === ba.bot_id ? ' tracked' : '');
+    const icon = ACTION_ICONS[ba.action] || '?';
+    const actionLabel = ba.action.replace('move_', '').replace('pick_up', 'pick').replace('drop_off', 'drop');
+    const distBadge = ba.dist_to_dropoff !== '?' ? `<span class="dist-text">d:${ba.dist_to_dropoff}</span>` : '';
+    const itemNote = ba.item_id ? `(${ba.item_id})` : '';
+    const actClass = ba.action === 'wait' ? 'act-wait' : ba.action === 'pick_up' ? 'act-pick' : ba.action === 'drop_off' ? 'act-drop' : '';
     div.innerHTML = `
-      <div class="bot-id" style="background:${color}">${ba.bot_id}</div>
+      <div class="bot-id-badge" style="background:${color}">${ba.bot_id}</div>
       <div class="bot-info">
-        <div class="bot-action">${ba.action}${ba.item_id ? ' ('+ba.item_id+')' : ''}</div>
-        <div class="bot-inv">[${ba.bx},${ba.by}] ${inv}</div>
+        <div class="bot-action-line">
+          <span class="action-icon">${icon}</span>
+          <span class="action-text ${actClass}">${actionLabel} ${itemNote}</span>
+          ${distBadge}
+        </div>
+        <div class="bot-pos-inv">[${ba.bx},${ba.by}] <span class="bot-inv-items">${inv}</span></div>
       </div>`;
+    div.addEventListener('click', () => { trackedBot = trackedBot === ba.bot_id ? null : ba.bot_id; render(); });
     botPanel.appendChild(div);
   }
+  // Auto-scroll tracked bot into view
+  const trackedRow = botPanel.querySelector('.bot-row.tracked');
+  if (trackedRow) trackedRow.scrollIntoView({ block: 'nearest' });
 
   // Order panel
   const orderPanel = document.getElementById('order-panel');
   const an = roundData.actions[0]?.active_needed || '';
   const pn = roundData.actions[0]?.preview_needed || '';
   const ad = roundData.actions[0]?.active_delivered || '';
-  let html = '';
+  const oi = roundData.order_idx || '?';
+
+  // Compute order progress
+  let totalNeeded = 0, totalDelivered = 0;
+  if (an) { for (const p of an.split(';')) { if (p) totalNeeded += parseInt(p.split(':')[1]) || 0; } }
+  if (ad) { for (const p of ad.split(';')) { if (p) totalDelivered += parseInt(p.split(':')[1]) || 0; } }
+  const orderTotal = totalNeeded + totalDelivered;
+  const orderPct = orderTotal > 0 ? (totalDelivered / orderTotal * 100) : 0;
+
+  let html = `<div class="order-meta">Order #${oi}</div>`;
+  if (orderTotal > 0) {
+    html += `<div class="order-progress-row">
+      <div class="order-progress-bar"><div class="order-progress-fill" style="width:${orderPct}%"></div></div>
+      <div class="order-progress-text">${totalDelivered}/${orderTotal}</div>
+    </div>`;
+  }
   if (an) {
-    html += `<b style="color:#1a5">Active:</b> `;
+    html += `<div class="order-row"><span class="order-label order-label-active">Active</span>`;
     for (const part of an.split(';')) {
       if (!part) continue;
       const [type, cnt] = part.split(':');
-      html += `<span class="order-box order-active">${type}: ${cnt}</span>`;
+      html += `<span class="order-chip order-chip-active">${type}: ${cnt}</span>`;
     }
-    if (ad) html += ` <span style="color:#888">delivered: ${ad}</span>`;
+    html += '</div>';
   }
   if (pn) {
-    html += `<br><b style="color:#058">Preview:</b> `;
+    html += `<div class="order-row"><span class="order-label order-label-preview">Preview</span>`;
     for (const part of pn.split(';')) {
       if (!part) continue;
       const [type, cnt] = part.split(':');
-      html += `<span class="order-box order-preview">${type}: ${cnt}</span>`;
+      html += `<span class="order-chip order-chip-preview">${type}: ${cnt}</span>`;
     }
+    html += '</div>';
   }
   orderPanel.innerHTML = html;
+
+  renderScoreChart();
 }
 
-// ---- Controls ----
+// ---- Canvas helpers ----
 
-document.getElementById('round-slider').addEventListener('input', e => {
-  currentRound = parseInt(e.target.value);
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function roundRectStroke(ctx, x, y, w, h, r) {
+  roundRect(ctx, x, y, w, h, r);
+  ctx.stroke();
+}
+
+function lightenColor(hex, pct) {
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (num >> 16) + pct);
+  const g = Math.min(255, ((num >> 8) & 0xff) + pct);
+  const b = Math.min(255, (num & 0xff) + pct);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ---- Tooltip on hover ----
+
+canvas.addEventListener('mousemove', e => {
+  if (!meta || !rounds[currentRound]) return;
+  const rect = canvas.getBoundingClientRect();
+  const cs = canvas._cellSize;
+  const gx = Math.floor((e.clientX - rect.left) / cs);
+  const gy = Math.floor((e.clientY - rect.top) / cs);
+
+  if (gx < 0 || gx >= meta.grid.width || gy < 0 || gy >= meta.grid.height) {
+    document.getElementById('tooltip').style.display = 'none'; return;
+  }
+
+  const tooltip = document.getElementById('tooltip');
+  const lines = [`[${gx}, ${gy}]`];
+  const wallSet = new Set((meta.grid.wall_positions || meta.grid.walls || []).map(w => w[0]+','+w[1]));
+  if (wallSet.has(gx+','+gy)) lines.push('\u2588 Wall');
+  const dropZones = meta.drop_off_zones || [meta.drop_off];
+  for (const [dx, dy] of dropZones) { if (dx === gx && dy === gy) lines.push('\u25A3 Drop-off zone'); }
+  for (const it of (meta.item_positions || [])) { if (it.position[0] === gx && it.position[1] === gy) lines.push(`\u25A0 ${it.type} (${it.item_id})`); }
+  for (const ba of rounds[currentRound].actions) {
+    if (ba.bx === gx && ba.by === gy) {
+      const inv = ba.inventory.length ? ba.inventory.join(', ') : 'empty';
+      lines.push(`\u25CF Bot ${ba.bot_id}: ${ba.action}\n   inv: [${inv}]`);
+    }
+  }
+  if (heatmapData) {
+    const visits = heatmapData[gx+','+gy] || 0;
+    if (visits > 0) lines.push(`\u2237 ${visits} visits`);
+  }
+
+  if (lines.length <= 1) { tooltip.style.display = 'none'; return; }
+  tooltip.textContent = lines.join('\n');
+  tooltip.style.display = 'block';
+  const mainRect = document.getElementById('main').getBoundingClientRect();
+  tooltip.style.left = (e.clientX - mainRect.left + 14) + 'px';
+  tooltip.style.top = (e.clientY - mainRect.top - 10) + 'px';
+});
+
+canvas.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none'; });
+
+// ---- Click canvas to track bot ----
+
+canvas.addEventListener('click', e => {
+  if (!meta || !rounds[currentRound]) return;
+  const rect = canvas.getBoundingClientRect();
+  const cs = canvas._cellSize;
+  const gx = Math.floor((e.clientX - rect.left) / cs);
+  const gy = Math.floor((e.clientY - rect.top) / cs);
+  for (const ba of rounds[currentRound].actions) {
+    if (ba.bx === gx && ba.by === gy) { trackedBot = trackedBot === ba.bot_id ? null : ba.bot_id; render(); return; }
+  }
+  trackedBot = null;
   render();
 });
 
+// ---- Controls ----
+
+document.getElementById('round-slider').addEventListener('input', e => { currentRound = parseInt(e.target.value); render(); });
 document.getElementById('btn-start').addEventListener('click', () => { currentRound = 0; render(); });
 document.getElementById('btn-end').addEventListener('click', () => { currentRound = maxRound; render(); });
 document.getElementById('btn-prev').addEventListener('click', () => { if (currentRound > 0) currentRound--; render(); });
@@ -404,17 +1581,15 @@ document.getElementById('btn-next').addEventListener('click', () => { if (curren
 document.getElementById('btn-play').addEventListener('click', function() {
   playing = !playing;
   this.classList.toggle('active', playing);
-  this.textContent = playing ? '⏸' : '▶';
+  this.textContent = playing ? '\u23F8' : '\u25B6';
   if (playing) {
     const speed = parseInt(document.getElementById('speed-select').value);
     playTimer = setInterval(() => {
-      if (currentRound >= maxRound) { playing = false; document.getElementById('btn-play').classList.remove('active'); document.getElementById('btn-play').textContent = '▶'; clearInterval(playTimer); return; }
+      if (currentRound >= maxRound) { playing = false; document.getElementById('btn-play').classList.remove('active'); document.getElementById('btn-play').textContent = '\u25B6'; clearInterval(playTimer); return; }
       currentRound++;
       render();
     }, speed);
-  } else {
-    clearInterval(playTimer);
-  }
+  } else { clearInterval(playTimer); }
 });
 
 document.getElementById('speed-select').addEventListener('change', () => {
@@ -429,21 +1604,65 @@ document.getElementById('speed-select').addEventListener('change', () => {
   }
 });
 
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowRight' || e.key === 'l') { if (currentRound < maxRound) currentRound++; render(); }
-  if (e.key === 'ArrowLeft' || e.key === 'h') { if (currentRound > 0) currentRound--; render(); }
-  if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-play').click(); }
-  if (e.key === 'Home') { currentRound = 0; render(); }
-  if (e.key === 'End') { currentRound = maxRound; render(); }
+// Round number input
+document.getElementById('round-input').addEventListener('change', e => {
+  const val = parseInt(e.target.value);
+  if (!isNaN(val)) { currentRound = Math.max(0, Math.min(maxRound, val)); render(); }
+  e.target.value = '';
 });
 
-// ---- Auto-discover logs (if served from project root) ----
+// Overlay toggles
+for (const id of ['chk-trails', 'chk-heatmap', 'chk-gridcoords']) {
+  document.getElementById(id).addEventListener('change', () => render());
+}
+
+// Problem nav buttons
+document.getElementById('btn-next-problem').addEventListener('click', () => {
+  if (!problems.length) return;
+  problemIdx = (problemIdx + 1) % problems.length;
+  currentRound = problems[problemIdx].round;
+  render();
+  highlightActiveProblem();
+});
+document.getElementById('btn-prev-problem').addEventListener('click', () => {
+  if (!problems.length) return;
+  problemIdx = (problemIdx - 1 + problems.length) % problems.length;
+  currentRound = problems[problemIdx].round;
+  render();
+  highlightActiveProblem();
+});
+
+// Help toggle
+document.getElementById('help-toggle').addEventListener('click', () => {
+  const box = document.getElementById('help-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const big = 10;
+  if (e.key === 'ArrowRight' || e.key === 'l') { currentRound = Math.min(maxRound, currentRound + (e.shiftKey ? big : 1)); render(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'h') { currentRound = Math.max(0, currentRound - (e.shiftKey ? big : 1)); render(); }
+  else if (e.key === 'j') { currentRound = Math.min(maxRound, currentRound + big); render(); }
+  else if (e.key === 'k') { currentRound = Math.max(0, currentRound - big); render(); }
+  else if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-play').click(); }
+  else if (e.key === 'Home') { currentRound = 0; render(); }
+  else if (e.key === 'End') { currentRound = maxRound; render(); }
+  else if (e.key === 'Escape') { trackedBot = null; render(); }
+  else if (e.key >= '0' && e.key <= '9') { const bid = parseInt(e.key); trackedBot = trackedBot === bid ? null : bid; render(); }
+  else if (e.key === 'n' && problems.length) { document.getElementById('btn-next-problem').click(); }
+  else if (e.key === 'p' && problems.length) { document.getElementById('btn-prev-problem').click(); }
+  else if (e.key === 't') { const c = document.getElementById('chk-trails'); c.checked = !c.checked; render(); }
+  else if (e.key === 'm') { const c = document.getElementById('chk-heatmap'); c.checked = !c.checked; render(); }
+  else if (e.key === 'g') { const c = document.getElementById('chk-gridcoords'); c.checked = !c.checked; render(); }
+});
+
+// ---- Auto-discover logs ----
 
 let allLogs = [];
 
 function formatLogLabel(name) {
-  // "local_expert_28x18_10bot_20260308_105109" → "Expert 28x18 10bot 10:51:09"
   const m = name.match(/^(local|game)_(\w+?)_(\d+x\d+)_(\d+bot)_(\d{8})_(\d{2})(\d{2})(\d{2})$/);
   if (m) {
     const src = m[1] === 'game' ? 'LIVE' : 'local';
@@ -465,34 +1684,21 @@ function populateLogSelect(filter) {
   }
 }
 
-document.getElementById('log-filter').addEventListener('change', e => {
-  populateLogSelect(e.target.value);
-});
+document.getElementById('log-filter').addEventListener('change', e => { populateLogSelect(e.target.value); });
 
 async function tryLoadLogList() {
   try {
     const resp = await fetch('/api/logs');
-    if (resp.ok) {
-      allLogs = await resp.json();
-      populateLogSelect('');
-    }
-  } catch(e) { /* no server, use file inputs */ }
+    if (resp.ok) { allLogs = await resp.json(); populateLogSelect(''); }
+  } catch(e) {}
 }
 
 document.getElementById('load-btn').addEventListener('click', async () => {
-  const sel = document.getElementById('log-select');
-  const logName = sel.value;
+  const logName = document.getElementById('log-select').value;
   if (!logName) return;
   try {
-    const [metaResp, csvResp] = await Promise.all([
-      fetch(`/logs/${logName}.json`),
-      fetch(`/logs/${logName}.csv`)
-    ]);
-    if (metaResp.ok && csvResp.ok) {
-      const metaObj = await metaResp.json();
-      const csvText = await csvResp.text();
-      loadData(metaObj, csvText);
-    }
+    const [metaResp, csvResp] = await Promise.all([fetch(`/logs/${logName}.json`), fetch(`/logs/${logName}.csv`)]);
+    if (metaResp.ok && csvResp.ok) loadData(await metaResp.json(), await csvResp.text());
   } catch(e) { alert('Failed to load: ' + e.message); }
 });
 
