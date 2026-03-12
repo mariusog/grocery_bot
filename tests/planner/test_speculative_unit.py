@@ -164,6 +164,7 @@ class TestSpeculativePickup:
         planner.actions = []
         planner._speculative_pickers = 0
         planner._spec_types_claimed = set()
+        planner.claimed = set()  # reset claims from plan() run
         ctx = planner._build_bot_context(planner.bots[0])
         assert ctx.has_active is False
         assert planner.active_on_shelves > 0
